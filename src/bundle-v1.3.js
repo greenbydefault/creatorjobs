@@ -80,7 +80,7 @@
   const MODULE_PATHS = {
     debug: './modules/debug.js',
     cache: './modules/cache.js',
-    apiService: './modules/api-service.js',
+    apiService: './modules/api-service-1.0.js',
     videoApi: './modules/video-api.js',
     memberApi: './modules/member-api.js',
     uploadcare: './modules/uploadcare.js',

@@ -1,6 +1,16 @@
 // src/modules/api-service.js
-import { CONFIG } from '../config.js';
-import { DEBUG } from './debug.js';
+(function() {
+  'use strict';
+
+  // Zugriff auf globale Objekte
+  const CONFIG = window.WEBFLOW_API.config;
+  const DEBUG = window.WEBFLOW_API.debug;
+  
+  // Rest des Moduls...
+  
+  // Registriere im globalen Namespace
+  window.WEBFLOW_API.something = new SomethingClass();
+})();
 
 class ApiService {
     /**

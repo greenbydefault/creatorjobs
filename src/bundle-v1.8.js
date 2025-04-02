@@ -86,7 +86,7 @@
     uploadcare: './modules/uploadcare-1.1.js',
     memberstack: './modules/memberstack-1.1.js',
     uiManager: './modules/ui-manager-1.1.js',
-    videoFeedApp: './modules/video-feed-app.js',
+    videoFeedApp: './modules/video-edit-app-1.1.js',
     videoEditApp: './modules/video-edit-app.js',
     videoUploadApp: './modules/video-upload-app.js'
   };

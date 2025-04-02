@@ -318,3 +318,277 @@ class VideoEditApp {
     
     /**
      * Event-Listener für einen Save-Button registrieren
+     */
+    initSaveButtonListener(button) {
+        button.addEventListener('click', async (e) => {
+            e.preventDefault();
+            
+            if (!this.currentVideoData) {
+                DEBUG.log("Keine aktuellen Video-Daten zum Speichern", null, 'error');
+                return;
+            }
+            
+            // Formular finden
+            const form = document.getElementById(CONFIG.EDIT_FORM_ID) || 
+                        document.querySelector(`[data-modal-id="${CONFIG.EDIT_MODAL_ID}"] form`);
+            
+            if (!form) {
+                DEBUG.log("Edit-Formular nicht gefunden", null, 'error');
+                return;
+            }
+            
+            // Validiere die Zeichenlänge
+            const nameField = this.findField(form, CONFIG.EDIT_NAME_FIELD);
+            const descField = this.findField(form, CONFIG.EDIT_DESCRIPTION_FIELD);
+            
+            if (nameField && nameField.value.length > CONFIG.NAME_CHAR_LIMIT) {
+                alert(`Der Name darf maximal ${CONFIG.NAME_CHAR_LIMIT} Zeichen lang sein.`);
+                nameField.focus();
+                return;
+            }
+            
+            if (descField && descField.value.length > CONFIG.DESCRIPTION_CHAR_LIMIT) {
+                alert(`Die Beschreibung darf maximal ${CONFIG.DESCRIPTION_CHAR_LIMIT} Zeichen lang sein.`);
+                descField.focus();
+                return;
+            }
+            
+            // Ändere den Button-Text während des Speicherns
+            const originalText = button.value || button.textContent;
+            button.disabled = true;
+            if (button.type === 'submit') {
+                button.value = "Wird gespeichert...";
+            } else {
+                button.textContent = "Wird gespeichert...";
+            }
+            
+            try {
+                // Hole die Formulardaten
+                const formData = {
+                    name: this.getValue(form, CONFIG.EDIT_NAME_FIELD, this.currentVideoData.fieldData["video-name"] || ""),
+                    kategorie: this.getValue(form, CONFIG.EDIT_CATEGORY_FIELD, this.currentVideoData.fieldData["video-kategorie"] || ""),
+                    beschreibung: this.getValue(form, CONFIG.EDIT_DESCRIPTION_FIELD, this.currentVideoData.fieldData["video-beschreibung"] || ""),
+                    openVideo: this.getChecked(form, CONFIG.EDIT_PUBLIC_FIELD)
+                };
+                
+                // Validiere die Daten
+                if (!formData.name) {
+                    alert("Bitte gib einen Namen für das Video ein.");
+                    return;
+                }
+                
+                DEBUG.log("Formulardaten zum Speichern:", formData);
+                
+                // Führe das Update durch
+                const result = await VIDEO_API.updateVideo(this.currentVideoData.id, formData, this.currentVideoData);
+                
+                if (result) {
+                    DEBUG.log("Video erfolgreich aktualisiert:", result);
+                    
+                    // Schließe das Modal
+                    const editModal = document.querySelector(`[data-modal-id="${CONFIG.EDIT_MODAL_ID}"]`);
+                    if (editModal && window.modalManager) {
+                        window.modalManager.closeModal(editModal);
+                    }
+                    
+                    // Event auslösen, um den Feed neu zu laden
+                    document.dispatchEvent(new CustomEvent('videoFeedUpdate'));
+                    
+                    // Zeige eine Erfolgsmeldung
+                    alert("Video erfolgreich aktualisiert!");
+                } else {
+                    throw new Error("Unbekannter Fehler beim Aktualisieren des Videos");
+                }
+            } catch (error) {
+                DEBUG.log("Fehler beim Speichern:", error, 'error');
+                alert("Fehler beim Speichern der Änderungen. Bitte versuche es erneut.");
+            } finally {
+                // Button zurücksetzen
+                button.disabled = false;
+                if (button.type === 'submit') {
+                    button.value = originalText;
+                } else {
+                    button.textContent = originalText;
+                }
+            }
+        });
+        
+        DEBUG.log("Save-Button initialisiert");
+    }
+    
+    /**
+     * Event-Listener für Delete-Button initialisieren
+     */
+    initDeleteButton() {
+        // Finde den Delete-Button im Edit-Modal
+        const deleteButton = document.getElementById(CONFIG.EDIT_DELETE_BUTTON);
+        
+        if (!deleteButton) {
+            DEBUG.log("Kein Delete-Button gefunden", null, 'warn');
+            return;
+        }
+        
+        deleteButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            if (!this.currentVideoData) {
+                DEBUG.log("Keine aktuellen Video-Daten zum Löschen", null, 'error');
+                return;
+            }
+            
+            // Bestätigungsdialog anzeigen
+            if (confirm("Bist du sicher, dass du dieses Video löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.")) {
+                this.handleVideoDelete(this.currentVideoData.id, deleteButton);
+            }
+        });
+        
+        DEBUG.log("Delete-Button initialisiert");
+    }
+    
+    /**
+     * Hilfsfunktion zum Durchführen des Löschens
+     */
+    async handleVideoDelete(videoId, button) {
+        if (!videoId) {
+            DEBUG.log("Keine Video-ID zum Löschen", null, 'error');
+            return;
+        }
+        
+        // Ändere den Button-Text während des Löschens
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = "Wird gelöscht...";
+        
+        try {
+            // Hole Video-Daten, falls noch nicht geladen
+            const videoData = this.currentVideoData || await VIDEO_API.getVideoById(videoId);
+            
+            if (!videoData) {
+                throw new Error("Video-Daten konnten nicht geladen werden");
+            }
+            
+            // 1. Uploadcare-Datei löschen, falls vorhanden
+            if (videoData.fieldData["video-link"]) {
+                const videoUrl = videoData.fieldData["video-link"];
+                const fileUuid = UPLOADCARE.extractUploadcareUuid(videoUrl);
+                
+                if (fileUuid) {
+                    DEBUG.log(`Uploadcare-UUID gefunden: ${fileUuid}`);
+                    try {
+                        await UPLOADCARE.deleteUploadcareFile(fileUuid);
+                    } catch (uploadcareError) {
+                        DEBUG.log("Fehler beim Löschen der Uploadcare-Datei:", uploadcareError, 'error');
+                        // Wir machen trotzdem weiter mit dem Löschen des Videos
+                    }
+                }
+            }
+            
+            // 2. Aus dem Member-Feed entfernen
+            if (videoData.fieldData["webflow-id"] || videoData.fieldData["memberstack-id"]) {
+                try {
+                    if (videoData.fieldData["webflow-id"]) {
+                        await MEMBER_API.updateMemberVideoFeed(
+                            videoData.fieldData["webflow-id"], 
+                            videoId, 
+                            true // true = entfernen
+                        );
+                    }
+                    
+                    if (videoData.fieldData["memberstack-id"] && 
+                        videoData.fieldData["memberstack-id"] !== videoData.fieldData["webflow-id"]) {
+                        await MEMBER_API.updateMemberVideoFeed(
+                            videoData.fieldData["memberstack-id"], 
+                            videoId,
+                            true // true = entfernen
+                        );
+                    }
+                } catch (memberError) {
+                    DEBUG.log("Fehler beim Entfernen aus dem Member-Feed:", memberError, 'warn');
+                    // Wir können hier weitermachen mit dem Löschen des Videos
+                }
+            }
+            
+            // 3. Video im CMS löschen
+            const result = await VIDEO_API.deleteVideo(videoId);
+            
+            if (result) {
+                DEBUG.log("Video erfolgreich gelöscht");
+                
+                // Schließe das Modal
+                const editModal = document.querySelector(`[data-modal-id="${CONFIG.EDIT_MODAL_ID}"]`);
+                if (editModal && window.modalManager) {
+                    window.modalManager.closeModal(editModal);
+                }
+                
+                // Event auslösen, um den Feed neu zu laden
+                document.dispatchEvent(new CustomEvent('videoFeedUpdate'));
+                
+                // Zeige eine Erfolgsmeldung
+                alert("Video erfolgreich gelöscht!");
+            } else {
+                throw new Error("Unbekannter Fehler beim Löschen des Videos");
+            }
+        } catch (error) {
+            DEBUG.log("Fehler beim Löschen:", error, 'error');
+            alert("Fehler beim Löschen des Videos. Bitte versuche es erneut.");
+        } finally {
+            // Button zurücksetzen
+            button.disabled = false;
+            button.textContent = originalText;
+        }
+    }
+    
+    /**
+     * Hilfsfunktionen zum Abrufen von Feldwerten
+     */
+    getValue(form, fieldName, defaultValue = "") {
+        // Suche nach verschiedenen Selector-Varianten
+        const selectors = [
+            `[name="${fieldName}"]`,
+            `[data-name="${fieldName}"]`, 
+            `#${fieldName.replace(/\s+/g, "-").toLowerCase()}`
+        ];
+        
+        let field = null;
+        
+        // Versuche verschiedene Selektoren
+        for (const selector of selectors) {
+            field = form.querySelector(selector);
+            if (field) break;
+        }
+        
+        if (!field) {
+            DEBUG.log(`Feld '${fieldName}' nicht gefunden. Verwende Standardwert: '${defaultValue}'`, null, 'warn');
+            return defaultValue;
+        }
+        
+        return field.value || defaultValue;
+    }
+    
+    getChecked(form, fieldName) {
+        // Suche nach verschiedenen Selector-Varianten
+        const selectors = [
+            `[name="${fieldName}"]`,
+            `[data-name="${fieldName}"]`, 
+            `#${fieldName.replace(/\s+/g, "-").toLowerCase()}`
+        ];
+        
+        let field = null;
+        
+        // Versuche verschiedene Selektoren
+        for (const selector of selectors) {
+            field = form.querySelector(selector);
+            if (field && field.type === 'checkbox') break;
+        }
+        
+        if (!field || field.type !== 'checkbox') {
+            DEBUG.log(`Checkbox '${fieldName}' nicht gefunden. Standard: false`, null, 'warn');
+            return false;
+        }
+        
+        return field.checked;
+    }
+}
+
+// Singleton-Instanz exportieren
+export const VIDEO_EDIT_APP = new VideoEditApp();

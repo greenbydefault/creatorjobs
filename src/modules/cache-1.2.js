@@ -1,12 +1,21 @@
 (function() {
     'use strict';
 
+    // Ensure WEBFLOW_API exists
+    window.WEBFLOW_API = window.WEBFLOW_API || {};
+    window.WEBFLOW_API.config = window.WEBFLOW_API.config || {};
+    window.WEBFLOW_API.debug = window.WEBFLOW_API.debug || {
+        log: function(message, data, level) {
+            console.log(`[${level || 'log'}] ${message}`, data || '');
+        }
+    };
+
     // Zugriff auf globale Objekte
     const CONFIG = window.WEBFLOW_API.config;
     const DEBUG = window.WEBFLOW_API.debug;
 
     class CacheService {
-        constructor(expirationTime = CONFIG.CACHE_EXPIRATION) {
+        constructor(expirationTime = CONFIG.CACHE_EXPIRATION || 300000) { // Default 5 minutes if not set
             this.items = {};
             this.expiration = expirationTime;
             DEBUG.log('Cache initialisiert mit Expiration: ' + expirationTime + 'ms');

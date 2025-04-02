@@ -135,7 +135,7 @@
     
     // Basis-URL für GitHub
     // HIER MUSST DU DEN PFAD ZU DEINEM GITHUB-REPOSITORY ANGEBEN
-    const baseUrl = 'https://raw.githubusercontent.com/DEIN-USERNAME/DEIN-REPO/main/src';
+    const baseUrl = 'https://cdn.jsdelivr.net/gh/greenbydefault/creatorjobs/src';
     
     try {
       // Module in der richtigen Abhängigkeitsreihenfolge laden

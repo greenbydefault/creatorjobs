@@ -278,46 +278,70 @@
                 return;
             }
             
-            // Wichtig: Hier KEINE Prüfung, ob videos.length > maxUploads!
-            // Immer alle vorhandenen Videos anzeigen, unabhängig vom Limit
+            // WICHTIG: Immer alle vorhandenen Videos anzeigen, unabhängig vom Limit
             
-            // Sortiere Videos nach Datum (neueste zuerst)
-            const sortedVideos = [...videos].sort((a, b) => {
-                // Versuche zuerst, nach dem publish-date zu sortieren
-                const dateA = a.publishedOn || a.createdOn || new Date(0);
-                const dateB = b.publishedOn || b.createdOn || new Date(0);
-                return new Date(dateB) - new Date(dateA);
-            });
+            // Sortiere Videos nach Datum (neueste zuerst), falls verfügbar
+            const sortedVideos = [...videos];
             
             // Erzeuge HTML für jedes Video
             sortedVideos.forEach(video => {
                 try {
-                    // Überprüfung, ob erforderliche Daten vorhanden sind
-                    if (!video.id || !video.name) {
-                        DEBUG.log(`Video mit unvollständigen Daten übersprungen`, video, 'warn');
+                    // Logge das komplette Video-Objekt zur Analyse
+                    // DEBUG.log("Verarbeite Video-Objekt:", video);
+                    
+                    // Verbesserte Überprüfung für die tatsächliche Datenstruktur
+                    // Wir akzeptieren jetzt verschiedene Feldnamen-Formate
+                    const videoId = video.id || "";
+                    
+                    // Verbesserte Extraktion des Namens
+                    const videoName = 
+                        video.name || 
+                        video["video-name"] || 
+                        (video.fieldData && (video.fieldData["video-name"] || video.fieldData.name)) || 
+                        "Unbenanntes Video";
+                    
+                    // Verbesserte Extraktion der Beschreibung
+                    const videoDescription = 
+                        video.description || 
+                        video["video-beschreibung"] || 
+                        (video.fieldData && video.fieldData["video-beschreibung"]) || 
+                        "";
+                    
+                    // Verbesserte Extraktion des Video-Links
+                    const videoLink = 
+                        video.videoLink || 
+                        video["video-link"] || 
+                        (video.fieldData && video.fieldData["video-link"]) || 
+                        "";
+                    
+                    // Verbesserte Überprüfung der erforderlichen Daten
+                    if (!videoId) {
+                        DEBUG.log("Video hat keine ID und wird übersprungen", video, 'warn');
                         return;
                     }
                     
-                    // Video-Daten extrahieren und aufbereiten
-                    const videoId = video.id;
-                    const videoName = video.name || "Unbenanntes Video";
-                    const videoDescription = video.description || video.fieldData?.["video-beschreibung"] || "";
-                    const videoLink = video.videoLink || video.fieldData?.["video-link"] || "";
-                    const thumbnailUrl = video.thumbnail || videoLink; // Optional: Thumbnail-URL aus Video-URL ableiten
-                    const videoKategorie = video.kategorie || 
-                                        video.fieldData?.["video-kategorie"] || 
-                                        "Keine Kategorie";
+                    // Verbesserte Extraktion der Kategorie
+                    const videoKategorie = 
+                        video.kategorie || 
+                        video["video-kategorie"] || 
+                        (video.fieldData && video.fieldData["video-kategorie"]) ||
+                        "";
                     
-                    // Kategorie-Namen aus Mapping ermitteln
+                    // Kategorie-Namen aus Mapping ermitteln oder aus dem Objekt extrahieren
                     let kategorieName = "Sonstige";
                     if (CONFIG.CATEGORY_MAPPING && CONFIG.CATEGORY_MAPPING[videoKategorie]) {
                         kategorieName = CONFIG.CATEGORY_MAPPING[videoKategorie];
+                    } else if (video["kategorie-name"]) {
+                        kategorieName = video["kategorie-name"];
                     }
                     
                     // Video-Karte erstellen
                     const videoCard = document.createElement('div');
                     videoCard.className = 'db-card';
                     videoCard.setAttribute('data-video-id', videoId);
+                    
+                    // Thumbnail URL ermitteln, verwende Video-Link als Fallback
+                    const thumbnailUrl = videoLink;
                     
                     // HTML-Inhalt der Karte
                     videoCard.innerHTML = `
@@ -363,7 +387,7 @@
                     container.appendChild(videoCard);
                     
                 } catch (error) {
-                    DEBUG.log(`Fehler beim Rendern von Video ${video.id}:`, error, 'error');
+                    DEBUG.log(`Fehler beim Rendern von Video:`, error, 'error');
                 }
             });
         }

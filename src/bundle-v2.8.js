@@ -81,7 +81,7 @@
     debug: './modules/debug-1.1.js',
     cache: './modules/cache-1.2.js',
     apiService: './modules/api-service-1.0.js',
-    videoApi: './modules/video-api-1.2.js',
+    videoApi: './modules/video-api-1.3.js',
     memberApi: './modules/member-api-1.1.js',
     uploadcare: './modules/uploadcare-1.4.js',
     memberstack: './modules/memberstack-1.1.js',

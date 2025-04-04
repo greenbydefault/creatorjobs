@@ -30,6 +30,9 @@
     class VideoUploadApp {
         constructor() {
             this.currentMember = null;
+            
+            // Fortschrittsbalken-Zustand
+            this.progressBarVisible = false;
         }
         
         /**
@@ -46,6 +49,9 @@
             
             // Formularanalyse durchführen für Debug-Zwecke
             this.analyzeForm();
+            
+            // Verstecke den Fortschrittsbalken bei der Initialisierung
+            this.hideProgressBar();
         }
         
         /**
@@ -113,7 +119,7 @@
                 return;
             }
             
-            // Zeige Progress-Bar an, falls vorhanden
+            // Jetzt zeigen wir den Fortschrittsbalken an, nicht früher
             this.showProgressBar();
             this.updateProgressBar(10);
             
@@ -329,10 +335,15 @@
          */
         showProgressBar() {
             const progressBar = document.querySelector('.db-modal-progress-wrapper');
-            if (progressBar) {
-                progressBar.style.display = 'block';
-                this.updateProgressBar(0);
+            if (!progressBar) {
+                DEBUG.log('Fortschrittsbalken nicht gefunden', null, 'warn');
+                return;
             }
+            
+            this.progressBarVisible = true;
+            progressBar.style.display = 'block';
+            this.updateProgressBar(0);
+            DEBUG.log('Fortschrittsbalken wird angezeigt');
         }
         
         /**
@@ -340,9 +351,14 @@
          */
         hideProgressBar() {
             const progressBar = document.querySelector('.db-modal-progress-wrapper');
-            if (progressBar) {
-                progressBar.style.display = 'none';
+            if (!progressBar) {
+                DEBUG.log('Fortschrittsbalken nicht gefunden', null, 'warn');
+                return;
             }
+            
+            this.progressBarVisible = false;
+            progressBar.style.display = 'none';
+            DEBUG.log('Fortschrittsbalken ausgeblendet');
         }
         
         /**
@@ -350,6 +366,11 @@
          * @param {number} percent - Prozentsatz des Fortschritts (0-100)
          */
         updateProgressBar(percent) {
+            // Nur aktualisieren, wenn der Fortschrittsbalken sichtbar ist
+            if (!this.progressBarVisible) {
+                return;
+            }
+            
             const progressBarElem = document.querySelector('.db-modal-progessbar');
             const progressTextElem = document.querySelector('.db-modal-progress-text');
             const progressPercentElem = document.querySelector('.db-modal-progress-percentage');

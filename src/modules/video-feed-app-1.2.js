@@ -92,7 +92,7 @@
                 
                 // Membership-Details ermitteln
                 const membershipDetails = MEMBERSTACK.getMembershipDetails(member);
-                const maxUploads = membershipDetails.limit;
+                let maxUploads = membershipDetails.limit;
                 DEBUG.log(`Ermittelte Membership-Details:`, membershipDetails);
                 
                 // Plan-Status anzeigen
@@ -120,6 +120,13 @@
                 // Videos aus dem Video-Feed des Users holen
                 const videos = await MEMBER_API.getVideosFromUserFeed(user, VIDEO_API);
                 this.userVideos = videos;
+                
+                // Korrektur: Stelle sicher, dass maxUploads mindestens so groß wie die Anzahl der Videos ist
+                // Dies verhindert das Problem, wenn der Benutzer bereits mehr Videos hat als das aktuelle Limit
+                if (videos.length > maxUploads) {
+                    DEBUG.log(`Benutzer hat ${videos.length} Videos, aber das Limit ist ${maxUploads}. Passe Limit an.`, null, 'warn');
+                    maxUploads = Math.max(videos.length, maxUploads);
+                }
                 
                 DEBUG.log(`Vor dem Rendern - Videoanzahl: ${videos.length}, Max-Uploads: ${maxUploads}`);
                 

@@ -237,9 +237,11 @@
             }
             
             return `
-                <a href="#" class="db-upload-button w-button" data-modal-toggle="new-upload">
-                    Video hochladen
-                </a>
+                <div class="db-upload-empty-state">
+                    <a href="#" class="db-upload-more-upload-button" data-modal-toggle="new-upload">
+                        Lade dein erstes Video hoch
+                    </a>
+                </div>
             `;
         }
         
@@ -266,130 +268,137 @@
             // Wenn keine Videos vorhanden sind, zeige Leerstand-Nachricht
             if (!videos || videos.length === 0) {
                 DEBUG.log('Keine Videos vorhanden, zeige Leerstand');
-                container.innerHTML = `
-                    <div class="db-card empty-state">
-                        <div class="is-upload-empty">
-                            <h4>Du hast noch keine Videos hochgeladen</h4>
-                            <p>Starte jetzt und lade dein erstes Video hoch.</p>
-                            ${this.createEmptyStateUploadButton()}
-                        </div>
-                    </div>
-                `;
+                container.innerHTML = this.createEmptyStateUploadButton();
                 return;
             }
             
             // WICHTIG: Immer alle vorhandenen Videos anzeigen, unabhängig vom Limit
             
-            // Sortiere Videos nach Datum (neueste zuerst), falls verfügbar
-            const sortedVideos = [...videos];
+            // DocumentFragment für bessere Performance
+            const fragment = document.createDocumentFragment();
             
-            // Erzeuge HTML für jedes Video
-            sortedVideos.forEach(video => {
+            // Videos rendern
+            videos.forEach(videoData => {
                 try {
-                    // Logge das komplette Video-Objekt zur Analyse
-                    // DEBUG.log("Verarbeite Video-Objekt:", video);
-                    
                     // Verbesserte Überprüfung für die tatsächliche Datenstruktur
-                    // Wir akzeptieren jetzt verschiedene Feldnamen-Formate
-                    const videoId = video.id || "";
-                    
-                    // Verbesserte Extraktion des Namens
-                    const videoName = 
-                        video.name || 
-                        video["video-name"] || 
-                        (video.fieldData && (video.fieldData["video-name"] || video.fieldData.name)) || 
-                        "Unbenanntes Video";
-                    
-                    // Verbesserte Extraktion der Beschreibung
-                    const videoDescription = 
-                        video.description || 
-                        video["video-beschreibung"] || 
-                        (video.fieldData && video.fieldData["video-beschreibung"]) || 
-                        "";
-                    
-                    // Verbesserte Extraktion des Video-Links
-                    const videoLink = 
-                        video.videoLink || 
-                        video["video-link"] || 
-                        (video.fieldData && video.fieldData["video-link"]) || 
-                        "";
+                    const videoId = videoData.id || "";
+                    const videoName = videoData["video-name"] || "Unbenanntes Video";
+                    const videoLink = videoData["video-link"] || "";
+                    const videoKategorie = videoData["video-kategorie"] || "";
+                    const kategorieName = videoData["kategorie-name"] || "Sonstige";
                     
                     // Verbesserte Überprüfung der erforderlichen Daten
-                    if (!videoId) {
-                        DEBUG.log("Video hat keine ID und wird übersprungen", video, 'warn');
+                    if (!videoId || !videoLink) {
+                        DEBUG.log("Video hat keine ID oder Link und wird übersprungen", videoData, 'warn');
                         return;
                     }
                     
-                    // Verbesserte Extraktion der Kategorie
-                    const videoKategorie = 
-                        video.kategorie || 
-                        video["video-kategorie"] || 
-                        (video.fieldData && video.fieldData["video-kategorie"]) ||
-                        "";
+                    // Erstelle die exakt gleiche HTML-Struktur wie in der alten Implementierung
+                    const wrapperDiv = document.createElement("div");
+                    wrapperDiv.classList.add("db-upload-wrapper-item");
+                    wrapperDiv.setAttribute('data-video-id', videoId);
                     
-                    // Kategorie-Namen aus Mapping ermitteln oder aus dem Objekt extrahieren
-                    let kategorieName = "Sonstige";
-                    if (CONFIG.CATEGORY_MAPPING && CONFIG.CATEGORY_MAPPING[videoKategorie]) {
-                        kategorieName = CONFIG.CATEGORY_MAPPING[videoKategorie];
-                    } else if (video["kategorie-name"]) {
-                        kategorieName = video["kategorie-name"];
-                    }
+                    // Video-Element
+                    const videoDiv = document.createElement("div");
+                    videoDiv.classList.add("db-upload-item-video");
                     
-                    // Video-Karte erstellen
-                    const videoCard = document.createElement('div');
-                    videoCard.className = 'db-card';
-                    videoCard.setAttribute('data-video-id', videoId);
+                    const videoElement = document.createElement("video");
+                    videoElement.src = videoLink;
+                    videoElement.controls = true;
+                    videoElement.classList.add("db-upload-video");
                     
-                    // Thumbnail URL ermitteln, verwende Video-Link als Fallback
-                    const thumbnailUrl = videoLink;
-                    
-                    // HTML-Inhalt der Karte
-                    videoCard.innerHTML = `
-                        <div class="db-card-image">
-                            <div class="db-view-wrapper">
-                                <div class="db-preview" style="background-image: url('${thumbnailUrl}')">
-                                    <a href="${videoLink}" class="db-video-preview w-inline-block" target="_blank">
-                                        <div class="db-watch"></div>
-                                    </a>
-                                </div>
+                    // Error-Handler für Videofehler
+                    videoElement.addEventListener("error", () => {
+                        videoDiv.innerHTML = `
+                            <div class="video-error">
+                                <p>Video konnte nicht geladen werden</p>
                             </div>
-                        </div>
-                        <div class="db-card-content">
-                            <div class="db-card-top">
-                                <div class="db-card-name-wrap">
-                                    <h4 class="db-card-name">${videoName}</h4>
-                                </div>
-                                <div class="is-txt-14 is-light">${kategorieName}</div>
-                            </div>
-                            <div class="db-card-description">
-                                <p>${videoDescription}</p>
-                            </div>
-                            <div class="db-card-bottom">
-                                <a href="#" class="db-card-edit w-button" data-video-edit="${videoId}">Bearbeiten</a>
-                            </div>
-                        </div>
-                    `;
+                        `;
+                    });
                     
-                    // Event-Listener für Edit-Button hinzufügen
-                    const editButton = videoCard.querySelector(`[data-video-edit="${videoId}"]`);
-                    if (editButton) {
-                        editButton.addEventListener('click', (e) => {
-                            e.preventDefault();
-                            if (window.editVideo && typeof window.editVideo === 'function') {
-                                window.editVideo(videoId);
-                            } else {
-                                DEBUG.log('editVideo-Funktion nicht verfügbar', null, 'warn');
-                            }
-                        });
-                    }
+                    videoDiv.appendChild(videoElement);
                     
-                    // Video-Karte zum Container hinzufügen
-                    container.appendChild(videoCard);
+                    // Details-Container
+                    const detailsDiv = document.createElement("div");
+                    detailsDiv.classList.add("db-upload-item-details");
+                    
+                    // Container für Titel und Kategorie
+                    const detailsContainerDiv = document.createElement("div");
+                    detailsContainerDiv.classList.add("db-upload-details-container");
+                    
+                    // Titel
+                    const titleDiv = document.createElement("div");
+                    titleDiv.classList.add("db-upload-video-title");
+                    titleDiv.textContent = videoName;
+                    
+                    // Kategorie
+                    const categoryP = document.createElement("p");
+                    categoryP.classList.add("is-txt-tiny");
+                    categoryP.textContent = kategorieName;
+                    
+                    // Edit-Button
+                    const editButton = document.createElement("button");
+                    editButton.classList.add("db-upload-settings");
+                    editButton.setAttribute("data-video-edit", videoId);
+                    editButton.innerHTML = `<img src="https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/678a26c04581673826145b8b_settings.svg" alt="Bearbeiten">`;
+                    editButton.title = "Video bearbeiten";
+                    
+                    // Event-Handler für Edit-Button
+                    editButton.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        if (window.editVideo && typeof window.editVideo === 'function') {
+                            window.editVideo(videoId);
+                        } else {
+                            DEBUG.log('editVideo-Funktion nicht verfügbar', null, 'warn');
+                            
+                            // Fallback: Event auslösen
+                            const editEvent = new CustomEvent('videoEditRequest', { 
+                                detail: { videoId: videoId } 
+                            });
+                            document.dispatchEvent(editEvent);
+                        }
+                    });
+                    
+                    // Struktur zusammenfügen
+                    detailsContainerDiv.appendChild(titleDiv);
+                    detailsContainerDiv.appendChild(categoryP);
+                    detailsDiv.appendChild(detailsContainerDiv);
+                    detailsDiv.appendChild(editButton);
+                    
+                    wrapperDiv.appendChild(videoDiv);
+                    wrapperDiv.appendChild(detailsDiv);
+                    
+                    // Wrapper zum Fragment hinzufügen
+                    fragment.appendChild(wrapperDiv);
                     
                 } catch (error) {
                     DEBUG.log(`Fehler beim Rendern von Video:`, error, 'error');
                 }
             });
+            
+            // Alle Video-Elemente auf einmal anhängen
+            container.appendChild(fragment);
+            
+            // Button für neue Videos hinzufügen, wenn Limit nicht erreicht
+            const isLimitReached = videos.length >= maxUploads;
+            
+            if (!isLimitReached && videos.length > 0) {
+                const addButtonContainer = document.createElement("div");
+                addButtonContainer.classList.add("db-upload-add-new");
+                
+                const addButton = document.createElement("a");
+                addButton.href = "#";
+                addButton.classList.add("db-upload-more-upload-button");
+                addButton.setAttribute("data-modal-toggle", "new-upload");
+                addButton.textContent = "Video hinzufügen";
+                
+                addButtonContainer.appendChild(addButton);
+                container.appendChild(addButtonContainer);
+            }
+            
+            DEBUG.log(`${videos.length} Videos gerendert, maxUploads = ${maxUploads}`);
         }
     }
 

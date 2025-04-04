@@ -27,12 +27,19 @@
         getCurrentMember: async () => null,
         extractWebflowId: () => null
     };
+    const CACHE = window.WEBFLOW_API.cache || {
+        clear: () => {}
+    };
+    
     class VideoUploadApp {
         constructor() {
             this.currentMember = null;
             
             // Fortschrittsbalken-Zustand
             this.progressBarVisible = false;
+            
+            // Timeout für die Seitenaktualisierung
+            this.refreshTimeout = null;
         }
         
         /**
@@ -173,6 +180,12 @@
                 
                 DEBUG.log('Video erfolgreich erstellt:', videoResult);
                 
+                // Clear Cache to make the new video visible on page refresh
+                if (CACHE && typeof CACHE.clear === 'function') {
+                    DEBUG.log('Cache wird geleert, um das neue Video sofort sichtbar zu machen');
+                    CACHE.clear();
+                }
+                
                 // Update Progress
                 this.updateProgressBar(70);
                 
@@ -188,11 +201,10 @@
                     }
                 }
                 
-                // Update Progress
+                // Update Progress to 100%
                 this.updateProgressBar(100);
                 
-                // Erfolg! Zeige Erfolgs-DIV an oder leite weiter
-                this.hideProgressBar();
+                // Erfolg! Zeige Erfolgs-DIV an
                 const successDiv = document.getElementById(CONFIG.SUCCESS_DIV_ID);
                 if (successDiv) {
                     successDiv.style.display = 'block';
@@ -201,15 +213,50 @@
                     form.style.display = 'none';
                 }
                 
-                // Optional: Zur Bestätigungsseite weiterleiten
-                // setTimeout(() => {
-                //     window.location.href = "/upload-success";
-                // }, 2000);
+                // Wichtig: Seite nach 1,5 Sekunden neu laden, damit das neue Video sichtbar wird
+                this.schedulePageRefresh(1500);
                 
             } catch (error) {
                 DEBUG.log('Fehler beim Verarbeiten des Formulars', error, 'error');
                 alert('Fehler beim Hochladen des Videos. Bitte versuche es erneut.');
                 this.hideProgressBar();
+                
+                // Clear any pending page refresh
+                this.cancelPageRefresh();
+            }
+        }
+        
+        /**
+         * Plant die Aktualisierung der Seite nach einer Verzögerung
+         * @param {number} delay - Verzögerung in Millisekunden
+         */
+        schedulePageRefresh(delay = 1500) {
+            // Lösche vorherige Timeouts, falls vorhanden
+            this.cancelPageRefresh();
+            
+            DEBUG.log(`Seite wird in ${delay}ms neu geladen, um das neue Video anzuzeigen`);
+            
+            // Setze einen neuen Timeout für die Seitenaktualisierung
+            this.refreshTimeout = setTimeout(() => {
+                DEBUG.log('Lade Seite neu, um das neue Video anzuzeigen...');
+                
+                // Lösche den Cache und lade die Seite neu
+                if (CACHE && typeof CACHE.clear === 'function') {
+                    CACHE.clear();
+                }
+                
+                // Seite neu laden mit Cache-Busting-Parameter
+                window.location.href = window.location.href.split('?')[0] + '?refresh=' + new Date().getTime();
+            }, delay);
+        }
+        
+        /**
+         * Bricht eine geplante Seitenaktualisierung ab
+         */
+        cancelPageRefresh() {
+            if (this.refreshTimeout) {
+                clearTimeout(this.refreshTimeout);
+                this.refreshTimeout = null;
             }
         }
         
@@ -385,7 +432,7 @@
             
             if (progressTextElem) {
                 if (percent === 100) {
-                    progressTextElem.textContent = 'Erfolgreich hochgeladen!';
+                    progressTextElem.textContent = 'Erfolgreich hochgeladen! Seite wird aktualisiert...';
                 } else {
                     progressTextElem.textContent = 'Wird hochgeladen...';
                 }

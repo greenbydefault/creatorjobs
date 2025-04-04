@@ -33,6 +33,94 @@
         }
         
         /**
+         * Lädt Videos in Chunks, um API-Limits zu umgehen
+         * @param {Array<string>} videoIds - Liste der Video-IDs
+         * @param {number} chunkSize - Größe der Chunks
+         * @returns {Promise<Array>} - Array mit Video-Daten
+         */
+        async fetchVideosInChunks(videoIds, chunkSize = 20) {
+            if (!videoIds || videoIds.length === 0) {
+                return [];
+            }
+            
+            const videoCollectionId = CONFIG.COLLECTION_ID;
+            const videoIdSet = new Set(videoIds);
+            let allVideos = [];
+            
+            // Videos in Chunks aufteilen für bessere Performance
+            const chunks = [];
+            for (let i = 0; i < videoIds.length; i += chunkSize) {
+                chunks.push(videoIds.slice(i, i + chunkSize));
+            }
+            
+            DEBUG.log(`Lade ${videoIds.length} Videos in ${chunks.length} Chunks`);
+            
+            for (let i = 0; i < chunks.length; i++) {
+                const chunk = chunks[i];
+                
+                try {
+                    // Erstelle die API-URL für den Chunk
+                    const filter = JSON.stringify({ id: { in: chunk } });
+                    const apiUrl = `${CONFIG.BASE_URL}/${videoCollectionId}/items?live=true&filter=${encodeURIComponent(filter)}`;
+                    const workerUrl = this.buildWorkerUrl(apiUrl);
+                    
+                    // Lade den Chunk
+                    const response = await fetch(workerUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`API-Fehler: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.items && data.items.length > 0) {
+                        // Verarbeite die Videos
+                        const chunkVideos = data.items
+                            .filter(item => videoIdSet.has(item.id))
+                            .map(item => this.processVideoItem(item));
+                        
+                        allVideos = allVideos.concat(chunkVideos);
+                    }
+                } catch (error) {
+                    DEBUG.log(`Fehler beim Laden von Chunk ${i+1}`, error, 'error');
+                }
+            }
+            
+            return allVideos;
+        }
+        
+        /**
+         * Verarbeitet ein Video-Item aus der API-Antwort
+         * @param {Object} item - Das Video-Item aus der API
+         * @returns {Object} - Verarbeitetes Video-Objekt
+         */
+        processVideoItem(item) {
+            if (!item || !item.fieldData) {
+                return null;
+            }
+            
+            // Kategorie-ID extrahieren
+            const categoryId = item.fieldData["video-kategorie"];
+            
+            // Kategorie-Name über das Mapping holen
+            let categoryName = "Nicht angegeben";
+            
+            if (categoryId && CONFIG.CATEGORY_MAPPING && CONFIG.CATEGORY_MAPPING[categoryId]) {
+                categoryName = CONFIG.CATEGORY_MAPPING[categoryId];
+            }
+            
+            return {
+                id: item.id,
+                "video-link": item.fieldData["video-link"],
+                "video-name": item.fieldData["video-name"] || item.fieldData["name"] || "Unbenanntes Video",
+                "video-beschreibung": item.fieldData["video-beschreibung"] || "",
+                "video-kategorie": categoryId,
+                "kategorie-name": categoryName,
+                "offentliches-video": item.fieldData["offentliches-video"] || false
+            };
+        }
+        
+        /**
          * Holt ein Video anhand seiner ID
          * @param {string} videoId - Die Video-ID
          * @returns {Promise<Object>} - Die Video-Daten

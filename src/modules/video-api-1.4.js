@@ -33,6 +33,77 @@
         }
         
         /**
+         * Erstellt ein neues Video in der CMS-Collection
+         * @param {Object} formData - Die Formulardaten für das neue Video
+         * @returns {Promise<Object>} - Das erstellte Video-Objekt
+         */
+        async createVideo(formData) {
+            if (!formData) {
+                DEBUG.log("Keine Formulardaten zum Erstellen des Videos", null, 'error');
+                return null;
+            }
+
+            try {
+                DEBUG.log("Erstelle neues Video in Webflow CMS...", formData);
+                
+                // Erstelle die API-URL zum Erstellen des Videos
+                const apiUrl = `${CONFIG.BASE_URL}/${CONFIG.COLLECTION_ID}/items/live`;
+                const workerUrl = this.buildWorkerUrl(apiUrl);
+                
+                // Die Webflow API erwartet dieses Format für ein Single Item
+                const payload = {
+                    isArchived: false,
+                    isDraft: false,
+                    fieldData: {
+                        "name": formData.name || "Unbenanntes Video",
+                        "slug": formData.slug || "unbenanntes-video",
+                        "video-name": formData.name || "Unbenanntes Video",
+                        "video-kategorie": formData.kategorie || "",
+                        "video-beschreibung": formData.beschreibung || "Keine Beschreibung",
+                        "offentliches-video": formData.openVideo || false,
+                        "video-contest": formData.videoContest || false,
+                        "webflow-id": formData.webflowMemberId || "",
+                        "memberstack-id": formData.memberstackMemberId || "",
+                        "creator-name": formData.memberName || "Unbekannter Nutzer",
+                        "video-link": formData.videoLink || ""
+                    }
+                };
+                
+                DEBUG.log("Sende Daten an Webflow API:", payload);
+                
+                // Sende die Anfrage
+                const response = await fetch(workerUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                // Überprüfe die Antwort
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    DEBUG.log(`API-Fehler beim Erstellen des Videos: ${response.status}`, errorText, 'error');
+                    throw new Error(`API-Fehler beim Erstellen des Videos: ${response.status}`);
+                }
+                
+                // Parse die Antwort
+                const videoData = await response.json();
+                DEBUG.log("Video erfolgreich erstellt:", videoData);
+                
+                // Cache löschen für aktualisierten Zustand
+                if (CACHE.clear) {
+                    CACHE.clear();
+                }
+                
+                return videoData;
+            } catch (error) {
+                DEBUG.log("Fehler beim Erstellen des Videos:", error, 'error');
+                throw error;
+            }
+        }
+        
+        /**
          * Lädt Videos in Chunks, um API-Limits zu umgehen
          * @param {Array<string>} videoIds - Liste der Video-IDs
          * @param {number} chunkSize - Größe der Chunks

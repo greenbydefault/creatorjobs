@@ -85,8 +85,8 @@
     memberApi: './modules/member-api-1.1.js',
     uploadcare: './modules/uploadcare-1.4.js',
     memberstack: './modules/memberstack-1.1.js',
-    uiManager: './modules/ui-manager-1.1.js',
-    videoFeedApp: './modules/video-feed-app-1.1.js',
+    uiManager: './modules/ui-manager-1.2.js',
+    videoFeedApp: './modules/video-feed-app-1.2.js',
     videoEditApp: './modules/video-edit-app-1.2.js',
     videoUploadApp: './modules/video-upload-app-1.2.js'
   };

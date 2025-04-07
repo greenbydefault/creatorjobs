@@ -79,7 +79,7 @@
   // Modul-Pfade
   const MODULE_PATHS = {
     debug: './modules/debug-1.1.js',
-    cache: './modules/cache-1.5.js',
+    cache: './modules/cache-1.6.js',
     apiService: './modules/api-service-1.0.js',
     videoApi: './modules/video-api-1.4.js',
     memberApi: './modules/member-api-1.7.js',

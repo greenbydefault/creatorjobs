@@ -87,7 +87,7 @@
     memberstack: './modules/memberstack-1.1.js',
     uiManager: './modules/ui-manager-1.5.js',
     videoFeedApp: './modules/video-feed-app-1.6.js',
-    videoEditApp: './modules/video-edit-app-1.3.js',
+    videoEditApp: './modules/video-edit-app-1.4.js',
     videoUploadApp: './modules/video-upload-app-1.5.js',
     diagnostics: './modules/debug-diagnostics.js'
   };

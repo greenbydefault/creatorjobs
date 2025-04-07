@@ -48,21 +48,20 @@
         }
         
         /**
-         * Prüft, ob die URL einen Refresh-Parameter enthält und leert ggf. den Cache
+         * Prüft, ob die URL einen Refresh-Parameter enthält und löst ein Event aus
          */
         checkRefreshParameter() {
             try {
                 const url = new URL(window.location.href);
                 const refreshParam = url.searchParams.get('refresh');
                 
-                // Wenn ein refresh-Parameter existiert, leere den Cache
+                // Wenn ein refresh-Parameter existiert, Event auslösen
                 if (refreshParam) {
-                    DEBUG.log('Refresh-Parameter gefunden, Cache wird geleert');
+                    DEBUG.log('Refresh-Parameter gefunden');
                     
-                    // Cache leeren
-                    if (CACHE && typeof CACHE.clear === 'function') {
-                        CACHE.clear();
-                    }
+                    // Event auslösen anstatt Cache zu leeren
+                    const event = new CustomEvent('refreshRequest');
+                    document.dispatchEvent(event);
                     
                     // Parameter aus der URL entfernen, um unnötige Refreshes zu vermeiden
                     url.searchParams.delete('refresh');
@@ -89,12 +88,7 @@
             // Event-Listener für Video-Feed-Updates registrieren
             document.addEventListener('videoFeedUpdate', () => {
                 DEBUG.log('Update-Event empfangen, lade Feed neu');
-                
-                // Cache löschen und Daten neu laden
-                if (CACHE && typeof CACHE.clear === 'function') {
-                    CACHE.clear();
-                }
-                this.loadUserVideos(true); // true = cache ignorieren
+                this.loadUserVideos(true);
             });
             
             // Zusätzliche Event-Listener für Video-Aktionen
@@ -121,12 +115,7 @@
                 const newUpload = url.searchParams.get('newupload');
                 
                 if (newUpload) {
-                    DEBUG.log('Neuer Upload erkannt, Cache wird ignoriert');
-                    
-                    // Cache leeren
-                    if (CACHE && typeof CACHE.clear === 'function') {
-                        CACHE.clear();
-                    }
+                    DEBUG.log('Neuer Upload erkannt');
                     
                     // Parameter aus der URL entfernen
                     url.searchParams.delete('newupload');
@@ -139,7 +128,7 @@
         
         /**
          * Lädt die Videos des eingeloggten Users
-         * @param {boolean} ignoreCache - Wenn true, wird der Cache ignoriert
+         * @param {boolean} ignoreCache - Parameter beibehalten für Kompatibilität
          */
         async loadUserVideos(ignoreCache = false) {
             try {
@@ -151,12 +140,6 @@
                 
                 this.isLoading = true;
                 UI.showLoading();
-                
-                // Bei Bedarf Cache leeren
-                if (ignoreCache && CACHE && typeof CACHE.clear === 'function') {
-                    DEBUG.log('Cache wird gelöscht, um aktuelle Daten zu laden');
-                    CACHE.clear();
-                }
                 
                 // Memberstack-User laden
                 const member = await MEMBERSTACK.getCurrentMember();
@@ -222,17 +205,12 @@
         }
         
         /**
-         * Erzwingt eine Neuladung der Videos ohne Cache
+         * Erzwingt eine Neuladung der Videos
          */
         forceReload() {
-            DEBUG.log('Erzwinge Neuladung des Video-Feeds ohne Cache');
+            DEBUG.log('Erzwinge Neuladung des Video-Feeds');
             
-            // Cache leeren
-            if (CACHE && typeof CACHE.clear === 'function') {
-                CACHE.clear();
-            }
-            
-            // Videos neu laden mit Cache-Umgehung
+            // Direkt neu laden ohne Cache-Operationen
             this.loadUserVideos(true);
         }
     }

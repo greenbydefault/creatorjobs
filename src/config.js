@@ -38,7 +38,7 @@ export const CONFIG = {
     PAID_MEMBER_LIMIT: 12,
     
     // Cache-Zeit in Millisekunden (5 Minuten)
-    CACHE_EXPIRATION: 5 * 60 * 1000,
+    CACHE_EXPIRATION: 0,
     
     // Debug-Einstellungen
     DEBUG_MODE: true,

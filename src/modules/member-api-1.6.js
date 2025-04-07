@@ -112,6 +112,7 @@
             const workerUrl = this.buildWorkerUrl(apiUrl);
             
             try {
+                // WICHTIG: Wir verwenden die Worker-URL, nicht die direkte API-URL
                 const response = await fetch(workerUrl);
                 
                 if (!response.ok) {
@@ -221,10 +222,13 @@
                 
                 // Zunächst den Benutzer direkt abrufen
                 DEBUG.log(`Hole Benutzer direkt mit Webflow-ID: ${memberId}`);
+                
+                // WICHTIG: Wir verwenden die Worker-URL, nicht die direkte API-URL
                 const response = await fetch(workerUrl);
                 
                 if (!response.ok) {
-                    DEBUG.log(`API-Fehler beim Abrufen des Members: ${response.status}`, await response.text(), 'error');
+                    const errorText = await response.text();
+                    DEBUG.log(`API-Fehler beim Abrufen des Members: ${response.status}`, errorText, 'error');
                     return null;
                 }
                 
@@ -265,6 +269,7 @@
                     }
                 };
                 
+                // WICHTIG: Wir verwenden die Worker-URL, nicht die direkte API-URL
                 const updateResponse = await fetch(workerUrl, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },

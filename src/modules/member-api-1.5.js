@@ -101,8 +101,8 @@
             
             DEBUG.log(`Suche User mit Webflow-ID: ${webflowId}`);
             
-            // Kleine Verzögerung hinzufügen, um mögliche Timing-Probleme zu lösen
-            await new Promise(resolve => setTimeout(resolve, 300));
+            // Kleine Verzögerung hinzufügen für API-Stabilität
+            await new Promise(resolve => setTimeout(resolve, 500));
             
             // API-URL für User erstellen
             const memberCollectionId = CONFIG.MEMBERS_COLLECTION_ID;
@@ -112,7 +112,15 @@
             const workerUrl = this.buildWorkerUrl(apiUrl);
             
             try {
-                const user = await this.fetchApi(workerUrl);
+                const response = await fetch(workerUrl);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    DEBUG.log(`API-Fehler beim Abrufen des Users: ${response.status}`, errorText, 'error');
+                    return null;
+                }
+                
+                const user = await response.json();
                 
                 if (!user || !user.id) {
                     DEBUG.log(`Kein User gefunden mit Webflow-ID ${webflowId}`, null, 'warn');
@@ -133,7 +141,8 @@
                 return user;
             } catch (error) {
                 DEBUG.log(`Fehler beim Abrufen des Users mit Webflow-ID ${webflowId}`, error, 'error');
-                throw error;
+                // Fehler nicht weiterwerfen, sondern null zurückgeben
+                return null;
             }
         }
 
@@ -189,7 +198,7 @@
         }
 
         /**
-         * Aktualisiert den Video-Feed eines Members mit Fehlerbehandlung und Verzögerung
+         * Aktualisiert den Video-Feed eines Members mit Fehlerbehandlung
          * @param {string} memberId - Die ID des Members
          * @param {string} videoId - Die ID des Videos
          * @param {number} [delayMs=1500] - Verzögerung für die Datenbankreplikation
@@ -202,105 +211,83 @@
             }
         
             // WICHTIG: Verzögerung hinzufügen, um der Datenbank Zeit für die Replikation zu geben
-            DEBUG.log(`Warte ${delayMs}ms, um der Datenbank Zeit für die Replikation zu geben...`);
+            DEBUG.log(`Warte ${delayMs}ms, um der Datenbank Zeit zu geben...`);
             await new Promise(resolve => setTimeout(resolve, delayMs));
         
-            // Versuche die Aktualisierung mehrfach
-            for (let attempt = 1; attempt <= this.retryCount; attempt++) {
-                try {
-                    // Hole zuerst den aktuellen Member
-                    const member = await this.getUserByWebflowId(memberId);
-                    
-                    if (!member) {
-                        throw new Error(`Kein Member mit ID ${memberId} gefunden`);
+            try {
+                // Direkte API-URL konstruieren und Worker-URL erstellen
+                const apiUrl = `${CONFIG.BASE_URL}/${CONFIG.MEMBERS_COLLECTION_ID}/items/${memberId}`;
+                const workerUrl = this.buildWorkerUrl(apiUrl);
+                
+                // Zunächst den Benutzer direkt abrufen
+                DEBUG.log(`Hole Benutzer direkt mit Webflow-ID: ${memberId}`);
+                const response = await fetch(workerUrl);
+                
+                if (!response.ok) {
+                    DEBUG.log(`API-Fehler beim Abrufen des Members: ${response.status}`, await response.text(), 'error');
+                    return null;
+                }
+                
+                const member = await response.json();
+                
+                if (!member || !member.id) {
+                    DEBUG.log(`Kein Member mit ID ${memberId} gefunden`, null, 'warn');
+                    return null;
+                }
+                
+                // Hole die aktuelle Video-Feed-Liste
+                const currentVideoFeed = Array.isArray(member.fieldData["video-feed"]) 
+                    ? member.fieldData["video-feed"] 
+                    : [];
+                
+                // Prüfe, ob das Video bereits im Feed ist
+                if (currentVideoFeed.includes(videoId)) {
+                    DEBUG.log(`Video ${videoId} ist bereits im Feed des Members`, null, 'warn');
+                    return member;
+                }
+                
+                // Füge das neue Video zur Liste hinzu
+                const updatedVideoFeed = [...currentVideoFeed, videoId];
+                
+                DEBUG.log(`Aktualisiere Video-Feed für Member ${memberId}`, {
+                    vorher: currentVideoFeed.length,
+                    nachher: updatedVideoFeed.length,
+                    neuesVideo: videoId
+                });
+                
+                // PUT-Anfrage verwenden (stabiler als PATCH)
+                const putPayload = {
+                    isArchived: member.isArchived || false,
+                    isDraft: member.isDraft || false,
+                    fieldData: {
+                        ...member.fieldData,
+                        "video-feed": updatedVideoFeed
                     }
+                };
+                
+                const updateResponse = await fetch(workerUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(putPayload)
+                });
+                
+                if (!updateResponse.ok) {
+                    const errorText = await updateResponse.text();
+                    DEBUG.log(`API-Fehler beim Member-Update: ${updateResponse.status}`, errorText, 'error');
                     
-                    // Hole die aktuelle Video-Feed-Liste
-                    const currentVideoFeed = Array.isArray(member.fieldData["video-feed"]) 
-                        ? member.fieldData["video-feed"] 
-                        : [];
-                    
-                    // Prüfe, ob das Video bereits im Feed ist
-                    if (currentVideoFeed.includes(videoId)) {
-                        DEBUG.log(`Video ${videoId} ist bereits im Feed des Members`, null, 'warn');
-                        return member; // Keine Änderung notwendig
-                    }
-                    
-                    // Füge das neue Video zur Liste hinzu
-                    const updatedVideoFeed = [...currentVideoFeed, videoId];
-                    
-                    DEBUG.log(`Aktualisiere Video-Feed für Member ${memberId}`, {
-                        vorher: currentVideoFeed.length,
-                        nachher: updatedVideoFeed.length,
-                        neuesVideo: videoId
-                    });
-                    
-                    // Erstelle die API-URL zum Aktualisieren des Members
-                    const apiUrl = `${CONFIG.BASE_URL}/${CONFIG.MEMBERS_COLLECTION_ID}/items/${member.id}`;
-                    const workerUrl = this.buildWorkerUrl(apiUrl);
-                    
-                    // Baue den Payload für das Update mit PATCH - nur das zu ändernde Feld
-                    const payload = {
-                        isArchived: false,
-                        isDraft: false,
-                        fieldData: {
-                            // Nur das Feld aktualisieren, das wir ändern möchten
-                            "video-feed": updatedVideoFeed
-                        }
-                    };
-                    
-                    // Versuche zuerst mit PATCH, dann mit PUT, wenn PATCH fehlschlägt
-                    let response;
-                    try {
-                        // PATCH-Methode
-                        response = await fetch(workerUrl, {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(payload)
-                        });
-                    } catch (corsError) {
-                        DEBUG.log(`PATCH fehlgeschlagen, versuche mit PUT...`, corsError, 'warn');
-                        
-                        // Bei PUT müssen wir alle Felder beibehalten
-                        const putPayload = {
-                            isArchived: member.isArchived || false,
-                            isDraft: member.isDraft || false,
-                            fieldData: {
-                                ...member.fieldData,
-                                "video-feed": updatedVideoFeed
-                            }
-                        };
-                        
-                        response = await fetch(workerUrl, {
-                            method: "PUT",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(putPayload)
-                        });
-                    }
-                    
-                    // Überprüfe auf Referenzierungsfehler (400 Bad Request)
-                    if (response.status === 400) {
-                        const errorText = await response.text();
-                        const errorJson = JSON.parse(errorText);
-                        
-                        // Prüfe, ob es sich um einen "Referenced item not found"-Fehler handelt
-                        if (errorJson.details && 
-                            errorJson.details.some(detail => 
-                                detail.param === "video-feed" && 
-                                detail.description && 
-                                detail.description.includes("Referenced item not found"))) {
+                    // Bei 400-Fehler (Bad Request) prüfen, ob es ein "Referenced item not found" Fehler ist
+                    if (updateResponse.status === 400) {
+                        try {
+                            const errorJson = JSON.parse(errorText);
                             
-                            DEBUG.log(`Video ${videoId} existiert noch nicht in der Datenbank`, null, 'warn');
-                            
-                            if (attempt < this.retryCount) {
-                                // Warte länger, bevor wir es erneut versuchen
-                                const delay = this.retryDelay * Math.pow(2, attempt);
-                                DEBUG.log(`Warte ${delay}ms vor nächstem Versuch...`);
-                                await new Promise(resolve => setTimeout(resolve, delay));
-                                continue; // Zum nächsten Versuch
-                            } else {
-                                // Maximal Versuche erreicht, als erfolgreich behandeln
-                                DEBUG.log(`Max. Versuche erreicht. Video wird später hinzugefügt.`, null, 'warn');
+                            // Prüfe, ob es sich um einen "Referenced item not found"-Fehler handelt
+                            if (errorJson.details && 
+                                errorJson.details.some(detail => 
+                                    detail.param === "video-feed" && 
+                                    detail.description && 
+                                    detail.description.includes("Referenced item not found"))) {
+                                
+                                DEBUG.log(`Video ${videoId} existiert noch nicht in der Datenbank`, null, 'warn');
                                 
                                 // Event abfeuern, damit der Feed später aktualisiert wird
                                 setTimeout(() => {
@@ -317,40 +304,23 @@
                                     }
                                 };
                             }
+                        } catch (parseError) {
+                            DEBUG.log(`Fehler beim Parsen der API-Fehlermeldung`, parseError, 'warn');
                         }
-                        
-                        // Bei anderen Fehlern normal weiterwerfen
-                        DEBUG.log(`API-Fehler beim Member-Update: ${response.status}`, errorText, 'error');
-                        throw new Error(`API-Fehler beim Member-Update: ${response.status} - ${errorText}`);
                     }
                     
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        DEBUG.log(`API-Fehler beim Member-Update: ${response.status}`, errorText, 'error');
-                        throw new Error(`API-Fehler beim Member-Update: ${response.status} - ${errorText}`);
-                    }
-                    
-                    // Erfolgreiche Antwort verarbeiten
-                    const responseData = await response.json();
-                    DEBUG.log("Member erfolgreich aktualisiert:", responseData);
-                    
-                    return responseData;
-                } catch (error) {
-                    DEBUG.log(`Fehler beim Aktualisieren des Member Video-Feeds (Versuch ${attempt})`, error, 'error');
-                    
-                    if (attempt < this.retryCount) {
-                        const delay = this.retryDelay * Math.pow(2, attempt);
-                        DEBUG.log(`Warte ${delay}ms vor nächstem Versuch...`);
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                    } else {
-                        // Bei endgültigem Fehler weitergeben
-                        throw error;
-                    }
+                    return null;
                 }
+                
+                // Erfolgreiche Antwort verarbeiten
+                const responseData = await updateResponse.json();
+                DEBUG.log("Member erfolgreich aktualisiert:", responseData);
+                
+                return responseData;
+            } catch (error) {
+                DEBUG.log(`Fehler beim Aktualisieren des Member Video-Feeds`, error, 'error');
+                return null;
             }
-            
-            // Sollte nie erreicht werden
-            throw new Error(`Konnte Video ${videoId} nach ${this.retryCount} Versuchen nicht zum Member ${memberId} hinzufügen`);
         }
     }
 

@@ -19,7 +19,7 @@
     };
     const UI = window.WEBFLOW_API.UI || {
         init: () => {},
-        showLoading: () => {},
+        showLoading: (count) => {},
         showError: (message) => console.error(message),
         updatePlanStatus: () => {},
         renderVideos: () => {}
@@ -37,14 +37,50 @@
         // Fallback-Implementierung
     };
 
+    // Konstante für den localStorage Key
+    const VIDEO_COUNT_STORAGE_KEY = 'webflow_video_count';
+    const DEFAULT_SKELETON_COUNT = 3;
+
     class VideoFeedApp {
         constructor() {
             this.currentMember = null;
             this.userVideos = [];
             this.isLoading = false;
+            this.lastVideoCount = this.getLastVideoCount();
             
             // Prüfe auf Cache-Busting-Parameter in der URL
             this.checkRefreshParameter();
+        }
+        
+        /**
+         * Holt die letzte bekannte Video-Anzahl aus dem localStorage
+         * @returns {number} - Die Anzahl der Videos oder Standardwert
+         */
+        getLastVideoCount() {
+            try {
+                const storedCount = localStorage.getItem(VIDEO_COUNT_STORAGE_KEY);
+                const count = parseInt(storedCount, 10);
+                return !isNaN(count) && count > 0 ? count : DEFAULT_SKELETON_COUNT;
+            } catch (error) {
+                DEBUG.log('Fehler beim Lesen des video count aus localStorage', error, 'warn');
+                return DEFAULT_SKELETON_COUNT;
+            }
+        }
+        
+        /**
+         * Speichert die aktuelle Video-Anzahl im localStorage
+         * @param {number} count - Die zu speichernde Anzahl
+         */
+        saveVideoCount(count) {
+            try {
+                if (count && count > 0) {
+                    localStorage.setItem(VIDEO_COUNT_STORAGE_KEY, count.toString());
+                    this.lastVideoCount = count;
+                    DEBUG.log(`Video-Anzahl (${count}) im localStorage gespeichert`);
+                }
+            } catch (error) {
+                DEBUG.log('Fehler beim Speichern des video count in localStorage', error, 'warn');
+            }
         }
         
         /**
@@ -91,6 +127,12 @@
                 this.loadUserVideos(true);
             });
             
+            // Event-Listener für Refresh-Anfragen
+            document.addEventListener('refreshRequest', () => {
+                DEBUG.log('Refresh-Event empfangen, lade Feed neu');
+                this.loadUserVideos(true);
+            });
+            
             // Zusätzliche Event-Listener für Video-Aktionen
             document.addEventListener('videoCreated', () => {
                 DEBUG.log('Neues Video erstellt, Feed wird aktualisiert');
@@ -128,7 +170,7 @@
         
         /**
          * Lädt die Videos des eingeloggten Users
-         * @param {boolean} ignoreCache - Parameter beibehalten für Kompatibilität
+         * @param {boolean} ignoreCache - Wenn true, wird der Cache ignoriert
          */
         async loadUserVideos(ignoreCache = false) {
             try {
@@ -139,7 +181,10 @@
                 }
                 
                 this.isLoading = true;
-                UI.showLoading();
+                
+                // Zeige Skeleton-Loader mit der letzten bekannten Anzahl
+                DEBUG.log(`Zeige Skeleton-Loader für ${this.lastVideoCount} Videos`);
+                UI.showLoading(this.lastVideoCount);
                 
                 // Memberstack-User laden
                 const member = await MEMBERSTACK.getCurrentMember();
@@ -184,6 +229,9 @@
                 const videos = await MEMBER_API.getVideosFromUserFeed(user, VIDEO_API);
                 this.userVideos = videos;
                 
+                // Speichere die neue Video-Anzahl für zukünftige Skeleton-Loader
+                this.saveVideoCount(videos.length);
+                
                 // Wenn ein Benutzer mehr Videos hat als sein Limit, passe das Limit an
                 // Dies ist wichtig, damit bereits hochgeladene Videos weiterhin angezeigt werden
                 if (videos.length > maxUploads) {
@@ -209,9 +257,23 @@
          */
         forceReload() {
             DEBUG.log('Erzwinge Neuladung des Video-Feeds');
-            
-            // Direkt neu laden ohne Cache-Operationen
             this.loadUserVideos(true);
+        }
+        
+        /**
+         * Setzt den Video-Count im localStorage zurück
+         * Nützlich für Debugging oder als Extension-Methode
+         */
+        resetVideoCount() {
+            try {
+                localStorage.removeItem(VIDEO_COUNT_STORAGE_KEY);
+                this.lastVideoCount = DEFAULT_SKELETON_COUNT;
+                DEBUG.log('Video-Count zurückgesetzt auf Standardwert', this.lastVideoCount);
+                return true;
+            } catch (error) {
+                DEBUG.log('Fehler beim Zurücksetzen des Video-Counts', error, 'error');
+                return false;
+            }
         }
     }
 
@@ -223,6 +285,14 @@
         if (window.WEBFLOW_API && window.WEBFLOW_API.videoFeedApp) {
             window.WEBFLOW_API.videoFeedApp.forceReload();
             return true;
+        }
+        return false;
+    };
+    
+    // Debugging-Funktion zum Zurücksetzen des Video-Counts
+    window.resetVideoFeedCount = function() {
+        if (window.WEBFLOW_API && window.WEBFLOW_API.videoFeedApp) {
+            return window.WEBFLOW_API.videoFeedApp.resetVideoCount();
         }
         return false;
     };

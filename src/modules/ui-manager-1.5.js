@@ -28,6 +28,9 @@
             
             DEBUG.log('Initialisiere UI-Elemente');
             
+            // Skeleton-Styles initialisieren
+            this.initSkeletonStyles();
+            
             // Wichtige UI-Elemente suchen und zwischenspeichern
             this.findElement('videoContainer', CONFIG.VIDEO_CONTAINER_ID, '.db-upload-wrapper');
             this.findElement('uploadLimitTitle', CONFIG.UPLOAD_LIMIT_TITLE_ID);
@@ -83,6 +86,67 @@
             }
             
             return null;
+        }
+        
+        /**
+         * Initialisiert die CSS-Styles für die Skeleton-Loader
+         */
+        initSkeletonStyles() {
+            if (document.getElementById('skeleton-styles')) return;
+            
+            DEBUG.log('Initialisiere Skeleton-Styles');
+            
+            const styleEl = document.createElement('style');
+            styleEl.id = 'skeleton-styles';
+            styleEl.textContent = `
+                @keyframes skeletonPulse {
+                    0% { opacity: 0.6; }
+                    50% { opacity: 0.8; }
+                    100% { opacity: 0.6; }
+                }
+                
+                .skeleton-item {
+                    animation: skeletonPulse 1.5s ease-in-out infinite;
+                }
+                
+                .skeleton-video {
+                    background-color: #e6e6e6;
+                    min-height: 180px;
+                    border-radius: 8px;
+                }
+                
+                .skeleton-text {
+                    background-color: #e6e6e6;
+                    height: 16px;
+                    margin: 8px 0;
+                    border-radius: 4px;
+                }
+                
+                .skeleton-title {
+                    width: 80%;
+                    height: 20px;
+                }
+                
+                .skeleton-category {
+                    width: 60%;
+                    height: 14px;
+                }
+                
+                .skeleton-button {
+                    background-color: #e6e6e6;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                }
+                
+                .skeleton-details-container {
+                    display: flex;
+                    flex-direction: column;
+                    flex: 1;
+                }
+            `;
+            
+            document.head.appendChild(styleEl);
         }
         
         /**
@@ -178,25 +242,71 @@
         }
         
         /**
-         * Zeigt einen Ladezustand im Video-Container an
+         * Zeigt Skeleton-Loader im Video-Container an
+         * @param {number} count - Anzahl der anzuzeigenden Skeleton-Items
          */
-        showLoading() {
+        showLoading(count = 3) {
             const container = this.elements.videoContainer;
             if (!container) {
-                DEBUG.log('Video-Container zum Anzeigen des Ladevorgangs nicht gefunden!', null, 'warn');
+                DEBUG.log('Video-Container zum Anzeigen des Skeleton-Loaders nicht gefunden!', null, 'warn');
                 return;
             }
             
-            // Ladezustand anzeigen
-            container.innerHTML = `
-                <div class="db-card loading-state">
-                    <div class="is-upload-loading">
-                        <div class="is-spinner"></div>
-                        <p>Lade Videos...</p>
-                    </div>
-                </div>
-            `;
-            DEBUG.log('Ladeanimation wird angezeigt');
+            // Container leeren
+            container.innerHTML = '';
+            
+            DEBUG.log(`Zeige ${count} Skeleton-Loader an`);
+            
+            // Skeleton-Items einfügen
+            for (let i = 0; i < count; i++) {
+                const skeletonItem = this.createSkeletonItem();
+                container.appendChild(skeletonItem);
+            }
+        }
+        
+        /**
+         * Erstellt ein einzelnes Skeleton-Item, das einem Video-Element entspricht
+         * @returns {HTMLElement} - Das Skeleton-Item-Element
+         */
+        createSkeletonItem() {
+            // Wrapper-Element erstellen
+            const wrapperDiv = document.createElement("div");
+            wrapperDiv.classList.add("db-upload-wrapper-item", "skeleton-item");
+            
+            // Video-Platzhalter
+            const videoDiv = document.createElement("div");
+            videoDiv.classList.add("db-upload-item-video", "skeleton-video");
+            
+            // Details-Container
+            const detailsDiv = document.createElement("div");
+            detailsDiv.classList.add("db-upload-item-details");
+            
+            // Details-Container für Titel und Kategorie
+            const detailsContainerDiv = document.createElement("div");
+            detailsContainerDiv.classList.add("db-upload-details-container", "skeleton-details-container");
+            
+            // Titel-Platzhalter
+            const titleDiv = document.createElement("div");
+            titleDiv.classList.add("db-upload-video-title", "skeleton-text", "skeleton-title");
+            
+            // Kategorie-Platzhalter
+            const categoryP = document.createElement("div");
+            categoryP.classList.add("is-txt-tiny", "skeleton-text", "skeleton-category");
+            
+            // Edit-Button-Platzhalter
+            const editButton = document.createElement("div");
+            editButton.classList.add("db-upload-settings", "skeleton-button");
+            
+            // Struktur zusammenfügen (wie bei echten Videos)
+            detailsContainerDiv.appendChild(titleDiv);
+            detailsContainerDiv.appendChild(categoryP);
+            detailsDiv.appendChild(detailsContainerDiv);
+            detailsDiv.appendChild(editButton);
+            
+            wrapperDiv.appendChild(videoDiv);
+            wrapperDiv.appendChild(detailsDiv);
+            
+            return wrapperDiv;
         }
         
         /**

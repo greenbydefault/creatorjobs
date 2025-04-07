@@ -104,46 +104,6 @@
                     50% { opacity: 0.8; }
                     100% { opacity: 0.6; }
                 }
-                
-                .skeleton-item {
-                    animation: skeletonPulse 1.5s ease-in-out infinite;
-                }
-                
-                .skeleton-video {
-                    background-color: #e6e6e6;
-                    min-height: 180px;
-                    border-radius: 8px;
-                }
-                
-                .skeleton-text {
-                    background-color: #e6e6e6;
-                    height: 16px;
-                    margin: 8px 0;
-                    border-radius: 4px;
-                }
-                
-                .skeleton-title {
-                    width: 80%;
-                    height: 20px;
-                }
-                
-                .skeleton-category {
-                    width: 60%;
-                    height: 14px;
-                }
-                
-                .skeleton-button {
-                    background-color: #e6e6e6;
-                    width: 24px;
-                    height: 24px;
-                    border-radius: 50%;
-                }
-                
-                .skeleton-details-container {
-                    display: flex;
-                    flex-direction: column;
-                    flex: 1;
-                }
             `;
             
             document.head.appendChild(styleEl);

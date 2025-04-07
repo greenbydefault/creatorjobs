@@ -85,7 +85,7 @@
     memberApi: './modules/member-api-1.7.js',
     uploadcare: './modules/uploadcare-1.4.js',
     memberstack: './modules/memberstack-1.1.js',
-    uiManager: './modules/ui-manager-1.7.js',
+    uiManager: './modules/ui-manager-1.8.js',
     videoFeedApp: './modules/video-feed-app-1.6.js',
     videoEditApp: './modules/video-edit-app-1.8.js',
     videoUploadApp: './modules/video-upload-app-1.5.js',

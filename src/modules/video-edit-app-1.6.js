@@ -70,66 +70,6 @@
         }
         
         /**
-         * Setzt den Wert eines Toggle/Checkbox-Elements im Edit-Formular
-         * @param {string} fieldName - Der Name des Feldes
-         * @param {boolean} value - Der zu setzende Wert
-         */
-        setToggleValue(fieldName, value) {
-            const form = document.getElementById(CONFIG.EDIT_FORM_ID);
-            if (!form) {
-                DEBUG.log(`Formular mit ID '${CONFIG.EDIT_FORM_ID}' nicht gefunden`, null, 'warn');
-                return;
-            }
-            
-            // Mehrere Selektoren für verschiedene Attribute testen
-            const selectors = [
-                `input[type="checkbox"][name="${fieldName}"]`,
-                `input[type="checkbox"][data-name="${fieldName}"]`,
-                `input[type="checkbox"]#${fieldName.replace(/\s+/g, '-').toLowerCase()}`
-            ];
-            
-            // Wichtig: Nur innerhalb des Formulars suchen!
-            let toggle = null;
-            for (const selector of selectors) {
-                const elements = form.querySelectorAll(selector);
-                
-                if (elements.length > 0) {
-                    // Wenn mehrere Elemente gefunden wurden, wähle eines aus
-                    // Hier könnten wir zusätzliche Logik implementieren, um das richtige zu finden
-                    toggle = elements[0];
-                    DEBUG.log(`Toggle '${fieldName}' gefunden (${elements.length} Elemente) mit Selektor: ${selector}`);
-                    break;
-                }
-            }
-            
-            if (!toggle) {
-                DEBUG.log(`Toggle-Element '${fieldName}' nicht gefunden`, null, 'warn');
-                
-                // Fallback: Globale Suche (nur für Debug-Zwecke)
-                const globalElements = document.querySelectorAll(`input[type="checkbox"][data-name="${fieldName}"]`);
-                if (globalElements.length > 0) {
-                    DEBUG.log(`Hinweis: ${globalElements.length} Toggle-Elemente global gefunden, aber nicht im Formular`, null, 'warn');
-                }
-                
-                return;
-            }
-            
-            // Wert setzen und Event auslösen
-            toggle.checked = value;
-            DEBUG.log(`Toggle-Wert für '${fieldName}' gesetzt: ${value}`);
-            
-            // Wichtig: Ein Change-Event auslösen, damit Webflow-Event-Handler reagieren
-            const event = new Event('change', { bubbles: true });
-            toggle.dispatchEvent(event);
-            
-            // Zusätzlich: Explizit click-Event für spezielle Handler
-            if (toggle.checked !== value) {
-                DEBUG.log(`Toggle-Wert wurde nicht korrekt gesetzt, versuche click-Event`, null, 'warn');
-                toggle.click();
-            }
-        }
-        
-        /**
          * Lädt die Videos des eingeloggten Users
          * @param {boolean} forceReload - Wenn true, wird der Cache ignoriert
          */
@@ -224,15 +164,6 @@
     window.reloadVideoFeed = function() {
         if (window.WEBFLOW_API && window.WEBFLOW_API.videoFeedApp) {
             window.WEBFLOW_API.videoFeedApp.forceReload();
-            return true;
-        }
-        return false;
-    };
-
-    // Globale Funktion zum Setzen von Toggle-Werten hinzufügen
-    window.setToggleValue = function(fieldName, value) {
-        if (window.WEBFLOW_API && window.WEBFLOW_API.videoFeedApp) {
-            window.WEBFLOW_API.videoFeedApp.setToggleValue(fieldName, value);
             return true;
         }
         return false;

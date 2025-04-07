@@ -88,7 +88,8 @@
     uiManager: './modules/ui-manager-1.4.js',
     videoFeedApp: './modules/video-feed-app-1.4.js',
     videoEditApp: './modules/video-edit-app-1.3.js',
-    videoUploadApp: './modules/video-upload-app-1.5.js'
+    videoUploadApp: './modules/video-upload-app-1.5.js',
+    diagnostics: './modules/debug-diagnostics.js'
   };
   
   // Debugging-Ausgabe
@@ -157,6 +158,9 @@
       await loadScript(`${baseUrl}/${MODULE_PATHS.videoFeedApp}`);
       await loadScript(`${baseUrl}/${MODULE_PATHS.videoEditApp}`);
       await loadScript(`${baseUrl}/${MODULE_PATHS.videoUploadApp}`);
+
+      // 5. Diagnose-Modul laden
+      await loadScript(`${baseUrl}/${MODULE_PATHS.diagnostics}`);
       
       log('Alle Module erfolgreich geladen');
       

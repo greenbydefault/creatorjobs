@@ -100,6 +100,65 @@
         }
         
         /**
+         * Setzt den Wert eines Toggle/Checkbox-Elements im Edit-Formular
+         * @param {string} fieldName - Der Name des Feldes
+         * @param {boolean} value - Der zu setzende Wert
+         */
+        setToggleValue(fieldName, value) {
+            const form = document.getElementById(CONFIG.EDIT_FORM_ID);
+            if (!form) {
+                DEBUG.log(`Formular mit ID '${CONFIG.EDIT_FORM_ID}' nicht gefunden`, null, 'warn');
+                return;
+            }
+            
+            // Mehrere Selektoren für verschiedene Attribute testen
+            const selectors = [
+                `input[type="checkbox"][name="${fieldName}"]`,
+                `input[type="checkbox"][data-name="${fieldName}"]`,
+                `input[type="checkbox"]#${fieldName.replace(/\s+/g, '-').toLowerCase()}`
+            ];
+            
+            // Wichtig: Nur innerhalb des Formulars suchen!
+            let toggle = null;
+            for (const selector of selectors) {
+                const elements = form.querySelectorAll(selector);
+                
+                if (elements.length > 0) {
+                    // Wenn mehrere Elemente gefunden wurden, wähle eines aus
+                    toggle = elements[0];
+                    DEBUG.log(`Toggle '${fieldName}' gefunden (${elements.length} Elemente) mit Selektor: ${selector}`);
+                    break;
+                }
+            }
+            
+            if (!toggle) {
+                DEBUG.log(`Toggle-Element '${fieldName}' nicht gefunden`, null, 'warn');
+                
+                // Fallback: Globale Suche (nur für Debug-Zwecke)
+                const globalElements = document.querySelectorAll(`input[type="checkbox"][data-name="${fieldName}"]`);
+                if (globalElements.length > 0) {
+                    DEBUG.log(`Hinweis: ${globalElements.length} Toggle-Elemente global gefunden, aber nicht im Formular`, null, 'warn');
+                }
+                
+                return;
+            }
+            
+            // Wert setzen und Event auslösen
+            toggle.checked = value;
+            DEBUG.log(`Toggle-Wert für '${fieldName}' gesetzt: ${value}`);
+            
+            // Wichtig: Ein Change-Event auslösen, damit Webflow-Event-Handler reagieren
+            const event = new Event('change', { bubbles: true });
+            toggle.dispatchEvent(event);
+            
+            // Zusätzlich: Explizit click-Event für spezielle Handler
+            if (toggle.checked !== value) {
+                DEBUG.log(`Toggle-Wert wurde nicht korrekt gesetzt, versuche click-Event`, null, 'warn');
+                toggle.click();
+            }
+        }
+        
+        /**
          * Event-Listener für Edit-Buttons initialisieren
          */
         initVideoEditButtons() {
@@ -313,7 +372,7 @@
                 alert("Fehler beim Löschen des Videos. Bitte versuche es erneut.");
             } finally {
                 // Button zurücksetzen
-                button.disabled = false;
+            button.disabled = false;
                 button.textContent = originalText;
             }
         }

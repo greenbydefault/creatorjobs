@@ -103,6 +103,34 @@
                     0% { opacity: 0.6; }
                     50% { opacity: 0.8; }
                     100% { opacity: 0.6; }
+                    
+                .skeleton-item {
+                    
+                }
+                
+                .skeleton-video {
+                    
+                }
+                
+                .skeleton-text {
+                   
+                }
+                
+                .skeleton-title {
+                    
+                }
+                
+                .skeleton-category {
+                    
+                }
+                
+                .skeleton-button {
+                   
+                }
+                
+                .skeleton-details-container {
+                    
+                }
                 }
             `;
             

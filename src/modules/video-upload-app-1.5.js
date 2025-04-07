@@ -27,9 +27,6 @@
         getCurrentMember: async () => null,
         extractWebflowId: () => null
     };
-    const CACHE = window.WEBFLOW_API.cache || {
-        clear: () => {}
-    };
     
     class VideoUploadApp {
         constructor() {
@@ -180,12 +177,6 @@
                 
                 DEBUG.log('Video erfolgreich erstellt:', videoResult);
                 
-                // Clear Cache to make the new video visible on page refresh
-                if (CACHE && typeof CACHE.clear === 'function') {
-                    DEBUG.log('Cache wird geleert, um das neue Video sofort sichtbar zu machen');
-                    CACHE.clear();
-                }
-                
                 // Update Progress
                 this.updateProgressBar(70);
                 
@@ -239,11 +230,6 @@
             // Setze einen neuen Timeout für die Seitenaktualisierung
             this.refreshTimeout = setTimeout(() => {
                 DEBUG.log('Lade Seite neu, um das neue Video anzuzeigen...');
-                
-                // Lösche den Cache und lade die Seite neu
-                if (CACHE && typeof CACHE.clear === 'function') {
-                    CACHE.clear();
-                }
                 
                 // Seite neu laden mit Cache-Busting-Parameter
                 window.location.href = window.location.href.split('?')[0] + '?refresh=' + new Date().getTime();

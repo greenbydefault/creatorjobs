@@ -32,14 +32,14 @@
   
   // Modul-Pfade
   const MODULE_PATHS = {
-    debug: './modules/debug.js',
-    pdfGenerator: './modules/pdf-generator.js',
-    validation: './modules/validation.js',
-    navigation: './modules/navigation.js',
-    uiController: './modules/ui-controller.js',
-    contractTypeFactory: './modules/contract-type-factory.js',
+    debug: './modules/debug-1.1.js',
+    pdfGenerator: './modules/pdf-generator-1.1.js',
+    validation: './modules/validation-1.1.js',
+    navigation: './modules/navigation-1.1.js',
+    uiController: './modules/ui-controller-1.1.js',
+    contractTypeFactory: './modules/contract-type-factory-1.1.js',
     // Vertragstypen
-    influencerContract: './contracts/influencer.js'
+    influencerContract: './contracts/influencer-1.1.js'
     // Weitere Vertragstypen hier hinzufügen
   };
   

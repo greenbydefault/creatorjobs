@@ -32,14 +32,14 @@
   
   // Modul-Pfade
   const MODULE_PATHS = {
-    debug: './src/modules/debug-1.1.js',
-    pdfGenerator: './src/modules/pdf-generator-1.1.js',
-    validation: './src/modules/validation-1.1.js',
-    navigation: './src/modules/navigation-1.1.js',
-    uiController: './src/modules/ui-controller-1.1.js',
-    contractTypeFactory: './src/modules/contract-type-factory-1.1.js',
+    debug: 'src/modules/debug-1.1.js',
+    pdfGenerator: 'src/modules/pdf-generator-1.1.js',
+    validation: 'src/modules/validation-1.1.js',
+    navigation: 'src/modules/navigation-1.1.js',
+    uiController: 'src/modules/ui-controller-1.1.js',
+    contractTypeFactory: 'src/modules/contract-type-factory-1.1.js',
     // Vertragstypen
-    influencerContract: './src/contracts/influencer-1.1.js'
+    influencerContract: 'src/contracts/influencer-1.1.js'
     // Weitere Vertragstypen hier hinzufügen
   };
   
@@ -87,7 +87,7 @@
     
     // Basis-URL
     // HIER MUSST DU DEN PFAD ZU DEINEM REPOSITORY ANGEBEN
-    const baseUrl = './'; // Ändere dies zum Pfad deines GitHub-Repositorys
+    const baseUrl = 'https://cdn.jsdelivr.net/gh/greenbydefault/creatorjobs/contract-generator'; // Ändere dies zum Pfad deines GitHub-Repositorys
     
     try {
       // Module in der richtigen Abhängigkeitsreihenfolge laden

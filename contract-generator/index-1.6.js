@@ -87,7 +87,7 @@
     
     // Basis-URL
     // HIER MUSST DU DEN PFAD ZU DEINEM REPOSITORY ANGEBEN
-    const baseUrl = 'https://cdn.jsdelivr.net/gh/greenbydefault/creatorjobs/contract-generator'; // Ändere dies zum Pfad deines GitHub-Repositorys
+    const baseUrl = 'https://cdn.jsdelivr.net/gh/greenbydefault/creatorjobs/contract-generator/'; // Ändere dies zum Pfad deines GitHub-Repositorys
     
     try {
       // Module in der richtigen Abhängigkeitsreihenfolge laden

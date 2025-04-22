@@ -16,7 +16,7 @@
     'use strict';
 
     // --- !! Set to true to enable detailed console logs for debugging !! ---
-    const DEBUG_MODE = true;
+    const DEBUG_MODE = false;
 
     /**
      * Helper function for conditional logging.

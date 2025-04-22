@@ -1,6 +1,6 @@
 /**
  * Responsives Modal-System mit Auto-Show-Funktion
- * - Auto-Show basierend auf Zeit (optional), Memberstack-Rolle, Plan-Status, Credits.
+ * - Auto-Show basierend auf Zeit (optional), Memberstack-Rolle, Plan-Status (aktiv/inaktiv), Credits.
  * - Unterstützt mehrere Modals auf einer Seite
  * - Desktop: Modal gleitet von rechts herein
  * - Mobil: Modal gleitet von unten herein
@@ -28,7 +28,7 @@ const ModalConfig = {
   autoShowIntervalAttribute: 'data-modal-auto-show-interval-minutes', // Optional
   autoShowRoleAttribute: 'data-modal-auto-show-role',
   autoShowCreditsAttribute: 'data-modal-auto-show-min-credits',
-  autoShowActivePlanAttribute: 'data-modal-auto-show-active-plan',
+  autoShowActivePlanAttribute: 'data-modal-auto-show-active-plan', // NEU: Akzeptiert "true" oder "false"
   autoShowZeroCreditsAttribute: 'data-modal-auto-show-zero-credits',
 
   // Z-Index für Modal und Overlay
@@ -187,14 +187,13 @@ class ModalManager {
   initAutoShowModals() {
      setTimeout(() => {
         // Wähle alle Modals aus, die *mindestens ein* Auto-Show-Attribut haben
-        // (Intervall ODER eine der Bedingungen)
         const selector = [
             `[${this.config.autoShowIntervalAttribute}]`,
             `[${this.config.autoShowRoleAttribute}]`,
             `[${this.config.autoShowCreditsAttribute}]`,
             `[${this.config.autoShowZeroCreditsAttribute}]`,
-            `[${this.config.autoShowActivePlanAttribute}]`
-        ].join(','); // Erzeugt einen CSS-Selektor wie "[attr1],[attr2],..."
+            `[${this.config.autoShowActivePlanAttribute}]` // Prüft jetzt auf Existenz, nicht nur 'true'
+        ].join(',');
 
         const modals = document.querySelectorAll(selector);
         console.log(`Found ${modals.length} modals with any auto-show attribute.`);
@@ -203,9 +202,8 @@ class ModalManager {
             const modalId = modal.getAttribute(this.config.modalIdAttribute);
             if (!modalId) {
                 console.warn("Modal mit Auto-Show-Attribut hat keine data-modal-id. Überspringe.", modal);
-                return; // ID ist essentiell für localStorage (falls Intervall genutzt wird)
+                return;
             }
-            // Prüfe Bedingungen für jedes gefundene Modal
             this.checkAndShowAutoModal(modal, modalId);
         });
      }, this.config.memberstackCheckDelay);
@@ -213,17 +211,18 @@ class ModalManager {
 
   // --- Angepasste Auto-Show Prüfung ---
   async checkAndShowAutoModal(modal, modalId) {
-    // console.log(`Prüfe Auto-Show für Modal: ${modalId}`); // Weniger verbose
+    // console.log(`Prüfe Auto-Show für Modal: ${modalId}`);
 
     // Attribute auslesen
     const intervalAttr = modal.getAttribute(this.config.autoShowIntervalAttribute);
-    const intervalMinutes = intervalAttr ? parseInt(intervalAttr, 10) : null; // null wenn Attribut fehlt
+    const intervalMinutes = intervalAttr ? parseInt(intervalAttr, 10) : null;
     const hasInterval = intervalMinutes !== null && !isNaN(intervalMinutes) && intervalMinutes > 0;
 
-    const requiredRole = modal.getAttribute(this.config.autoShowRoleAttribute)?.toLowerCase() || null; // null wenn Attribut fehlt
+    const requiredRole = modal.getAttribute(this.config.autoShowRoleAttribute)?.toLowerCase() || null;
     const minCreditsAttr = modal.getAttribute(this.config.autoShowCreditsAttribute);
-    const minCredits = minCreditsAttr ? parseInt(minCreditsAttr, 10) : null; // null wenn Attribut fehlt
-    const requiresActivePlan = modal.getAttribute(this.config.autoShowActivePlanAttribute)?.toLowerCase() === 'true';
+    const minCredits = minCreditsAttr ? parseInt(minCreditsAttr, 10) : null;
+    // NEU: Lese den Wert von active-plan (kann "true", "false" oder null sein)
+    const requiredPlanStatusAttr = modal.getAttribute(this.config.autoShowActivePlanAttribute)?.toLowerCase();
     const requiresZeroCredits = modal.getAttribute(this.config.autoShowZeroCreditsAttribute)?.toLowerCase() === 'true';
 
     // 1. Zeitprüfung (NUR wenn Intervall angegeben ist)
@@ -234,12 +233,9 @@ class ModalManager {
         const now = Date.now();
 
         if (lastShownTimestamp && (now - parseInt(lastShownTimestamp)) < intervalMs) {
-            // console.log(`Modal ${modalId}: Zeitintervall (${intervalMinutes} Min) noch nicht erreicht.`);
-            return; // Zu früh, Prüfung abbrechen
+            return; // Zu früh
         }
-        // console.log(`Modal ${modalId}: Zeitintervall erreicht oder noch nie gezeigt (oder kein Intervall).`);
     }
-    // Wenn kein Intervall -> Zeitprüfung übersprungen
 
     // 2. Memberstack-Bedingungen prüfen
     try {
@@ -247,60 +243,54 @@ class ModalManager {
         const isLoggedIn = !!member;
 
         const isBrand = isLoggedIn ? this._isUserBrand(member) : null;
-        const credits = isLoggedIn ? this._getUserCredits(member) : null; // Gibt 0 zurück, wenn nicht gesetzt
+        const credits = isLoggedIn ? this._getUserCredits(member) : null;
         const hasActivePlan = isLoggedIn ? this._hasActivePlan(member) : false;
 
         // --- Bedingungsprüfungen ---
 
         // Rollenprüfung (nur wenn Attribut gesetzt)
-        let roleMatch = true; // Standard: true (keine Einschränkung)
-        if (requiredRole) { // Nur prüfen, wenn Rolle spezifiziert
-            roleMatch = false; // Standard auf false setzen, wenn Prüfung stattfindet
-            if (requiredRole === 'all') {
-                 roleMatch = true; // 'all' passt immer
-            } else if (isLoggedIn) {
+        let roleMatch = true;
+        if (requiredRole) {
+            roleMatch = false;
+            if (requiredRole === 'all') roleMatch = true;
+            else if (isLoggedIn) {
                 if (requiredRole === 'brand' && isBrand === true) roleMatch = true;
                 else if (requiredRole === 'creator' && isBrand === false) roleMatch = true;
             }
-            // Wenn nicht eingeloggt und Rolle nicht 'all', bleibt roleMatch false
         }
 
-
-        // Kreditprüfung (komplexer, berücksichtigt ZeroCredits und MinCredits)
-        let creditsMatch = true; // Standard: true (keine Einschränkung)
-        const checkCredits = requiresZeroCredits || (minCredits !== null && !isNaN(minCredits)); // Nur prüfen, wenn eines der Attribute gesetzt ist
-
+        // Kreditprüfung (berücksichtigt ZeroCredits und MinCredits)
+        let creditsMatch = true;
+        const checkCredits = requiresZeroCredits || (minCredits !== null && !isNaN(minCredits));
         if (checkCredits) {
-            creditsMatch = false; // Standard auf false setzen, wenn Prüfung stattfindet
+            creditsMatch = false;
             if (requiresZeroCredits) {
-                // Spezialfall: Nur anzeigen, wenn eingeloggt und Credits genau 0 sind
                 creditsMatch = isLoggedIn && credits === 0;
             } else if (minCredits !== null && !isNaN(minCredits)) {
-                // Standardfall: Prüfe gegen minCredits
-                if (isLoggedIn) {
-                     creditsMatch = credits >= minCredits;
-                } else {
-                     creditsMatch = minCredits <= 0; // Nicht eingeloggt: Nur wenn minCredits <= 0
-                }
+                if (isLoggedIn) creditsMatch = credits >= minCredits;
+                else creditsMatch = minCredits <= 0;
             }
         }
 
-
-        // Aktiver Plan Prüfung (nur wenn Attribut gesetzt)
+        // NEU: Aktiver Plan Prüfung (berücksichtigt "true" und "false")
         let activePlanMatch = true; // Standard: true (keine Einschränkung)
-        if (requiresActivePlan) {
-            activePlanMatch = isLoggedIn && hasActivePlan; // Muss eingeloggt sein UND aktiven Plan haben
+        if (requiredPlanStatusAttr === 'true') {
+            // Muss eingeloggt sein UND aktiven Plan haben
+            activePlanMatch = isLoggedIn && hasActivePlan;
+        } else if (requiredPlanStatusAttr === 'false') {
+            // Muss eingeloggt sein UND KEINEN aktiven Plan haben
+            activePlanMatch = isLoggedIn && !hasActivePlan;
+            // Alternative: Auch für nicht eingeloggte anzeigen? Dann: activePlanMatch = !hasActivePlan;
         }
+        // Wenn Attribut fehlt oder anderen Wert hat, bleibt activePlanMatch true
 
         // console.log(`Modal ${modalId}: Bedingungen: roleMatch=${roleMatch}, creditsMatch=${creditsMatch}, activePlanMatch=${activePlanMatch}`);
 
         // 3. Bedingungen auswerten und Modal anzeigen
-        // Alle durchgeführten Prüfungen müssen erfolgreich sein
         if (roleMatch && creditsMatch && activePlanMatch) {
             console.log(`Modal ${modalId}: Bedingungen erfüllt. Öffne Modal.`);
             if (!this.activeModal) {
                  this.openModal(modal);
-                 // Zeitstempel NUR setzen, wenn ein Intervall angegeben war
                  if (hasInterval) {
                      const now = Date.now();
                      const localStorageKey = `${this.config.localStorageKeyPrefix}${modalId}`;

@@ -1,5 +1,5 @@
 /**
- * Responsives Modal-System mit Auto-Show-Funktion basierend auf Zeit, Memberstack-Rolle und Plan-Status
+ * Responsives Modal-System mit Auto-Show-Funktion basierend auf Zeit, Memberstack-Rolle, Plan-Status und Credits
  * - Unterstützt mehrere Modals auf einer Seite
  * - Desktop: Modal gleitet von rechts herein
  * - Mobil: Modal gleitet von unten herein
@@ -26,8 +26,10 @@ const ModalConfig = {
   autoShowIntervalAttribute: 'data-modal-auto-show-interval-minutes',
   autoShowRoleAttribute: 'data-modal-auto-show-role', // 'brand', 'creator', 'all'
   autoShowCreditsAttribute: 'data-modal-auto-show-min-credits',
-  // NEU: Attribut für Prüfung auf aktiven Plan
   autoShowActivePlanAttribute: 'data-modal-auto-show-active-plan', // "true" / "false" (oder weglassen)
+  // NEU: Attribut für Prüfung auf genau 0 Credits
+  autoShowZeroCreditsAttribute: 'data-modal-auto-show-zero-credits', // "true" / "false" (oder weglassen)
+
 
   // Z-Index für Modal und Overlay
   zIndex: 1000,
@@ -56,7 +58,7 @@ class ModalManager {
     this.init();
   }
 
-  // --- Memberstack Helper Funktionen ---
+  // --- Memberstack Helper Funktionen (unverändert) ---
 
   /**
    * Ruft die Daten des aktuell eingeloggten Mitglieds ab.
@@ -73,7 +75,7 @@ class ModalManager {
       if (member && member.data) {
         return member.data;
       } else {
-        console.log("Kein eingeloggter Memberstack-Benutzer gefunden.");
+        // console.log("Kein eingeloggter Memberstack-Benutzer gefunden."); // Weniger verbose im Normalbetrieb
         return null;
       }
     } catch (error) {
@@ -111,22 +113,20 @@ class ModalManager {
     if (typeof credits !== 'undefined' && credits !== null && !isNaN(parseInt(credits))) {
         return parseInt(credits);
     } else {
-        // console.warn("Credits konnten nicht aus den Metadaten gelesen werden oder sind keine Zahl. Standardwert 0 wird angenommen.");
-        return 0; // Standardwert
+        return 0; // Standardwert 0, wenn Credits nicht vorhanden oder ungültig
     }
   }
 
   /**
-   * NEU: Prüft, ob der Benutzer mindestens einen aktiven Plan hat.
+   * Prüft, ob der Benutzer mindestens einen aktiven Plan hat.
    * @param {object} member - Das Memberstack Member-Datenobjekt.
    * @returns {boolean} true, wenn mindestens ein Plan aktiv ist, sonst false.
    * @private
    */
   _hasActivePlan(member) {
       if (!member || !Array.isArray(member.planConnections)) {
-          return false; // Kein Member oder keine planConnections-Daten
+          return false;
       }
-      // Prüft, ob mindestens eine Verbindung den Status 'ACTIVE' hat
       return member.planConnections.some(connection => connection && connection.status && connection.status.toUpperCase() === 'ACTIVE');
   }
 
@@ -134,6 +134,7 @@ class ModalManager {
 
 
   init() {
+    // Event Listener etc. (unverändert)
     window.addEventListener('resize', () => {
       this.isMobile = window.innerWidth < this.config.mobileBreakpoint;
       this.updateModalPositions();
@@ -153,6 +154,7 @@ class ModalManager {
   }
 
   createOverlay() {
+    // (unverändert)
     this.overlay = document.createElement('div');
     this.overlay.className = 'modal-overlay';
     this.overlay.style.position = 'fixed';
@@ -174,6 +176,7 @@ class ModalManager {
   }
 
   initModalsStyling() {
+    // (unverändert)
     const modals = document.querySelectorAll(`[${this.config.modalIdAttribute}]`);
     modals.forEach(modal => {
       modal.style.position = 'fixed';
@@ -185,6 +188,7 @@ class ModalManager {
   }
 
   initToggleButtons() {
+    // (unverändert)
     const toggleButtons = document.querySelectorAll(`[${this.config.toggleAttribute}]`);
     toggleButtons.forEach(button => {
       const modalId = button.getAttribute(this.config.toggleAttribute);
@@ -201,6 +205,7 @@ class ModalManager {
   }
 
   initCloseButtons() {
+    // (unverändert)
     const closeButtons = document.querySelectorAll(`[${this.config.closeAttribute}]`);
     closeButtons.forEach(button => {
       button.addEventListener('click', (e) => {
@@ -220,9 +225,10 @@ class ModalManager {
   }
 
   initAutoShowModals() {
+     // (unverändert)
      setTimeout(() => {
         const modals = document.querySelectorAll(`[${this.config.autoShowIntervalAttribute}]`);
-        console.log(`Found ${modals.length} modals with auto-show interval.`);
+        // console.log(`Found ${modals.length} modals with auto-show interval.`); // Weniger verbose
         modals.forEach(modal => {
             const modalId = modal.getAttribute(this.config.modalIdAttribute);
             if (!modalId) {
@@ -235,48 +241,47 @@ class ModalManager {
   }
 
   async checkAndShowAutoModal(modal, modalId) {
-    console.log(`Prüfe Auto-Show für Modal: ${modalId}`);
+    // console.log(`Prüfe Auto-Show für Modal: ${modalId}`); // Weniger verbose
 
     // Attribute auslesen
     const intervalMinutes = parseInt(modal.getAttribute(this.config.autoShowIntervalAttribute), 10);
     const requiredRole = modal.getAttribute(this.config.autoShowRoleAttribute)?.toLowerCase() || 'all';
     const minCreditsAttr = modal.getAttribute(this.config.autoShowCreditsAttribute);
     const minCredits = minCreditsAttr ? parseInt(minCreditsAttr, 10) : 0;
-    // NEU: Attribut für aktiven Plan lesen
     const requiresActivePlan = modal.getAttribute(this.config.autoShowActivePlanAttribute)?.toLowerCase() === 'true';
+    // NEU: Attribut für Zero-Credits lesen
+    const requiresZeroCredits = modal.getAttribute(this.config.autoShowZeroCreditsAttribute)?.toLowerCase() === 'true';
+
 
     if (isNaN(intervalMinutes) || intervalMinutes <= 0) {
-        console.warn(`Ungültiges oder fehlendes Intervall für Modal ${modalId}.`);
+        // console.warn(`Ungültiges oder fehlendes Intervall für Modal ${modalId}.`);
         return;
     }
 
     const intervalMs = intervalMinutes * 60 * 1000;
     const localStorageKey = `${this.config.localStorageKeyPrefix}${modalId}`;
 
-    // 1. Zeitprüfung
+    // 1. Zeitprüfung (unverändert)
     const lastShownTimestamp = localStorage.getItem(localStorageKey);
     const now = Date.now();
     if (lastShownTimestamp && (now - parseInt(lastShownTimestamp)) < intervalMs) {
-        console.log(`Modal ${modalId}: Zeitintervall (${intervalMinutes} Min) noch nicht erreicht.`);
+        // console.log(`Modal ${modalId}: Zeitintervall (${intervalMinutes} Min) noch nicht erreicht.`);
         return;
     }
-    console.log(`Modal ${modalId}: Zeitintervall erreicht oder noch nie gezeigt.`);
+    // console.log(`Modal ${modalId}: Zeitintervall erreicht oder noch nie gezeigt.`);
 
     // 2. Memberstack-Bedingungen prüfen
     try {
-        // Member-Daten nur einmal abrufen
         const member = await this._getCurrentMember();
-        const isLoggedIn = !!member; // Ist der Benutzer überhaupt eingeloggt?
+        const isLoggedIn = !!member;
 
-        // Memberstack-Daten extrahieren (oder null/false setzen, wenn nicht eingeloggt)
         const isBrand = isLoggedIn ? this._isUserBrand(member) : null;
-        const credits = isLoggedIn ? this._getUserCredits(member) : null;
-        // NEU: Aktiven Plan prüfen
+        const credits = isLoggedIn ? this._getUserCredits(member) : null; // Gibt 0 zurück, wenn nicht gesetzt
         const hasActivePlan = isLoggedIn ? this._hasActivePlan(member) : false;
 
-        console.log(`Modal ${modalId}: Memberstack-Status: isLoggedIn=${isLoggedIn}, isBrand=${isBrand}, credits=${credits}, hasActivePlan=${hasActivePlan}`);
+        // console.log(`Modal ${modalId}: Memberstack-Status: isLoggedIn=${isLoggedIn}, isBrand=${isBrand}, credits=${credits}, hasActivePlan=${hasActivePlan}, requiresZeroCredits=${requiresZeroCredits}`);
 
-        // Rollenprüfung
+        // Rollenprüfung (unverändert)
         let roleMatch = false;
         if (requiredRole === 'all') {
             roleMatch = true;
@@ -287,34 +292,42 @@ class ModalManager {
              roleMatch = false;
         }
 
-        // Kreditprüfung
+        // NEU: Angepasste Kreditprüfung
         let creditsMatch = false;
-        if (isLoggedIn) {
-             creditsMatch = credits !== null && credits >= minCredits;
+        if (requiresZeroCredits) {
+            // Spezialfall: Nur anzeigen, wenn eingeloggt und Credits genau 0 sind
+            creditsMatch = isLoggedIn && credits === 0;
         } else {
-             creditsMatch = minCredits <= 0;
+            // Standardfall: Prüfe gegen minCredits
+            if (isLoggedIn) {
+                 // Eingeloggte Benutzer müssen minCredits erfüllen (credits ist nie null hier)
+                 creditsMatch = credits >= minCredits;
+            } else {
+                 // Nicht eingeloggte Benutzer: Nur anzeigen, wenn minCredits 0 oder weniger ist
+                 creditsMatch = minCredits <= 0;
+            }
         }
 
-        // NEU: Aktiver Plan Prüfung
-        let activePlanMatch = true; // Standardmäßig true, wird nur false wenn erforderlich und nicht erfüllt
+
+        // Aktiver Plan Prüfung (unverändert)
+        let activePlanMatch = true;
         if (requiresActivePlan) {
-            activePlanMatch = isLoggedIn && hasActivePlan; // Muss eingeloggt sein UND aktiven Plan haben
+            activePlanMatch = isLoggedIn && hasActivePlan;
         }
 
-        console.log(`Modal ${modalId}: Bedingungen: roleMatch=${roleMatch}, creditsMatch=${creditsMatch}, activePlanMatch=${activePlanMatch}`);
+        // console.log(`Modal ${modalId}: Bedingungen: roleMatch=${roleMatch}, creditsMatch=${creditsMatch}, activePlanMatch=${activePlanMatch}`);
 
         // 3. Bedingungen auswerten und Modal anzeigen
-        // Alle Bedingungen müssen erfüllt sein
         if (roleMatch && creditsMatch && activePlanMatch) {
             console.log(`Modal ${modalId}: Bedingungen erfüllt. Öffne Modal.`);
             if (!this.activeModal) {
                  this.openModal(modal);
                  localStorage.setItem(localStorageKey, now.toString());
             } else {
-                console.log(`Modal ${modalId}: Auto-Show verhindert, da bereits ein Modal (${this.activeModal.getAttribute(this.config.modalIdAttribute)}) aktiv ist.`);
+                // console.log(`Modal ${modalId}: Auto-Show verhindert, da bereits ein Modal (${this.activeModal.getAttribute(this.config.modalIdAttribute)}) aktiv ist.`);
             }
         } else {
-            console.log(`Modal ${modalId}: Bedingungen für Auto-Show nicht erfüllt.`);
+            // console.log(`Modal ${modalId}: Bedingungen für Auto-Show nicht erfüllt.`);
         }
 
     } catch (error) {
@@ -324,12 +337,14 @@ class ModalManager {
 
 
   toggleModal(modal) {
+    // (unverändert)
     if (!modal) return;
     if (modal === this.activeModal) this.closeModal(modal);
     else this.openModal(modal);
   }
 
   openModal(modal) {
+    // (unverändert)
     if (!modal) return;
     if (this.activeModal && this.activeModal !== modal) {
       this.closeModal(this.activeModal, true);
@@ -349,6 +364,7 @@ class ModalManager {
   }
 
   closeModal(modal, skipOverlay = false) {
+    // (unverändert)
      if (!modal) return;
     this.setModalPosition(modal, false);
     setTimeout(() => {
@@ -369,6 +385,7 @@ class ModalManager {
   }
 
   setModalPosition(modal, isOpen) {
+    // (unverändert)
     if (!this.isMobile) {
       modal.style.top = '0';
       modal.style.right = '0';
@@ -385,6 +402,7 @@ class ModalManager {
   }
 
   updateModalPositions() {
+    // (unverändert)
     const modals = document.querySelectorAll(`[${this.config.modalIdAttribute}]`);
     modals.forEach(modal => {
       this.setModalPosition(modal, modal === this.activeModal);
@@ -413,6 +431,7 @@ const injectModalStyles = () => {
 
 // Modal-System initialisieren, wenn DOM geladen ist
 document.addEventListener('DOMContentLoaded', () => {
+  // (unverändert)
   if (!window.$memberstackDom) {
        console.warn("Memberstack ($memberstackDom) ist beim DOMContentLoaded noch nicht verfügbar. Die Auto-Show-Prüfung könnte fehlschlagen, wenn Memberstack zu langsam lädt.");
   }

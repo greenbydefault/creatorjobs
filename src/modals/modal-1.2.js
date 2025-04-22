@@ -1,10 +1,10 @@
 /**
- * Responsives Modal-System mit Auto-Show-Funktion basierend auf Zeit und Memberstack-Rolle
+ * Responsives Modal-System mit Auto-Show-Funktion basierend auf Zeit, Memberstack-Rolle und Plan-Status
  * - Unterstützt mehrere Modals auf einer Seite
  * - Desktop: Modal gleitet von rechts herein
  * - Mobil: Modal gleitet von unten herein
  * - Steuerung über Data-Attribute (inkl. Auto-Show)
- * - **NEU: Memberstack-Abfrage direkt integriert**
+ * - Memberstack-Abfrage direkt integriert (Rolle, Credits, Aktiver Plan)
  */
 
 // Konfigurationsparameter (leicht anpassbar)
@@ -26,6 +26,8 @@ const ModalConfig = {
   autoShowIntervalAttribute: 'data-modal-auto-show-interval-minutes',
   autoShowRoleAttribute: 'data-modal-auto-show-role', // 'brand', 'creator', 'all'
   autoShowCreditsAttribute: 'data-modal-auto-show-min-credits',
+  // NEU: Attribut für Prüfung auf aktiven Plan
+  autoShowActivePlanAttribute: 'data-modal-auto-show-active-plan', // "true" / "false" (oder weglassen)
 
   // Z-Index für Modal und Overlay
   zIndex: 1000,
@@ -40,7 +42,6 @@ const ModalConfig = {
   localStorageKeyPrefix: 'autoModalLastShow_',
 
   // Verzögerung für Memberstack-Check (in ms)
-  // Wichtig, da Memberstack initialisiert sein muss
   memberstackCheckDelay: 1000
 };
 
@@ -50,37 +51,28 @@ class ModalManager {
     this.activeModal = null;
     this.overlay = null;
     this.isMobile = window.innerWidth < this.config.mobileBreakpoint;
-    // this.memberstackHelper = window.memberstackHelper; // Entfernt, da Logik integriert wird
 
     // Initialisieren
     this.init();
   }
 
-  // --- Memberstack Helper Funktionen (jetzt Teil der Klasse) ---
+  // --- Memberstack Helper Funktionen ---
 
   /**
    * Ruft die Daten des aktuell eingeloggten Mitglieds ab.
    * @returns {Promise<object|null>} Ein Promise, das das Member-Objekt oder null zurückgibt.
-   * @private // Kennzeichnung als interne Methode
+   * @private
    */
   async _getCurrentMember() {
     try {
-      // Prüfe, ob die Memberstack-Instanz verfügbar ist
       if (!window.$memberstackDom) {
         console.error("Memberstack DOM API ($memberstackDom) ist nicht verfügbar.");
         return null;
       }
-
-      // Rufe die Mitgliedsdaten ab
-      // Optional: Warte auf Memberstack, falls eine onReady-Methode existiert
-      // await window.$memberstackDom.onReady(); // Beispiel
-
       const member = await window.$memberstackDom.getCurrentMember();
-
       if (member && member.data) {
-        return member.data; // Das Objekt mit den Mitgliedsdaten
+        return member.data;
       } else {
-        // Benutzer ist nicht eingeloggt oder Daten nicht verfügbar
         console.log("Kein eingeloggter Memberstack-Benutzer gefunden.");
         return null;
       }
@@ -92,74 +84,64 @@ class ModalManager {
 
   /**
    * Prüft, ob der aktuelle Benutzer ein "brand" ist.
-   * @returns {Promise<boolean|null>} Ein Promise, das true (brand), false (creator/nicht brand) oder null (Fehler/nicht eingeloggt) zurückgibt.
-   * @private // Kennzeichnung als interne Methode
+   * @param {object} member - Das Memberstack Member-Datenobjekt.
+   * @returns {boolean|null} true (brand), false (creator/nicht brand) oder null (Fehler/nicht eingeloggt).
+   * @private
    */
-  async _isUserBrand() {
-    const member = await this._getCurrentMember(); // Ruft interne Methode auf
-    if (!member) {
-      return null; // Nicht eingeloggt oder Fehler
-    }
-
-    // Zugriff auf das benutzerdefinierte Feld
-    // Passe 'is-user-a-brand' an die tatsächliche ID deines Feldes an.
+  _isUserBrand(member) {
+    if (!member) return null;
     const customFields = member.customFields || {};
-    const isBrand = customFields['is-user-a-brand']; // Annahme: Feld-ID
-
-    // Memberstack speichert es evtl. als String 'true'/'false' oder boolean
+    const isBrand = customFields['is-user-a-brand']; // Passe Feld-ID an
     if (typeof isBrand === 'string') {
       return isBrand.toLowerCase() === 'true';
     }
-    return !!isBrand; // Konvertiere zu Boolean (true/false)
+    return !!isBrand;
   }
 
   /**
    * Ruft die Credits des aktuellen Benutzers aus den Metadaten ab.
-   * @returns {Promise<number|null>} Ein Promise, das die Anzahl der Credits oder null zurückgibt (wenn nicht eingeloggt oder Fehler). Gibt 0 zurück, wenn Credits nicht gefunden/gesetzt wurden.
-   * @private // Kennzeichnung als interne Methode
+   * @param {object} member - Das Memberstack Member-Datenobjekt.
+   * @returns {number|null} Die Anzahl der Credits oder null (wenn nicht eingeloggt). Gibt 0 zurück, wenn Credits nicht gefunden/gesetzt wurden.
+   * @private
    */
-  async _getUserCredits() {
-    const member = await this._getCurrentMember(); // Ruft interne Methode auf
-    if (!member) {
-      return null; // Nicht eingeloggt oder Fehler
-    }
-
-    // Zugriff auf die Metadaten
-    // Passe 'credits' an den tatsächlichen Schlüssel in deinen Metadaten an.
+  _getUserCredits(member) {
+    if (!member) return null;
     const metadata = member.metaData || {};
-    const credits = metadata['credits']; // Annahme: Metadaten-Schlüssel
-
+    const credits = metadata['credits']; // Passe Metadaten-Schlüssel an
     if (typeof credits !== 'undefined' && credits !== null && !isNaN(parseInt(credits))) {
-        return parseInt(credits); // Stelle sicher, dass es eine Zahl ist
+        return parseInt(credits);
     } else {
-        console.warn("Credits konnten nicht aus den Metadaten gelesen werden oder sind keine Zahl. Standardwert 0 wird angenommen.");
-        return 0; // Standardwert, wenn Credits nicht gesetzt oder ungültig sind
+        // console.warn("Credits konnten nicht aus den Metadaten gelesen werden oder sind keine Zahl. Standardwert 0 wird angenommen.");
+        return 0; // Standardwert
     }
+  }
+
+  /**
+   * NEU: Prüft, ob der Benutzer mindestens einen aktiven Plan hat.
+   * @param {object} member - Das Memberstack Member-Datenobjekt.
+   * @returns {boolean} true, wenn mindestens ein Plan aktiv ist, sonst false.
+   * @private
+   */
+  _hasActivePlan(member) {
+      if (!member || !Array.isArray(member.planConnections)) {
+          return false; // Kein Member oder keine planConnections-Daten
+      }
+      // Prüft, ob mindestens eine Verbindung den Status 'ACTIVE' hat
+      return member.planConnections.some(connection => connection && connection.status && connection.status.toUpperCase() === 'ACTIVE');
   }
 
   // --- Ende Memberstack Helper Funktionen ---
 
 
   init() {
-    // Event-Listener für Fenstergrößenänderungen
     window.addEventListener('resize', () => {
       this.isMobile = window.innerWidth < this.config.mobileBreakpoint;
       this.updateModalPositions();
     });
-
-    // Overlay erstellen
     this.createOverlay();
-
-    // Modals initialisieren (Styling etc.)
     this.initModalsStyling();
-
-    // Event-Listener für Toggle-Buttons
     this.initToggleButtons();
-
-    // Event-Listener für Close-Buttons
     this.initCloseButtons();
-
-    // Escape-Taste zum Schließen
     if (this.config.closeOnEscape) {
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && this.activeModal) {
@@ -167,15 +149,12 @@ class ModalManager {
         }
       });
     }
-
-    // Auto-Show Modals initialisieren (nach kurzer Verzögerung)
     this.initAutoShowModals();
   }
 
   createOverlay() {
     this.overlay = document.createElement('div');
     this.overlay.className = 'modal-overlay';
-    // ... (Rest des Overlay-Codes wie zuvor) ...
     this.overlay.style.position = 'fixed';
     this.overlay.style.top = '0';
     this.overlay.style.left = '0';
@@ -186,12 +165,9 @@ class ModalManager {
     this.overlay.style.opacity = '0';
     this.overlay.style.display = 'none';
     this.overlay.style.transition = `opacity ${this.config.animationDuration}ms ease`;
-
     if (this.config.closeOnOverlayClick) {
       this.overlay.addEventListener('click', () => {
-        if (this.activeModal) {
-          this.closeModal(this.activeModal);
-        }
+        if (this.activeModal) this.closeModal(this.activeModal);
       });
     }
     document.body.appendChild(this.overlay);
@@ -200,7 +176,6 @@ class ModalManager {
   initModalsStyling() {
     const modals = document.querySelectorAll(`[${this.config.modalIdAttribute}]`);
     modals.forEach(modal => {
-      // ... (Rest des Styling-Codes wie zuvor) ...
       modal.style.position = 'fixed';
       modal.style.zIndex = this.config.zIndex.toString();
       modal.style.transition = `transform ${this.config.animationDuration}ms ease`;
@@ -212,7 +187,6 @@ class ModalManager {
   initToggleButtons() {
     const toggleButtons = document.querySelectorAll(`[${this.config.toggleAttribute}]`);
     toggleButtons.forEach(button => {
-      // ... (Rest des Toggle-Button-Codes wie zuvor) ...
       const modalId = button.getAttribute(this.config.toggleAttribute);
       const targetModal = document.querySelector(`[${this.config.modalIdAttribute}="${modalId}"]`);
       if (targetModal) {
@@ -229,8 +203,7 @@ class ModalManager {
   initCloseButtons() {
     const closeButtons = document.querySelectorAll(`[${this.config.closeAttribute}]`);
     closeButtons.forEach(button => {
-      // ... (Rest des Close-Button-Codes wie zuvor) ...
-        button.addEventListener('click', (e) => {
+      button.addEventListener('click', (e) => {
         e.preventDefault();
         const modalId = button.getAttribute(this.config.closeAttribute);
         if (modalId) {
@@ -247,20 +220,15 @@ class ModalManager {
   }
 
   initAutoShowModals() {
-     // Kurze Verzögerung, um Memberstack Zeit zur Initialisierung zu geben
-     // Es ist wichtig, dass $memberstackDom verfügbar ist, wenn _getCurrentMember aufgerufen wird.
      setTimeout(() => {
-        // Die Prüfung auf window.memberstackHelper wird entfernt
         const modals = document.querySelectorAll(`[${this.config.autoShowIntervalAttribute}]`);
         console.log(`Found ${modals.length} modals with auto-show interval.`);
-
         modals.forEach(modal => {
             const modalId = modal.getAttribute(this.config.modalIdAttribute);
             if (!modalId) {
                 console.warn("Modal mit Auto-Show-Attribut hat keine ID.", modal);
                 return;
             }
-            // Ruft checkAndShowAutoModal für jedes gefundene Modal auf
             this.checkAndShowAutoModal(modal, modalId);
         });
      }, this.config.memberstackCheckDelay);
@@ -269,10 +237,13 @@ class ModalManager {
   async checkAndShowAutoModal(modal, modalId) {
     console.log(`Prüfe Auto-Show für Modal: ${modalId}`);
 
+    // Attribute auslesen
     const intervalMinutes = parseInt(modal.getAttribute(this.config.autoShowIntervalAttribute), 10);
     const requiredRole = modal.getAttribute(this.config.autoShowRoleAttribute)?.toLowerCase() || 'all';
     const minCreditsAttr = modal.getAttribute(this.config.autoShowCreditsAttribute);
     const minCredits = minCreditsAttr ? parseInt(minCreditsAttr, 10) : 0;
+    // NEU: Attribut für aktiven Plan lesen
+    const requiresActivePlan = modal.getAttribute(this.config.autoShowActivePlanAttribute)?.toLowerCase() === 'true';
 
     if (isNaN(intervalMinutes) || intervalMinutes <= 0) {
         console.warn(`Ungültiges oder fehlendes Intervall für Modal ${modalId}.`);
@@ -282,7 +253,7 @@ class ModalManager {
     const intervalMs = intervalMinutes * 60 * 1000;
     const localStorageKey = `${this.config.localStorageKeyPrefix}${modalId}`;
 
-    // 1. Zeitprüfung (unverändert)
+    // 1. Zeitprüfung
     const lastShownTimestamp = localStorage.getItem(localStorageKey);
     const now = Date.now();
     if (lastShownTimestamp && (now - parseInt(lastShownTimestamp)) < intervalMs) {
@@ -291,17 +262,21 @@ class ModalManager {
     }
     console.log(`Modal ${modalId}: Zeitintervall erreicht oder noch nie gezeigt.`);
 
-    // 2. Memberstack-Bedingungen prüfen (jetzt mit internen Methoden)
+    // 2. Memberstack-Bedingungen prüfen
     try {
-        // Ruft die internen Methoden auf
-        const isBrand = await this._isUserBrand();
-        const credits = await this._getUserCredits();
-        // Prüfung, ob Nutzer eingeloggt ist (wenn isBrand nicht null ist)
-        const isLoggedIn = isBrand !== null;
+        // Member-Daten nur einmal abrufen
+        const member = await this._getCurrentMember();
+        const isLoggedIn = !!member; // Ist der Benutzer überhaupt eingeloggt?
 
-        console.log(`Modal ${modalId}: Memberstack-Status: isLoggedIn=${isLoggedIn}, isBrand=${isBrand}, credits=${credits}`);
+        // Memberstack-Daten extrahieren (oder null/false setzen, wenn nicht eingeloggt)
+        const isBrand = isLoggedIn ? this._isUserBrand(member) : null;
+        const credits = isLoggedIn ? this._getUserCredits(member) : null;
+        // NEU: Aktiven Plan prüfen
+        const hasActivePlan = isLoggedIn ? this._hasActivePlan(member) : false;
 
-        // Rollenprüfung (Logik unverändert)
+        console.log(`Modal ${modalId}: Memberstack-Status: isLoggedIn=${isLoggedIn}, isBrand=${isBrand}, credits=${credits}, hasActivePlan=${hasActivePlan}`);
+
+        // Rollenprüfung
         let roleMatch = false;
         if (requiredRole === 'all') {
             roleMatch = true;
@@ -309,24 +284,28 @@ class ModalManager {
             if (requiredRole === 'brand' && isBrand === true) roleMatch = true;
             else if (requiredRole === 'creator' && isBrand === false) roleMatch = true;
         } else if (requiredRole !== 'all') {
-             roleMatch = false; // Nicht eingeloggt, aber spezifische Rolle gefordert
+             roleMatch = false;
         }
 
-        // Kreditprüfung (Logik unverändert)
+        // Kreditprüfung
         let creditsMatch = false;
         if (isLoggedIn) {
-            // Credits können nur geprüft werden, wenn der Nutzer eingeloggt ist
-            // und _getUserCredits nicht null zurückgegeben hat (was es nur bei Fehlern tut)
              creditsMatch = credits !== null && credits >= minCredits;
         } else {
-            // Wenn nicht eingeloggt, ist die Bedingung nur erfüllt, wenn keine Credits nötig sind
-            creditsMatch = minCredits <= 0;
+             creditsMatch = minCredits <= 0;
         }
 
-        console.log(`Modal ${modalId}: Bedingungen: roleMatch=${roleMatch}, creditsMatch=${creditsMatch}`);
+        // NEU: Aktiver Plan Prüfung
+        let activePlanMatch = true; // Standardmäßig true, wird nur false wenn erforderlich und nicht erfüllt
+        if (requiresActivePlan) {
+            activePlanMatch = isLoggedIn && hasActivePlan; // Muss eingeloggt sein UND aktiven Plan haben
+        }
 
-        // 3. Bedingungen auswerten und Modal anzeigen (Logik unverändert)
-        if (roleMatch && creditsMatch) {
+        console.log(`Modal ${modalId}: Bedingungen: roleMatch=${roleMatch}, creditsMatch=${creditsMatch}, activePlanMatch=${activePlanMatch}`);
+
+        // 3. Bedingungen auswerten und Modal anzeigen
+        // Alle Bedingungen müssen erfüllt sein
+        if (roleMatch && creditsMatch && activePlanMatch) {
             console.log(`Modal ${modalId}: Bedingungen erfüllt. Öffne Modal.`);
             if (!this.activeModal) {
                  this.openModal(modal);
@@ -336,25 +315,21 @@ class ModalManager {
             }
         } else {
             console.log(`Modal ${modalId}: Bedingungen für Auto-Show nicht erfüllt.`);
-            // Zeitstempel *nicht* aktualisieren
         }
 
     } catch (error) {
-        // Fehlerbehandlung für die gesamte Prüfung
         console.error(`Fehler bei der Prüfung der Memberstack-Bedingungen für Modal ${modalId}:`, error);
     }
   }
 
 
   toggleModal(modal) {
-    // ... (Code wie zuvor) ...
     if (!modal) return;
     if (modal === this.activeModal) this.closeModal(modal);
     else this.openModal(modal);
   }
 
   openModal(modal) {
-    // ... (Code wie zuvor, stellt sicher, dass Overlay/Body Class korrekt behandelt wird) ...
     if (!modal) return;
     if (this.activeModal && this.activeModal !== modal) {
       this.closeModal(this.activeModal, true);
@@ -374,7 +349,6 @@ class ModalManager {
   }
 
   closeModal(modal, skipOverlay = false) {
-    // ... (Code wie zuvor, stellt sicher, dass Overlay/Body Class korrekt behandelt wird) ...
      if (!modal) return;
     this.setModalPosition(modal, false);
     setTimeout(() => {
@@ -395,7 +369,6 @@ class ModalManager {
   }
 
   setModalPosition(modal, isOpen) {
-    // ... (Code wie zuvor) ...
     if (!this.isMobile) {
       modal.style.top = '0';
       modal.style.right = '0';
@@ -412,7 +385,6 @@ class ModalManager {
   }
 
   updateModalPositions() {
-    // ... (Code wie zuvor) ...
     const modals = document.querySelectorAll(`[${this.config.modalIdAttribute}]`);
     modals.forEach(modal => {
       this.setModalPosition(modal, modal === this.activeModal);
@@ -423,7 +395,6 @@ class ModalManager {
 // Basis-CSS für Modals (unverändert)
 const injectModalStyles = () => {
   const style = document.createElement('style');
-  // ... (CSS-Code wie zuvor) ...
   style.textContent = `
     .modal-overlay { -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
     body.modal-open { overflow: hidden; }
@@ -442,15 +413,9 @@ const injectModalStyles = () => {
 
 // Modal-System initialisieren, wenn DOM geladen ist
 document.addEventListener('DOMContentLoaded', () => {
-  // Wichtig: Stelle sicher, dass Memberstack ($memberstackDom) verfügbar ist,
-  // bevor die ModalManager-Instanz erstellt wird oder bevor initAutoShowModals läuft.
-  // Die Verzögerung in initAutoShowModals hilft, aber eine robustere Prüfung wäre besser,
-  // z.B. wenn Memberstack ein eigenes 'ready'-Event oder Promise bereitstellt.
   if (!window.$memberstackDom) {
        console.warn("Memberstack ($memberstackDom) ist beim DOMContentLoaded noch nicht verfügbar. Die Auto-Show-Prüfung könnte fehlschlagen, wenn Memberstack zu langsam lädt.");
-       // Hier könnte man auf ein Memberstack-Ready-Event warten, falls verfügbar.
   }
-
   injectModalStyles();
   window.modalManager = new ModalManager();
 });

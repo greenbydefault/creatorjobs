@@ -130,61 +130,61 @@ function renderVideos(videoItems, containerId) {
             return;
         }
         const fieldData = item.fieldData;
-        // Video-Titel wird nicht mehr verwendet: const videoName = fieldData['video-name'];
-        const videoLink = fieldData['video-link'];
+        let videoLink = fieldData['video-link']; // Hole den Link
 
         if (videoLink) {
-            // NEU: Äußerer Wrapper für jedes Video-Element + Skeleton
+            // --- NEU: Anpassung des Video-Links ---
+            // Überprüfe, ob der Link bereits den Parameter enthält (um Duplikate zu vermeiden)
+            // und ob es sich um einen SharePoint-Link handeln könnte (optional, zur Sicherheit)
+            if (!videoLink.includes('&download=1')) {
+                 // Prüfe, ob bereits Query-Parameter vorhanden sind
+                 if (videoLink.includes('?')) {
+                     videoLink += '&download=1'; // Füge als weiteren Parameter hinzu
+                 } else {
+                     // Sollte bei SharePoint-Links nicht vorkommen, aber als Fallback
+                     videoLink += '?download=1'; // Füge als ersten Parameter hinzu
+                 }
+                 console.log(`   -> Angepasster Link für ${item.id || index}: ${videoLink}`);
+            }
+            // --- Ende Link-Anpassung ---
+
+
             const feedContainer = document.createElement("div");
             feedContainer.classList.add("video-feed-container");
-            // Optional: Mindesthöhe setzen, um Layout-Sprünge zu reduzieren, bis CSS geladen ist
-            // feedContainer.style.minHeight = '200px'; // Beispielwert, anpassen!
 
-            // NEU: Skeleton Loader Wrapper
             const skeletonLoaderWrapper = document.createElement("div");
             skeletonLoaderWrapper.classList.add("skeleton-loader-wrapper");
-            // Hier könnte der eigentliche Skeleton-HTML-Inhalt rein (oder via CSS Background)
-            // skeletonLoaderWrapper.innerHTML = '<span>Lade Video...</span>'; // Einfacher Text als Beispiel
             feedContainer.appendChild(skeletonLoaderWrapper);
 
-            // Erstelle Video-Element, aber mache es initial unsichtbar
             const videoElement = document.createElement('video');
             videoElement.playsInline = true;
-            videoElement.preload = "metadata"; // Wichtig für 'loadedmetadata' Event
+            videoElement.preload = "metadata";
             videoElement.controls = true;
             videoElement.classList.add('db-video-player');
             videoElement.id = `db-user-video--${item.id || index}`;
-            videoElement.style.display = 'none'; // Initial verstecken
+            videoElement.style.display = 'none';
 
             const sourceElement = document.createElement('source');
-            sourceElement.src = videoLink;
+            sourceElement.src = videoLink; // Verwende den (potenziell) angepassten Link
             sourceElement.type = 'video/mp4';
 
             videoElement.appendChild(sourceElement);
             videoElement.appendChild(document.createTextNode('Dein Browser unterstützt das Video-Tag nicht.'));
 
-            // Event Listener: Wenn Metadaten geladen sind -> Skeleton entfernen, Video anzeigen
             videoElement.addEventListener('loadedmetadata', () => {
                 console.log(`Metadaten für Video ${videoElement.id} geladen.`);
-                skeletonLoaderWrapper.style.display = 'none'; // Skeleton ausblenden
-                videoElement.style.display = 'block'; // Video anzeigen
-                // Optional: Mindesthöhe vom Container entfernen, falls gesetzt
-                // feedContainer.style.minHeight = '';
-            }, { once: true }); // Event Listener nur einmal ausführen
+                skeletonLoaderWrapper.style.display = 'none';
+                videoElement.style.display = 'block';
+            }, { once: true });
 
-            // Fehlerbehandlung für das Laden des Videos
              videoElement.addEventListener('error', (e) => {
-                console.error(`Fehler beim Laden von Video ${videoElement.id}:`, e);
-                // Zeige Fehlermeldung statt Skeleton/Video
+                console.error(`Fehler beim Laden von Video ${videoElement.id} von ${videoLink}:`, e);
                 skeletonLoaderWrapper.innerHTML = '<p style="color: red; padding: 10px;">Video konnte nicht geladen werden.</p>';
                 skeletonLoaderWrapper.style.display = 'block';
                 videoElement.style.display = 'none';
             }, { once: true });
 
-
-            // Video-Element zum Container hinzufügen (noch versteckt)
             feedContainer.appendChild(videoElement);
-            // Den gesamten Container (mit Skeleton und verstecktem Video) zum Fragment hinzufügen
             fragment.appendChild(feedContainer);
 
         } else {
@@ -192,7 +192,6 @@ function renderVideos(videoItems, containerId) {
         }
     });
 
-    // Leere den Hauptcontainer und füge alle neuen Elemente auf einmal hinzu
     container.innerHTML = "";
     container.appendChild(fragment);
 }
@@ -222,13 +221,12 @@ function renderFilterTags(activeFiltersFlat) {
         removeButton.setAttribute('aria-label', `Filter ${filter.display} entfernen`);
         removeButton.dataset.checkboxId = filter.id;
 
-        // Event Listener zum Entfernen ist korrekt und deaktiviert die Checkbox
         removeButton.addEventListener('click', (e) => {
             const checkboxIdToRemove = e.currentTarget.dataset.checkboxId;
             const correspondingCheckbox = document.getElementById(checkboxIdToRemove);
             if (correspondingCheckbox) {
-                correspondingCheckbox.checked = false; // Checkbox deaktivieren
-                applyFiltersAndRender(); // Filter neu anwenden
+                correspondingCheckbox.checked = false;
+                applyFiltersAndRender();
             } else {
                 console.error(`Konnte Checkbox mit ID ${checkboxIdToRemove} zum Entfernen nicht finden.`);
             }

@@ -109,7 +109,8 @@ async function fetchAllCollectionItems(collectionId) {
 // 🎨 Rendering-Funktionen
 
 /**
- * Rendert die Video-Items im angegebenen Container mit Skeleton Loadern.
+ * Rendert die Video-Items im angegebenen Container.
+ * (Skeleton Loader entfernt)
  */
 function renderVideos(videoItems, containerId) {
     const container = document.getElementById(containerId);
@@ -130,61 +131,49 @@ function renderVideos(videoItems, containerId) {
             return;
         }
         const fieldData = item.fieldData;
-        let videoLink = fieldData['video-link']; // Hole den Link
+        let videoLink = fieldData['video-link'];
 
         if (videoLink) {
-            // --- NEU: Anpassung des Video-Links ---
-            // Überprüfe, ob der Link bereits den Parameter enthält (um Duplikate zu vermeiden)
-            // und ob es sich um einen SharePoint-Link handeln könnte (optional, zur Sicherheit)
+            // Link-Anpassung
             if (!videoLink.includes('&download=1')) {
-                 // Prüfe, ob bereits Query-Parameter vorhanden sind
                  if (videoLink.includes('?')) {
-                     videoLink += '&download=1'; // Füge als weiteren Parameter hinzu
+                     videoLink += '&download=1';
                  } else {
-                     // Sollte bei SharePoint-Links nicht vorkommen, aber als Fallback
-                     videoLink += '?download=1'; // Füge als ersten Parameter hinzu
+                     videoLink += '?download=1';
                  }
-                 console.log(`   -> Angepasster Link für ${item.id || index}: ${videoLink}`);
+                 // console.log(`   -> Angepasster Link für ${item.id || index}: ${videoLink}`); // Optional: Logging
             }
-            // --- Ende Link-Anpassung ---
 
-
+            // Äußerer Wrapper für jedes Video
             const feedContainer = document.createElement("div");
-            feedContainer.classList.add("video-feed-container");
+            feedContainer.classList.add("video-feed-container"); // Wrapper-Klasse
 
-            const skeletonLoaderWrapper = document.createElement("div");
-            skeletonLoaderWrapper.classList.add("skeleton-loader-wrapper");
-            feedContainer.appendChild(skeletonLoaderWrapper);
-
+            // Video-Element direkt erstellen und hinzufügen
             const videoElement = document.createElement('video');
             videoElement.playsInline = true;
-            videoElement.preload = "metadata";
+            videoElement.preload = "metadata"; // Lädt nur Metadaten initial
             videoElement.controls = true;
             videoElement.classList.add('db-video-player');
             videoElement.id = `db-user-video--${item.id || index}`;
-            videoElement.style.display = 'none';
+            // videoElement.style.display = 'none'; // Nicht mehr verstecken
 
             const sourceElement = document.createElement('source');
-            sourceElement.src = videoLink; // Verwende den (potenziell) angepassten Link
+            sourceElement.src = videoLink;
             sourceElement.type = 'video/mp4';
 
             videoElement.appendChild(sourceElement);
             videoElement.appendChild(document.createTextNode('Dein Browser unterstützt das Video-Tag nicht.'));
 
-            videoElement.addEventListener('loadedmetadata', () => {
-                console.log(`Metadaten für Video ${videoElement.id} geladen.`);
-                skeletonLoaderWrapper.style.display = 'none';
-                videoElement.style.display = 'block';
-            }, { once: true });
-
-             videoElement.addEventListener('error', (e) => {
+            // Einfache Fehlerbehandlung: Zeigt eine Nachricht im Container an, wenn das Video nicht lädt
+            videoElement.addEventListener('error', (e) => {
                 console.error(`Fehler beim Laden von Video ${videoElement.id} von ${videoLink}:`, e);
-                skeletonLoaderWrapper.innerHTML = '<p style="color: red; padding: 10px;">Video konnte nicht geladen werden.</p>';
-                skeletonLoaderWrapper.style.display = 'block';
-                videoElement.style.display = 'none';
+                // Ersetze das Video-Element durch eine Fehlermeldung im feedContainer
+                feedContainer.innerHTML = '<p style="color: red; padding: 10px; border: 1px solid red;">Video konnte nicht geladen werden.</p>';
             }, { once: true });
 
+            // Video-Element zum Container hinzufügen
             feedContainer.appendChild(videoElement);
+            // Den feedContainer zum Fragment hinzufügen
             fragment.appendChild(feedContainer);
 
         } else {
@@ -198,6 +187,7 @@ function renderVideos(videoItems, containerId) {
 
 /**
  * Rendert die aktiven Checkbox-Filter als klickbare Tags.
+ * (Styling für Button und Text angepasst)
  */
 function renderFilterTags(activeFiltersFlat) {
     const wrapper = document.getElementById(filterTagWrapperId);
@@ -209,15 +199,19 @@ function renderFilterTags(activeFiltersFlat) {
 
     activeFiltersFlat.forEach(filter => {
         const tagElement = document.createElement('div');
-        tagElement.classList.add('search-filter-tag'); // Styling via CSS
+        tagElement.classList.add('search-filter-tag'); // Hauptklasse für das Tag
 
+        // Span für den Text mit neuer Klasse
         const tagName = document.createElement('span');
+        tagName.classList.add('tag-text'); // NEU: Klasse für den Text
         tagName.textContent = filter.display;
-        tagName.style.marginRight = '6px';
+        // tagName.style.marginRight = '6px'; // Inline-Style entfernt
 
+        // Button zum Entfernen mit neuer Klasse
         const removeButton = document.createElement('button');
+        removeButton.classList.add('filter-close-button'); // NEU: Klasse für den Button
         removeButton.textContent = '×';
-        removeButton.style.cssText = `cursor:pointer;`;
+        // removeButton.style.cssText = ... // Inline-Styles entfernt
         removeButton.setAttribute('aria-label', `Filter ${filter.display} entfernen`);
         removeButton.dataset.checkboxId = filter.id;
 
@@ -303,7 +297,7 @@ function applyFiltersAndRender() {
     // 4. Aktive Checkbox-Filter-Tags rendern
     renderFilterTags(allActiveCheckboxFiltersFlat);
 
-    // 5. Gefilterte Videos rendern (mit Skeleton Loadern)
+    // 5. Gefilterte Videos rendern
     renderVideos(filteredItems, videoContainerId);
 
     console.timeEnd("Filterung und Rendering");
@@ -388,3 +382,4 @@ window.addEventListener("DOMContentLoaded", () => {
         console.error("Video-Feed kann nicht initialisiert werden.");
     }
 });
+

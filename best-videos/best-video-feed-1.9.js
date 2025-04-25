@@ -70,14 +70,12 @@ async function fetchWebflowData(apiUrl) {
 
 /**
  * Ruft ALLE Live-Items aus einer Webflow Collection ab, inkl. Paginierung.
- * @param {string} collectionId - Die ID der Collection.
- * @returns {Promise<Array|null>} Ein Array aller Items oder null bei Fehler.
  */
 async function fetchAllCollectionItems(collectionId) {
     let allItems = [];
     let offset = 0;
     let hasMore = true;
-    let totalFetched = 0; // Zähler für Debugging
+    let totalFetched = 0;
 
     console.log(`🚀 Starte Abruf aller Items für Collection ${collectionId} (Limit pro Abruf: ${API_LIMIT})`);
 
@@ -90,23 +88,18 @@ async function fetchAllCollectionItems(collectionId) {
             totalFetched += data.items.length;
             console.log(`   - ${data.items.length} Items bei Offset ${offset} geladen (Gesamt bisher: ${totalFetched})`);
 
-            // Prüfen, ob mehr Items vorhanden sind basierend auf 'total' und 'count'/'limit'
-            // Webflow v2 API: 'pagination.total' und aktuelle Anzahl prüfen
             if (data.pagination && totalFetched >= data.pagination.total) {
                 hasMore = false;
                 console.log(`✅ Alle ${data.pagination.total} Items geladen.`);
             } else if (data.items.length < API_LIMIT) {
-                 // Sicherheitscheck: Wenn weniger als Limit zurückkam, sind wir fertig
                  hasMore = false;
                  console.log(`✅ Weniger als ${API_LIMIT} Items zurückgegeben, Annahme: Alle Items geladen (Gesamt: ${totalFetched}).`);
             } else {
-                // Es gibt wahrscheinlich mehr, erhöhe den Offset für den nächsten Abruf
                 offset += API_LIMIT;
             }
         } else {
-            // Fehler beim Abrufen dieses Chunks
             console.error(`❌ Fehler beim Abrufen von Items bei Offset ${offset}. Breche Abruf ab.`);
-            return null; // Fehler signalisieren
+            return null;
         }
     }
     return allItems;
@@ -116,7 +109,7 @@ async function fetchAllCollectionItems(collectionId) {
 // 🎨 Rendering-Funktionen
 
 /**
- * Rendert die Video-Items im angegebenen Container.
+ * Rendert die Video-Items im angegebenen Container mit Skeleton Loadern.
  */
 function renderVideos(videoItems, containerId) {
     const container = document.getElementById(containerId);
@@ -124,7 +117,6 @@ function renderVideos(videoItems, containerId) {
         console.error(`❌ Video-Container mit ID '${containerId}' nicht gefunden.`);
         return;
     }
-    // Performance: Verwende DocumentFragment, um DOM-Manipulationen zu bündeln
     const fragment = document.createDocumentFragment();
 
     if (!videoItems || videoItems.length === 0) {
@@ -138,47 +130,69 @@ function renderVideos(videoItems, containerId) {
             return;
         }
         const fieldData = item.fieldData;
-        const videoName = fieldData['video-name'];
+        // Video-Titel wird nicht mehr verwendet: const videoName = fieldData['video-name'];
         const videoLink = fieldData['video-link'];
 
         if (videoLink) {
-            const videoWrapper = document.createElement("div");
-            videoWrapper.classList.add("video-item-wrapper");
-            videoWrapper.style.marginBottom = "20px";
+            // NEU: Äußerer Wrapper für jedes Video-Element + Skeleton
+            const feedContainer = document.createElement("div");
+            feedContainer.classList.add("video-feed-container");
+            // Optional: Mindesthöhe setzen, um Layout-Sprünge zu reduzieren, bis CSS geladen ist
+            // feedContainer.style.minHeight = '200px'; // Beispielwert, anpassen!
 
-            if (videoName) {
-                const nameHeading = document.createElement("h3");
-                nameHeading.textContent = videoName;
-                nameHeading.style.marginBottom = "8px";
-                videoWrapper.appendChild(nameHeading);
-            }
+            // NEU: Skeleton Loader Wrapper
+            const skeletonLoaderWrapper = document.createElement("div");
+            skeletonLoaderWrapper.classList.add("skeleton-loader-wrapper");
+            // Hier könnte der eigentliche Skeleton-HTML-Inhalt rein (oder via CSS Background)
+            // skeletonLoaderWrapper.innerHTML = '<span>Lade Video...</span>'; // Einfacher Text als Beispiel
+            feedContainer.appendChild(skeletonLoaderWrapper);
 
-            // Erstelle Video-Element dynamisch statt mit innerHTML/insertAdjacentHTML
-            // Das ist oft etwas performanter bei vielen Elementen, obwohl der Unterschied gering sein kann.
+            // Erstelle Video-Element, aber mache es initial unsichtbar
             const videoElement = document.createElement('video');
             videoElement.playsInline = true;
-            videoElement.preload = "metadata";
-            videoElement.toggleAttribute('autobuffer', true); // Für ältere Browser evtl. relevant
+            videoElement.preload = "metadata"; // Wichtig für 'loadedmetadata' Event
             videoElement.controls = true;
             videoElement.classList.add('db-video-player');
             videoElement.id = `db-user-video--${item.id || index}`;
+            videoElement.style.display = 'none'; // Initial verstecken
 
             const sourceElement = document.createElement('source');
             sourceElement.src = videoLink;
             sourceElement.type = 'video/mp4';
 
             videoElement.appendChild(sourceElement);
-            // Fallback-Text für Browser ohne Video-Unterstützung
             videoElement.appendChild(document.createTextNode('Dein Browser unterstützt das Video-Tag nicht.'));
 
-            videoWrapper.appendChild(videoElement);
-            fragment.appendChild(videoWrapper); // Füge zum Fragment hinzu
+            // Event Listener: Wenn Metadaten geladen sind -> Skeleton entfernen, Video anzeigen
+            videoElement.addEventListener('loadedmetadata', () => {
+                console.log(`Metadaten für Video ${videoElement.id} geladen.`);
+                skeletonLoaderWrapper.style.display = 'none'; // Skeleton ausblenden
+                videoElement.style.display = 'block'; // Video anzeigen
+                // Optional: Mindesthöhe vom Container entfernen, falls gesetzt
+                // feedContainer.style.minHeight = '';
+            }, { once: true }); // Event Listener nur einmal ausführen
+
+            // Fehlerbehandlung für das Laden des Videos
+             videoElement.addEventListener('error', (e) => {
+                console.error(`Fehler beim Laden von Video ${videoElement.id}:`, e);
+                // Zeige Fehlermeldung statt Skeleton/Video
+                skeletonLoaderWrapper.innerHTML = '<p style="color: red; padding: 10px;">Video konnte nicht geladen werden.</p>';
+                skeletonLoaderWrapper.style.display = 'block';
+                videoElement.style.display = 'none';
+            }, { once: true });
+
+
+            // Video-Element zum Container hinzufügen (noch versteckt)
+            feedContainer.appendChild(videoElement);
+            // Den gesamten Container (mit Skeleton und verstecktem Video) zum Fragment hinzufügen
+            fragment.appendChild(feedContainer);
+
         } else {
             console.warn(`⚠️ Video-Item ${item.id || index} hat keinen 'video-link'.`);
         }
     });
 
-    // Leere den Container und füge alle neuen Elemente auf einmal hinzu
+    // Leere den Hauptcontainer und füge alle neuen Elemente auf einmal hinzu
     container.innerHTML = "";
     container.appendChild(fragment);
 }
@@ -192,7 +206,7 @@ function renderFilterTags(activeFiltersFlat) {
         console.warn(`⚠️ Filter-Tag-Wrapper mit ID '${filterTagWrapperId}' nicht gefunden.`);
         return;
     }
-    const fragment = document.createDocumentFragment(); // DocumentFragment für Performance
+    const fragment = document.createDocumentFragment();
 
     activeFiltersFlat.forEach(filter => {
         const tagElement = document.createElement('div');
@@ -204,16 +218,17 @@ function renderFilterTags(activeFiltersFlat) {
 
         const removeButton = document.createElement('button');
         removeButton.textContent = '×';
-        removeButton.style.cssText = `cursor:pointer; font-weight:bold; font-size: 1.1em; line-height: 1; color: #555;`;
+        removeButton.style.cssText = `border:none; background:none; padding:0 4px; margin-left: 4px; cursor:pointer; font-weight:bold; font-size: 1.1em; line-height: 1; color: #555;`;
         removeButton.setAttribute('aria-label', `Filter ${filter.display} entfernen`);
         removeButton.dataset.checkboxId = filter.id;
 
+        // Event Listener zum Entfernen ist korrekt und deaktiviert die Checkbox
         removeButton.addEventListener('click', (e) => {
             const checkboxIdToRemove = e.currentTarget.dataset.checkboxId;
             const correspondingCheckbox = document.getElementById(checkboxIdToRemove);
             if (correspondingCheckbox) {
-                correspondingCheckbox.checked = false;
-                applyFiltersAndRender();
+                correspondingCheckbox.checked = false; // Checkbox deaktivieren
+                applyFiltersAndRender(); // Filter neu anwenden
             } else {
                 console.error(`Konnte Checkbox mit ID ${checkboxIdToRemove} zum Entfernen nicht finden.`);
             }
@@ -221,10 +236,9 @@ function renderFilterTags(activeFiltersFlat) {
 
         tagElement.appendChild(tagName);
         tagElement.appendChild(removeButton);
-        fragment.appendChild(tagElement); // Zum Fragment hinzufügen
+        fragment.appendChild(tagElement);
     });
 
-    // Leere den Wrapper und füge alle Tags auf einmal hinzu
     wrapper.innerHTML = '';
     wrapper.appendChild(fragment);
 }
@@ -236,7 +250,7 @@ function renderFilterTags(activeFiltersFlat) {
  * Wendet Checkbox-Filter UND Suchfilter an und rendert alles neu.
  */
 function applyFiltersAndRender() {
-    console.time("Filterung und Rendering"); // Starte Zeitmessung
+    console.time("Filterung und Rendering");
 
     // 1. Aktive Checkbox-Filter identifizieren
     const activeFiltersByGroup = {};
@@ -291,10 +305,10 @@ function applyFiltersAndRender() {
     // 4. Aktive Checkbox-Filter-Tags rendern
     renderFilterTags(allActiveCheckboxFiltersFlat);
 
-    // 5. Gefilterte Videos rendern
+    // 5. Gefilterte Videos rendern (mit Skeleton Loadern)
     renderVideos(filteredItems, videoContainerId);
 
-    console.timeEnd("Filterung und Rendering"); // Beende Zeitmessung
+    console.timeEnd("Filterung und Rendering");
     console.log(`📊 ${filteredItems.length} von ${allVideoItems.length} Videos angezeigt.`);
 }
 
@@ -307,7 +321,6 @@ function applyFiltersAndRender() {
 async function displayVideoCollection() {
     try {
         console.log(`🚀 Lade ALLE Videos von Collection ID: ${VIDEO_COLLECTION_ID}`);
-        // Nutzt die neue Funktion mit Paginierung
         allVideoItems = await fetchAllCollectionItems(VIDEO_COLLECTION_ID);
 
         if (allVideoItems && allVideoItems.length > 0) {
@@ -329,12 +342,10 @@ async function displayVideoCollection() {
             const searchInput = document.getElementById(searchInputId);
             if (searchInput) {
                 searchInput.addEventListener('input', () => {
-                    // Lösche den vorherigen Timer, falls vorhanden
                     clearTimeout(searchDebounceTimer);
-                    // Starte einen neuen Timer
                     searchDebounceTimer = setTimeout(() => {
                         console.log(`⏳ Debounced Search Triggered`);
-                        applyFiltersAndRender(); // Führe Filterung erst nach Verzögerung aus
+                        applyFiltersAndRender();
                     }, DEBOUNCE_DELAY);
                 });
                 console.log(`✅ Event Listener (debounced) für Suchfeld '${searchInputId}' eingerichtet.`);

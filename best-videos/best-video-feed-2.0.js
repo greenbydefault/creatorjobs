@@ -218,7 +218,7 @@ function renderFilterTags(activeFiltersFlat) {
 
         const removeButton = document.createElement('button');
         removeButton.textContent = '×';
-        removeButton.style.cssText = `border:none; background:none; padding:0 4px; margin-left: 4px; cursor:pointer; font-weight:bold; font-size: 1.1em; line-height: 1; color: #555;`;
+        removeButton.style.cssText = `cursor:pointer;`;
         removeButton.setAttribute('aria-label', `Filter ${filter.display} entfernen`);
         removeButton.dataset.checkboxId = filter.id;
 

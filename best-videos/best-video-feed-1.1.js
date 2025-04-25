@@ -5,9 +5,12 @@ const API_BASE_URL = "https://api.webflow.com/v2/collections";
 const WORKER_BASE_URL = "https://bewerbungen.oliver-258.workers.dev/?url="; // Dein Worker URL
 const JOB_COLLECTION_ID = "6448faf9c5a8a17455c05525"; // Beibehalten für bestehende Funktionalität
 const USER_COLLECTION_ID = "6448faf9c5a8a15f6cc05526"; // Beibehalten für bestehende Funktionalität
-const VIDEO_COLLECTION_ID = "680b45a22b15fa4643ebdca9"; // <-- NEU: Deine Video Collection ID
+const VIDEO_COLLECTION_ID = "680b45a22b15fa4643ebdca9"; // Deine Video Collection ID
 
 let currentWebflowMemberId = null; // 💡 Hier wird die eingeloggte Member-ID gespeichert (falls benötigt)
+let allVideoItems = []; // <-- NEU: Speicher für alle geladenen Video-Items
+const videoContainerId = "video-container"; // <-- NEU: ID des Video-Containers
+const filterCheckboxId = "kategorie-influencer"; // <-- NEU: ID der Filter-Checkbox
 
 // 🛠️ Hilfsfunktionen
 function buildWorkerUrl(apiUrl) {
@@ -48,16 +51,14 @@ async function fetchWebflowData(apiUrl) {
 async function fetchSingleItem(collectionId, itemId) {
     const apiUrl = `${API_BASE_URL}/${collectionId}/items/${itemId}/live`;
     const item = await fetchWebflowData(apiUrl);
-    // Die API für ein einzelnes Item gibt das Item direkt zurück, nicht unter 'items'
     return item;
 }
 
-// -- Funktion zum Abrufen mehrerer Items einer Collection (NEU) --
+// -- Funktion zum Abrufen mehrerer Items einer Collection (angepasst) --
 async function fetchCollectionItems(collectionId) {
-    // Füge ggf. Parameter wie limit und offset hinzu, falls nötig: ?limit=100&offset=0
-    const apiUrl = `${API_BASE_URL}/${collectionId}/items/live`;
+    const apiUrl = `${API_BASE_URL}/${collectionId}/items/live?limit=100`; // Limit erhöht, ggf. Paginierung hinzufügen
     const data = await fetchWebflowData(apiUrl);
-    // Die API für mehrere Items gibt ein Objekt mit einem 'items' Array zurück
+    // TODO: Implementiere Paginierung, falls mehr als 100 Items erwartet werden
     return data?.items || [];
 }
 
@@ -79,19 +80,19 @@ function renderJobs(jobs, containerId) {
     if (jobs.length === 0) {
         const noJobsMessage = document.createElement("p");
         noJobsMessage.textContent = "Es sieht so aus, als wäre aktuell noch kein Auftrag für dich bestätigt worden.";
-        noJobsMessage.classList.add("no-jobs-message"); // Optional: Klasse für Styling hinzufügen
+        noJobsMessage.classList.add("no-jobs-message");
         container.appendChild(noJobsMessage);
         return;
     }
 
     jobs.forEach(jobData => {
-        if (!jobData) return; // Überspringe, falls Jobdaten null sind
+        if (!jobData) return;
 
         const jobLink = document.createElement("a");
-        jobLink.href = `https://www.creatorjobs.com/creator-job/${jobData.slug || '#'}`; // Fallback für fehlenden Slug
+        jobLink.href = `https://www.creatorjobs.com/creator-job/${jobData.slug || '#'}`;
         jobLink.target = "_blank";
         jobLink.style.textDecoration = "none";
-        jobLink.style.color = "#040e1a"; // Standardtextfarbe
+        jobLink.style.color = "#040e1a";
 
         const jobDiv = document.createElement("div");
         jobDiv.classList.add("db-table-row", "db-table-booked");
@@ -102,15 +103,16 @@ function renderJobs(jobs, containerId) {
 
         const jobImage = document.createElement("img");
         jobImage.classList.add("db-table-img", "is-margin-right-12");
-        jobImage.src = jobData["job-image"]?.url || "https://via.placeholder.com/48"; // Sicherer Zugriff auf Bild-URL
+        // Sicherer Zugriff auf verschachtelte URL, falls vorhanden
+        jobImage.src = jobData["job-image"]?.url || "https://via.placeholder.com/48";
         jobImage.alt = jobData["name"] || "Job Bild";
-        jobImage.style.width = "48px"; // Feste Breite für Konsistenz
-        jobImage.style.height = "48px"; // Feste Höhe für Konsistenz
-        jobImage.style.objectFit = "cover"; // Bild-Anpassung
+        jobImage.style.width = "48px";
+        jobImage.style.height = "48px";
+        jobImage.style.objectFit = "cover";
         jobInfoDiv.appendChild(jobImage);
 
         const jobName = document.createElement("span");
-        jobName.classList.add("truncate"); // Klasse für Textabschneidung (falls vorhanden)
+        jobName.classList.add("truncate");
         jobName.textContent = jobData["name"] || "Unbekannter Job";
         jobInfoDiv.appendChild(jobName);
         jobDiv.appendChild(jobInfoDiv);
@@ -124,7 +126,6 @@ function renderJobs(jobs, containerId) {
         // Budget
         const jobBudget = document.createElement("div");
         jobBudget.classList.add("db-table-row-item");
-        // Versuche, eine Zahl zu formatieren, falls vorhanden, sonst Text anzeigen
         const payment = parseFloat(jobData["job-payment"]);
         jobBudget.textContent = !isNaN(payment) ? `${payment.toFixed(2)} €` : (jobData["job-payment"] || "N/A");
         jobDiv.appendChild(jobBudget);
@@ -141,7 +142,7 @@ function renderJobs(jobs, containerId) {
             const deadlineDiv = document.createElement("div");
             deadlineDiv.classList.add("db-table-row-item");
             const tag = document.createElement("div");
-            tag.classList.add(...deadlineInfo.class.split(" ")); // Klassen sicher hinzufügen
+            tag.classList.add(...deadlineInfo.class.split(" "));
             const text = document.createElement("span");
             text.classList.add("db-job-tag-txt");
             text.textContent = deadlineInfo.text;
@@ -159,7 +160,7 @@ function renderJobs(jobs, containerId) {
 }
 
 
-// ---- NEUE FUNKTION ZUM RENDERN DER VIDEOS ----
+// ---- Funktion zum Rendern der VIDEOS (unverändert) ----
 function renderVideos(videoItems, containerId) {
     const container = document.getElementById(containerId);
     if (!container) {
@@ -170,7 +171,7 @@ function renderVideos(videoItems, containerId) {
 
     if (!videoItems || videoItems.length === 0) {
         const noVideosMessage = document.createElement("p");
-        noVideosMessage.textContent = "Keine Videos in dieser Collection gefunden.";
+        noVideosMessage.textContent = "Keine Videos entsprechen den aktuellen Filtern.";
         container.appendChild(noVideosMessage);
         return;
     }
@@ -182,10 +183,9 @@ function renderVideos(videoItems, containerId) {
 
         if (videoLink) {
             const videoWrapper = document.createElement("div");
-            videoWrapper.classList.add("video-item-wrapper"); // Für optionales Styling
-            videoWrapper.style.marginBottom = "20px"; // Etwas Abstand zwischen Videos
+            videoWrapper.classList.add("video-item-wrapper");
+            videoWrapper.style.marginBottom = "20px";
 
-            // Optional: Video-Namen als Überschrift hinzufügen
             if (videoName) {
                 const nameHeading = document.createElement("h3");
                 nameHeading.textContent = videoName;
@@ -193,16 +193,11 @@ function renderVideos(videoItems, containerId) {
                 videoWrapper.appendChild(nameHeading);
             }
 
-            // Das Video-Element erstellen
-            // ACHTUNG: Direkte String-Konstruktion ist anfällig, wenn 'videoLink' unsicher ist.
-            // Da es von deiner eigenen Webflow-Collection kommt, ist das Risiko geringer.
             const videoElementHTML = `
-                <video playsinline preload="metadata" autobuffer controls class="db-video-player" id="db-user-video--${index + 1}">
-                    <source src="${videoLink}" type="video/mp4">
+                <video playsinline preload="metadata" autobuffer controls class="db-video-player" id="db-user-video--${item.id || index}"> <source src="${videoLink}" type="video/mp4">
                     Dein Browser unterstützt das Video-Tag nicht.
                 </video>
             `;
-            // Füge das HTML sicher zum Wrapper hinzu
             videoWrapper.insertAdjacentHTML('beforeend', videoElementHTML);
 
             container.appendChild(videoWrapper);
@@ -212,34 +207,60 @@ function renderVideos(videoItems, containerId) {
     });
 }
 
-// ---- NEUE HAUPTFUNKTION ZUM ANZEIGEN DER VIDEOS ----
+// ---- NEUE FUNKTION: Filter anwenden und Videos neu rendern ----
+function applyFiltersAndRender() {
+    const filterCheckbox = document.getElementById(filterCheckboxId);
+    if (!filterCheckbox) {
+        console.error(`❌ Filter-Checkbox mit ID '${filterCheckboxId}' nicht gefunden.`);
+        renderVideos(allVideoItems, videoContainerId); // Zeige alle Videos, wenn Checkbox fehlt
+        return;
+    }
+
+    const isInfluencerFilterActive = filterCheckbox.checked;
+    console.log(`🔄 Filter angewendet: Influencer = ${isInfluencerFilterActive}`);
+
+    let filteredItems = allVideoItems;
+
+    if (isInfluencerFilterActive) {
+        filteredItems = allVideoItems.filter(item => {
+            // Stelle sicher, dass fieldData und kategorie existieren und prüfe den Wert
+            return item.fieldData && item.fieldData.kategorie && item.fieldData.kategorie.toLowerCase() === 'influencer';
+            // Achte auf Groß-/Kleinschreibung: .toLowerCase() hinzugefügt für Robustheit
+        });
+    }
+    // Hier könnten weitere Filter hinzugefügt werden (z.B. else if, oder kombiniert)
+
+    renderVideos(filteredItems, videoContainerId);
+}
+
+
+// ---- Hauptfunktion zum Laden und Anzeigen der VIDEOS (angepasst) ----
 async function displayVideoCollection() {
-    const containerId = "video-container"; // Stelle sicher, dass dieses Element im HTML existiert
-
     try {
-        // Optional: Hole Memberstack-Daten, falls für Authentifizierung/Worker benötigt
-        // const member = await window.$memberstackDom.getCurrentMember();
-        // currentWebflowMemberId = member?.data?.customFields?.['webflow-member-id'];
-        // if (!currentWebflowMemberId) {
-        //     console.warn("⚠️ Kein 'webflow-member-id' im Memberstack-Profil gefunden, fahre aber fort.");
-        //     // Je nach Worker-Konfiguration könnte der API-Call fehlschlagen
-        // }
-
         console.log(`🚀 Lade Videos von Collection ID: ${VIDEO_COLLECTION_ID}`);
-        const videoItems = await fetchCollectionItems(VIDEO_COLLECTION_ID);
+        // Lade *alle* Videos und speichere sie
+        allVideoItems = await fetchCollectionItems(VIDEO_COLLECTION_ID);
 
-        if (videoItems) {
-            console.log(`📹 ${videoItems.length} Video(s) gefunden.`);
-            renderVideos(videoItems, containerId);
+        if (allVideoItems && allVideoItems.length > 0) {
+            console.log(`📹 ${allVideoItems.length} Video(s) insgesamt geladen.`);
+            // Richte den Event Listener für die Checkbox ein
+            const filterCheckbox = document.getElementById(filterCheckboxId);
+            if (filterCheckbox) {
+                filterCheckbox.addEventListener('change', applyFiltersAndRender);
+                console.log(`✅ Event Listener für Checkbox '${filterCheckboxId}' eingerichtet.`);
+            } else {
+                console.warn(`⚠️ Filter-Checkbox mit ID '${filterCheckboxId}' nicht im DOM gefunden. Filterung funktioniert nicht.`);
+            }
+            // Wende Filter initial an (basierend auf dem Standardzustand der Checkbox)
+            applyFiltersAndRender();
         } else {
             console.log("Keine Video-Items zum Rendern vorhanden.");
-            renderVideos([], containerId); // Leere den Container oder zeige Meldung an
+            renderVideos([], videoContainerId); // Leeren Container anzeigen
         }
 
     } catch (error) {
         console.error("❌ Fehler beim Laden der Video-Collection:", error);
-        // Optional: Fehlermeldung im UI anzeigen
-        const container = document.getElementById(containerId);
+        const container = document.getElementById(videoContainerId);
         if (container) {
             container.innerHTML = "<p>Fehler beim Laden der Videos. Bitte versuche es später erneut.</p>";
         }
@@ -249,7 +270,7 @@ async function displayVideoCollection() {
 
 // -- Bestehende Hauptfunktion für Jobs (unverändert) --
 async function displayUserJobs() {
-    const containerId = "booked-jobs-list"; // Stelle sicher, dass dieses Element im HTML existiert
+    const containerId = "booked-jobs-list";
 
     try {
         const member = await window.$memberstackDom.getCurrentMember();
@@ -257,20 +278,18 @@ async function displayUserJobs() {
 
         if (!currentWebflowMemberId) {
             console.error("❌ Kein 'webflow-member-id' im Memberstack-Profil gefunden.");
-            renderJobs([], containerId); // Zeige leere Liste/Nachricht an
+            renderJobs([], containerId);
             return;
         }
 
         console.log(`👤 Lade Benutzerdaten für Member ID: ${currentWebflowMemberId}`);
         const userDataItem = await fetchSingleItem(USER_COLLECTION_ID, currentWebflowMemberId);
-        // Die API für ein einzelnes Item gibt das Item direkt zurück
         const bookedJobIds = userDataItem?.fieldData?.["booked-jobs"] || [];
         console.log(`📚 Gefundene gebuchte Job IDs: ${bookedJobIds.length}`);
 
         const bookedJobsPromises = bookedJobIds.map(fetchJobData);
         const bookedJobs = await Promise.all(bookedJobsPromises);
 
-        // Filtere null Ergebnisse heraus, falls fetchJobData fehlschlägt
         const validBookedJobs = bookedJobs.filter(job => job && Object.keys(job).length > 0);
         console.log(`✅ ${validBookedJobs.length} gültige Jobdaten geladen.`);
 
@@ -278,13 +297,23 @@ async function displayUserJobs() {
 
     } catch (error) {
         console.error("❌ Fehler beim Laden der Benutzer-Jobs:", error);
-        renderJobs([], containerId); // Zeige leere Liste/Nachricht im Fehlerfall an
+        renderJobs([], containerId);
     }
 }
 
 // Start der Anwendung
 window.addEventListener("DOMContentLoaded", () => {
     console.log("🚀 DOM geladen. Starte Ladevorgänge...");
-    displayUserJobs();        // Starte das Laden der Jobs
-    displayVideoCollection(); // Starte das Laden der Videos
+    // Stelle sicher, dass das HTML für Filter und Container existiert, bevor du startest
+    if (document.getElementById(videoContainerId) && document.getElementById(filterCheckboxId)) {
+         displayVideoCollection(); // Starte das Laden der Videos und richte Filter ein
+    } else {
+        console.error(`FEHLER: Container (${videoContainerId}) oder Filter-Checkbox (${filterCheckboxId}) nicht gefunden! Videos können nicht geladen/gefiltert werden.`);
+    }
+    // Optional: Lade Jobs nur, wenn der Container dafür existiert
+    if (document.getElementById("booked-jobs-list")) {
+        displayUserJobs();
+    } else {
+        console.log("Container 'booked-jobs-list' nicht gefunden, Job-Ladevorgang übersprungen.");
+    }
 });

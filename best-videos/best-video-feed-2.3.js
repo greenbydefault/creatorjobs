@@ -31,11 +31,24 @@ const filterConfig = [
             { id: "paid", value: "paid", display: "Typ: Paid" },
             { id: "werbung", value: "werbeanzeige", display: "Typ: Werbeanzeige" }
         ]
+    },
+    // --- NEU: Kunden-Filtergruppe ---
+    {
+        field: 'kunden', // Das Multi-Referenz-Feld in der Video-Collection
+        filters: [
+            // Checkbox-ID 'autoscout', Wert ist die Webflow Item ID des Kunden
+            { id: "autoscout", value: "678f5b698973dba7df78f644", display: "Kunde: Autoscout" },
+            // Checkbox-ID 'B-B', Wert ist die Webflow Item ID des Kunden
+            // WICHTIG: Ersetze 'PLACEHOLDER_BB_HOTELS_ID' mit der echten ID!
+            { id: "B-B", value: "64808c8079995e878fda4f67", display: "Kunde: B&B Hotels" }
+            // Füge hier weitere Kundenfilter hinzu...
+        ]
     }
 ];
 
 // --- Konfiguration für Suchfelder ---
 const searchableFields = ['name', 'creator', 'beschreibung', 'anzeigentype', 'video-name', 'kategorie', 'produktionsort'];
+// Das 'kunden'-Feld wird hier *nicht* durchsucht, da es IDs enthält, kein Text.
 
 // 🛠️ Hilfsfunktionen
 
@@ -86,7 +99,7 @@ async function fetchAllCollectionItems(collectionId) {
         if (data && data.items) {
             allItems = allItems.concat(data.items);
             totalFetched += data.items.length;
-            console.log(`   - ${data.items.length} Items bei Offset ${offset} geladen (Gesamt bisher: ${totalFetched})`);
+            // console.log(`   - ${data.items.length} Items bei Offset ${offset} geladen (Gesamt bisher: ${totalFetched})`); // Weniger detailliertes Logging
 
             if (data.pagination && totalFetched >= data.pagination.total) {
                 hasMore = false;
@@ -110,7 +123,6 @@ async function fetchAllCollectionItems(collectionId) {
 
 /**
  * Rendert die Video-Items im angegebenen Container.
- * (Skeleton Loader entfernt)
  */
 function renderVideos(videoItems, containerId) {
     const container = document.getElementById(containerId);
@@ -136,26 +148,19 @@ function renderVideos(videoItems, containerId) {
         if (videoLink) {
             // Link-Anpassung
             if (!videoLink.includes('&download=1')) {
-                 if (videoLink.includes('?')) {
-                     videoLink += '&download=1';
-                 } else {
-                     videoLink += '?download=1';
-                 }
-                 // console.log(`   -> Angepasster Link für ${item.id || index}: ${videoLink}`); // Optional: Logging
+                 if (videoLink.includes('?')) { videoLink += '&download=1'; }
+                 else { videoLink += '?download=1'; }
             }
 
-            // Äußerer Wrapper für jedes Video
             const feedContainer = document.createElement("div");
-            feedContainer.classList.add("video-feed-container"); // Wrapper-Klasse
+            feedContainer.classList.add("video-feed-container");
 
-            // Video-Element direkt erstellen und hinzufügen
             const videoElement = document.createElement('video');
             videoElement.playsInline = true;
-            videoElement.preload = "metadata"; // Lädt nur Metadaten initial
+            videoElement.preload = "metadata";
             videoElement.controls = true;
             videoElement.classList.add('db-video-player');
             videoElement.id = `db-user-video--${item.id || index}`;
-            // videoElement.style.display = 'none'; // Nicht mehr verstecken
 
             const sourceElement = document.createElement('source');
             sourceElement.src = videoLink;
@@ -164,16 +169,12 @@ function renderVideos(videoItems, containerId) {
             videoElement.appendChild(sourceElement);
             videoElement.appendChild(document.createTextNode('Dein Browser unterstützt das Video-Tag nicht.'));
 
-            // Einfache Fehlerbehandlung: Zeigt eine Nachricht im Container an, wenn das Video nicht lädt
             videoElement.addEventListener('error', (e) => {
                 console.error(`Fehler beim Laden von Video ${videoElement.id} von ${videoLink}:`, e);
-                // Ersetze das Video-Element durch eine Fehlermeldung im feedContainer
                 feedContainer.innerHTML = '<p style="color: red; padding: 10px; border: 1px solid red;">Video konnte nicht geladen werden.</p>';
             }, { once: true });
 
-            // Video-Element zum Container hinzufügen
             feedContainer.appendChild(videoElement);
-            // Den feedContainer zum Fragment hinzufügen
             fragment.appendChild(feedContainer);
 
         } else {
@@ -187,7 +188,6 @@ function renderVideos(videoItems, containerId) {
 
 /**
  * Rendert die aktiven Checkbox-Filter als klickbare Tags.
- * (Styling für Button und Text angepasst)
  */
 function renderFilterTags(activeFiltersFlat) {
     const wrapper = document.getElementById(filterTagWrapperId);
@@ -199,30 +199,31 @@ function renderFilterTags(activeFiltersFlat) {
 
     activeFiltersFlat.forEach(filter => {
         const tagElement = document.createElement('div');
-        tagElement.classList.add('search-filter-tag'); // Hauptklasse für das Tag
+        tagElement.classList.add('search-filter-tag');
 
-        // Span für den Text mit neuer Klasse
         const tagName = document.createElement('span');
-        tagName.classList.add('tag-text'); // NEU: Klasse für den Text
+        tagName.classList.add('tag-text');
         tagName.textContent = filter.display;
-        // tagName.style.marginRight = '6px'; // Inline-Style entfernt
 
-        // Button zum Entfernen mit neuer Klasse
         const removeButton = document.createElement('button');
-        removeButton.classList.add('filter-close-button'); // NEU: Klasse für den Button
+        removeButton.classList.add('filter-close-button');
         removeButton.textContent = '×';
-        // removeButton.style.cssText = ... // Inline-Styles entfernt
         removeButton.setAttribute('aria-label', `Filter ${filter.display} entfernen`);
-        removeButton.dataset.checkboxId = filter.id;
+        removeButton.dataset.checkboxId = filter.id; // Speichert die ID der Checkbox
 
+        // Event Listener zum Entfernen des Tags und Deaktivieren der Checkbox
         removeButton.addEventListener('click', (e) => {
             const checkboxIdToRemove = e.currentTarget.dataset.checkboxId;
+            console.log(`Attempting to remove filter for checkbox ID: ${checkboxIdToRemove}`); // Zusätzliches Logging
             const correspondingCheckbox = document.getElementById(checkboxIdToRemove);
             if (correspondingCheckbox) {
-                correspondingCheckbox.checked = false;
-                applyFiltersAndRender();
+                console.log(`   Checkbox found:`, correspondingCheckbox);
+                correspondingCheckbox.checked = false; // Checkbox deaktivieren
+                console.log(`   Checkbox deselected.`);
+                applyFiltersAndRender(); // Filter neu anwenden
             } else {
-                console.error(`Konnte Checkbox mit ID ${checkboxIdToRemove} zum Entfernen nicht finden.`);
+                // Dieser Fehler sollte nicht auftreten, wenn die IDs übereinstimmen
+                console.error(`   FEHLER: Konnte Checkbox mit ID ${checkboxIdToRemove} zum Entfernen nicht finden!`);
             }
         });
 
@@ -253,7 +254,9 @@ function applyFiltersAndRender() {
         group.filters.forEach(filter => {
             const checkbox = document.getElementById(filter.id);
             if (checkbox && checkbox.checked) {
-                activeFiltersByGroup[groupField].push(filter.value.toLowerCase());
+                // Für normale Felder: Wert direkt hinzufügen
+                // Für 'kunden' (Multi-Ref): Wert (Kunden-ID) hinzufügen
+                activeFiltersByGroup[groupField].push(filter.value.toLowerCase()); // Wert ist die Kunden-ID (oder Text für andere Felder)
                 allActiveCheckboxFiltersFlat.push({ ...filter, field: groupField });
             }
         });
@@ -268,18 +271,39 @@ function applyFiltersAndRender() {
         // a) Checkbox-Filter
         let matchesCheckboxFilters = true;
         for (const groupField in activeFiltersByGroup) {
-            const activeValuesInGroup = activeFiltersByGroup[groupField];
+            const activeValuesInGroup = activeFiltersByGroup[groupField]; // Array der aktiven Werte (z.B. ['influencer'] oder ['kundenId1', 'kundenId2'])
+
             if (activeValuesInGroup.length > 0) {
-                const itemValue = item?.fieldData?.[groupField]?.toLowerCase();
-                if (itemValue === undefined || itemValue === null || !activeValuesInGroup.includes(itemValue)) {
-                    matchesCheckboxFilters = false;
-                    break;
+                // --- NEUE Logik für Multi-Referenz 'kunden' ---
+                if (groupField === 'kunden') {
+                    const itemKundenIds = item?.fieldData?.[groupField]; // Das Array der Kunden-IDs im Video-Item
+                    // Prüfen, ob das Feld existiert und ein Array ist
+                    if (!itemKundenIds || !Array.isArray(itemKundenIds)) {
+                        matchesCheckboxFilters = false; // Video hat keine Kunden-Referenzen
+                        break;
+                    }
+                    // Prüfen, ob *mindestens eine* der aktiven Kunden-IDs im Array des Items vorkommt (OR-Logik innerhalb der Gruppe)
+                    const hasMatchingKunde = activeValuesInGroup.some(activeKundenId =>
+                        itemKundenIds.includes(activeKundenId) // Prüft, ob die aktive ID im Array des Items ist (Groß/Klein ist bei IDs egal)
+                    );
+                    if (!hasMatchingKunde) {
+                        matchesCheckboxFilters = false; // Keine der ausgewählten Kunden passt
+                        break;
+                    }
+                }
+                // --- Alte Logik für normale Felder ---
+                else {
+                    const itemValue = item?.fieldData?.[groupField]?.toLowerCase(); // Wert des Feldes im Video-Item
+                    if (itemValue === undefined || itemValue === null || !activeValuesInGroup.includes(itemValue)) {
+                        matchesCheckboxFilters = false; // Wert passt nicht zu den aktiven Filtern dieser Gruppe
+                        break;
+                    }
                 }
             }
         }
-        if (!matchesCheckboxFilters) return false;
+        if (!matchesCheckboxFilters) return false; // Wenn Checkbox-Filter nicht passen, raus
 
-        // b) Suchfilter
+        // b) Suchfilter (unverändert)
         let matchesSearchTerm = true;
         if (searchTerm) {
             matchesSearchTerm = false;
@@ -291,7 +315,7 @@ function applyFiltersAndRender() {
                 }
             }
         }
-        return matchesSearchTerm;
+        return matchesSearchTerm; // Nur zurückgeben, wenn Checkbox UND Suche passen
     });
 
     // 4. Aktive Checkbox-Filter-Tags rendern
@@ -382,4 +406,3 @@ window.addEventListener("DOMContentLoaded", () => {
         console.error("Video-Feed kann nicht initialisiert werden.");
     }
 });
-

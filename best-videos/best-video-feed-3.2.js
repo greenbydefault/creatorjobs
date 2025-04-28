@@ -10,7 +10,7 @@ const API_LIMIT = 100;
 // Globale Variablen
 let allVideoItems = [];
 let allCustomerData = {}; // Speicher für *relevante* Kundendaten
-const videoContainerId = "video-container";
+const videoContainerId = "video-container"; // Hauptcontainer für alle Videos
 const filterTagWrapperId = "filter-tag-wrapper";
 const searchInputId = "filter-search";
 let searchDebounceTimer = null;
@@ -41,10 +41,7 @@ const filterConfig = [
             { id: "autoscout", value: "678f5b698973dba7df78f644", display: "Kunde: Autoscout" },
             { id: "B-B", value: "64808c8079995e878fda4f67", display: "Kunde: B&B Hotels" },
             { id: "chefkoch", value: "679213a19cc8609f08cc4565", display: "Kunde: Chefkoch" },
-            // --- NEU: Telekom hinzugefügt ---
-            // Annahme: Checkbox ID ist 'telekom'
             { id: "telekom", value: "659d5ef1dd74610abc7f44c6", display: "Kunde: Telekom" }
-            // Füge hier weitere Kundenfilter hinzu...
         ]
     }
 ];
@@ -150,6 +147,9 @@ async function fetchRelevantCustomerData(customerIds) {
 
 // 🎨 Rendering-Funktionen
 
+/**
+ * Rendert die Video-Items im angegebenen Container mit angepasster HTML-Struktur.
+ */
 function renderVideos(videoItems, containerId) {
     const container = document.getElementById(containerId);
     if (!container) {
@@ -178,15 +178,17 @@ function renderVideos(videoItems, containerId) {
                  else { videoLink += '?download=1'; }
             }
 
+            // --- Äußerer Container für den gesamten Eintrag ---
             const feedContainer = document.createElement("div");
-            feedContainer.classList.add("video-feed-container");
+            feedContainer.classList.add("video-feed-container"); // Behält die äußere Klasse
 
             const firstCustomerId = (Array.isArray(kundenIds) && kundenIds.length > 0) ? kundenIds[0] : null;
             const customerInfo = firstCustomerId ? allCustomerData[firstCustomerId] : null;
 
+            // --- Kundeninfo-Zeile ---
             if (customerInfo) {
                 const customerRow = document.createElement('div');
-                customerRow.classList.add('video-feed-row');
+                customerRow.classList.add('video-feed-row'); // Klasse für die Kundenzeile
 
                 if (customerInfo.logoUrl) {
                     const logoImg = document.createElement('img');
@@ -205,16 +207,22 @@ function renderVideos(videoItems, containerId) {
                 customerNameSpan.classList.add('video-feed-customer');
                 customerNameSpan.textContent = customerInfo.name;
                 customerRow.appendChild(customerNameSpan);
-                feedContainer.appendChild(customerRow);
+                feedContainer.appendChild(customerRow); // Füge Kundenzeile zum äußeren Container hinzu
             } else if (firstCustomerId) {
                 console.warn(`Kundendaten für ID ${firstCustomerId} nicht in allCustomerData gefunden.`);
+                // Optional: Leere Zeile einfügen
             }
 
+            // --- NEU: Innerer Container für das Video ---
+            const videoInnerContainer = document.createElement('div');
+            videoInnerContainer.classList.add('feed-video-container'); // Neue Klasse für den Video-Wrapper
+
+            // --- Video-Element ---
             const videoElement = document.createElement('video');
             videoElement.playsInline = true;
             videoElement.preload = "metadata";
             videoElement.controls = true;
-            videoElement.classList.add('db-video-player');
+            videoElement.classList.add('db-video-player'); // Klasse für das Video selbst
             videoElement.id = `db-user-video--${item.id || index}`;
 
             const sourceElement = document.createElement('source');
@@ -224,6 +232,7 @@ function renderVideos(videoItems, containerId) {
             videoElement.appendChild(sourceElement);
             videoElement.appendChild(document.createTextNode('Dein Browser unterstützt das Video-Tag nicht.'));
 
+            // Fehlerbehandlung: Ersetzt Inhalt im *inneren* Video-Container
             videoElement.addEventListener('error', (e) => {
                 console.error(`Fehler beim Laden von Video ${videoElement.id} von ${videoLink}:`, e);
                 const errorP = document.createElement('p');
@@ -231,12 +240,17 @@ function renderVideos(videoItems, containerId) {
                 errorP.style.padding = '10px';
                 errorP.style.border = '1px solid red';
                 errorP.textContent = 'Video konnte nicht geladen werden.';
-                if(videoElement.parentNode === feedContainer) {
-                     feedContainer.replaceChild(errorP, videoElement);
-                }
+                // Ersetze das Video im inneren Container durch die Fehlermeldung
+                videoInnerContainer.innerHTML = ''; // Entferne ggf. das fehlerhafte Video-Element zuerst
+                videoInnerContainer.appendChild(errorP);
             }, { once: true });
 
-            feedContainer.appendChild(videoElement);
+            // Füge Video zum *inneren* Container hinzu
+            videoInnerContainer.appendChild(videoElement);
+            // Füge den *inneren* Container zum *äußeren* Container hinzu
+            feedContainer.appendChild(videoInnerContainer);
+
+            // Füge den gesamten äußeren Container zum Fragment hinzu
             fragment.appendChild(feedContainer);
 
         } else {
@@ -447,6 +461,3 @@ window.addEventListener("DOMContentLoaded", () => {
         console.error("Video-Feed kann nicht initialisiert werden.");
     }
 });
-
-/* --- Benötigtes CSS (Beispiele) --- */
-// CSS bleibt unverändert

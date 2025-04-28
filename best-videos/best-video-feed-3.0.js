@@ -4,7 +4,7 @@
 const API_BASE_URL = "https://api.webflow.com/v2/collections";
 const WORKER_BASE_URL = "https://bewerbungen.oliver-258.workers.dev/?url=";
 const VIDEO_COLLECTION_ID = "680b45a22b15fa4643ebdca9";
-const CUSTOMER_COLLECTION_ID = "6448faf9c5a8a15f6cc05526";
+const CUSTOMER_COLLECTION_ID = "6448faf9c5a8a15f6cc05526"; // Kunden/Member Collection
 const API_LIMIT = 100;
 
 // Globale Variablen
@@ -127,7 +127,9 @@ async function fetchRelevantCustomerData(customerIds) {
             if (customer && customer.id && customer.fieldData) {
                 map[customer.id] = {
                     name: customer.fieldData.name || 'Unbekannter Kunde',
-                    logoUrl: customer.fieldData['user-profile-img']?.url || null
+                    // --- KORREKTUR HIER ---
+                    // Das Feld enthält direkt die URL, kein Objekt mit .url
+                    logoUrl: customer.fieldData['user-profile-img'] || null
                 };
             } else if (customer === null) {
                 console.warn("   -> Ein Kunde konnte nicht geladen werden (siehe vorherige Fehlermeldung).");
@@ -175,53 +177,42 @@ function renderVideos(videoItems, containerId) {
             }
 
             const feedContainer = document.createElement("div");
-            feedContainer.classList.add("video-feed-container"); // Klasse für den äußeren Container
+            feedContainer.classList.add("video-feed-container");
 
             const firstCustomerId = (Array.isArray(kundenIds) && kundenIds.length > 0) ? kundenIds[0] : null;
             const customerInfo = firstCustomerId ? allCustomerData[firstCustomerId] : null;
 
             if (customerInfo) {
                 const customerRow = document.createElement('div');
-                customerRow.classList.add('video-feed-row'); // Klasse für die Kundenzeile
-                // Inline-Styles entfernt
+                customerRow.classList.add('video-feed-row');
 
                 if (customerInfo.logoUrl) {
                     const logoImg = document.createElement('img');
-                    logoImg.classList.add('video-feed-logo'); // Klasse für das Logo
-                    logoImg.src = customerInfo.logoUrl;
+                    logoImg.classList.add('video-feed-logo');
+                    logoImg.src = customerInfo.logoUrl; // Direkt die URL aus customerInfo verwenden
                     logoImg.alt = `${customerInfo.name} Logo`;
-                    // Inline-Styles entfernt
-                    // Wichtig: Größe, Rundung, Abstand etc. müssen jetzt über CSS definiert werden!
                     logoImg.onerror = () => { logoImg.style.display='none'; console.warn(`Kundenlogo für ${customerInfo.name} konnte nicht geladen werden: ${customerInfo.logoUrl}`); };
                     customerRow.appendChild(logoImg);
                 } else {
-                    // Optional: Platzhalter, wenn kein Logo vorhanden (Styling via CSS)
                     const logoPlaceholder = document.createElement('div');
-                    logoPlaceholder.classList.add('video-feed-logo-placeholder'); // Eigene Klasse für Platzhalter-Styling
-                    // Inline-Styles entfernt
+                    logoPlaceholder.classList.add('video-feed-logo-placeholder');
                     customerRow.appendChild(logoPlaceholder);
                 }
 
                 const customerNameSpan = document.createElement('span');
-                customerNameSpan.classList.add('video-feed-customer'); // Klasse für den Namen
+                customerNameSpan.classList.add('video-feed-customer');
                 customerNameSpan.textContent = customerInfo.name;
-                // Inline-Styles entfernt
                 customerRow.appendChild(customerNameSpan);
-                feedContainer.appendChild(customerRow); // Füge die Kundenzeile zum Container hinzu
+                feedContainer.appendChild(customerRow);
             } else if (firstCustomerId) {
                 console.warn(`Kundendaten für ID ${firstCustomerId} nicht in allCustomerData gefunden.`);
-                // Optional: Leere Zeile einfügen, um Layout konsistent zu halten?
-                // const emptyCustomerRow = document.createElement('div');
-                // emptyCustomerRow.classList.add('video-feed-row');
-                // emptyCustomerRow.style.height = '32px'; // Beispielhöhe, anpassen!
-                // feedContainer.appendChild(emptyCustomerRow);
             }
 
             const videoElement = document.createElement('video');
             videoElement.playsInline = true;
             videoElement.preload = "metadata";
             videoElement.controls = true;
-            videoElement.classList.add('db-video-player'); // Klasse für das Video
+            videoElement.classList.add('db-video-player');
             videoElement.id = `db-user-video--${item.id || index}`;
 
             const sourceElement = document.createElement('source');
@@ -234,7 +225,7 @@ function renderVideos(videoItems, containerId) {
             videoElement.addEventListener('error', (e) => {
                 console.error(`Fehler beim Laden von Video ${videoElement.id} von ${videoLink}:`, e);
                 const errorP = document.createElement('p');
-                errorP.style.color = 'red'; // Fehlerstyling kann bleiben
+                errorP.style.color = 'red';
                 errorP.style.padding = '10px';
                 errorP.style.border = '1px solid red';
                 errorP.textContent = 'Video konnte nicht geladen werden.';
@@ -243,8 +234,8 @@ function renderVideos(videoItems, containerId) {
                 }
             }, { once: true });
 
-            feedContainer.appendChild(videoElement); // Füge Video zum Container hinzu
-            fragment.appendChild(feedContainer); // Füge Container zum Fragment hinzu
+            feedContainer.appendChild(videoElement);
+            fragment.appendChild(feedContainer);
 
         } else {
             console.warn(`⚠️ Video-Item ${item.id || index} hat keinen 'video-link'.`);
@@ -265,19 +256,17 @@ function renderFilterTags(activeFiltersFlat) {
 
     activeFiltersFlat.forEach(filter => {
         const tagElement = document.createElement('div');
-        tagElement.classList.add('search-filter-tag'); // Klasse für das Tag
+        tagElement.classList.add('search-filter-tag');
 
         const tagName = document.createElement('span');
-        tagName.classList.add('tag-text'); // Klasse für den Text
+        tagName.classList.add('tag-text');
         tagName.textContent = filter.display;
-        // Inline-Styles entfernt
 
         const removeButton = document.createElement('button');
-        removeButton.classList.add('filter-close-button'); // Klasse für den Button
+        removeButton.classList.add('filter-close-button');
         removeButton.textContent = '×';
         removeButton.setAttribute('aria-label', `Filter ${filter.display} entfernen`);
         removeButton.dataset.checkboxId = filter.id;
-        // Inline-Styles entfernt
 
         removeButton.addEventListener('click', (e) => {
             const checkboxIdToRemove = e.currentTarget.dataset.checkboxId;
@@ -341,7 +330,7 @@ function applyFiltersAndRender() {
                     if (!hasMatchingKunde) { matchesCheckboxFilters = false; break; }
                 } else if (groupField === 'creatortype' || groupField === 'produktion' || groupField === 'anzeige') {
                     if (itemFieldValue === undefined || itemFieldValue === null || !activeValuesInGroup.includes(itemFieldValue)) { matchesCheckboxFilters = false; break; }
-                } else { // Sollte nicht mehr vorkommen
+                } else {
                     const itemValueLower = itemFieldValue?.toLowerCase();
                     const normalizedActiveValues = activeValuesInGroup.map(v => v.toLowerCase());
                     if (itemValueLower === undefined || itemValueLower === null || !normalizedActiveValues.includes(itemValueLower)) { matchesCheckboxFilters = false; break; }
@@ -456,3 +445,6 @@ window.addEventListener("DOMContentLoaded", () => {
         console.error("Video-Feed kann nicht initialisiert werden.");
     }
 });
+
+/* --- Benötigtes CSS (Beispiele) --- */
+// CSS bleibt unverändert

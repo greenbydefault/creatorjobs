@@ -37,10 +37,14 @@ const filterConfig = [
         ]
     },
     {
-        field: 'kunden', filters: [
+        field: 'kunden', filters: [ // Multi-Referenz-Feld
             { id: "autoscout", value: "678f5b698973dba7df78f644", display: "Kunde: Autoscout" },
             { id: "B-B", value: "64808c8079995e878fda4f67", display: "Kunde: B&B Hotels" },
-            { id: "chefkoch", value: "679213a19cc8609f08cc4565", display: "Kunde: Chefkoch" }
+            { id: "chefkoch", value: "679213a19cc8609f08cc4565", display: "Kunde: Chefkoch" },
+            // --- NEU: Telekom hinzugefügt ---
+            // Annahme: Checkbox ID ist 'telekom'
+            { id: "telekom", value: "659d5ef1dd74610abc7f44c6", display: "Kunde: Telekom" }
+            // Füge hier weitere Kundenfilter hinzu...
         ]
     }
 ];
@@ -127,9 +131,7 @@ async function fetchRelevantCustomerData(customerIds) {
             if (customer && customer.id && customer.fieldData) {
                 map[customer.id] = {
                     name: customer.fieldData.name || 'Unbekannter Kunde',
-                    // --- KORREKTUR HIER ---
-                    // Das Feld enthält direkt die URL, kein Objekt mit .url
-                    logoUrl: customer.fieldData['user-profile-img'] || null
+                    logoUrl: customer.fieldData['user-profile-img'] || null // Direkt die URL
                 };
             } else if (customer === null) {
                 console.warn("   -> Ein Kunde konnte nicht geladen werden (siehe vorherige Fehlermeldung).");
@@ -189,7 +191,7 @@ function renderVideos(videoItems, containerId) {
                 if (customerInfo.logoUrl) {
                     const logoImg = document.createElement('img');
                     logoImg.classList.add('video-feed-logo');
-                    logoImg.src = customerInfo.logoUrl; // Direkt die URL aus customerInfo verwenden
+                    logoImg.src = customerInfo.logoUrl;
                     logoImg.alt = `${customerInfo.name} Logo`;
                     logoImg.onerror = () => { logoImg.style.display='none'; console.warn(`Kundenlogo für ${customerInfo.name} konnte nicht geladen werden: ${customerInfo.logoUrl}`); };
                     customerRow.appendChild(logoImg);

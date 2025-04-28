@@ -17,30 +17,32 @@ const DEBOUNCE_DELAY = 300; // Millisekunden Verzögerung für Suche
 // --- Filterkonfiguration (Checkboxes) ---
 const filterConfig = [
     {
-        field: 'kategorie', filters: [
-            { id: "influencer", value: "influencer", display: "Kategorie: Influencer" },
-            { id: "ugc", value: "ugc", display: "Kategorie: UGC" }
-        ]
-    }, {
-        // --- GEÄNDERT: Feldname und Werte für Produktionsart (Option-Feld) ---
-        field: 'produktion', // Webflow Feld-ID (Slug) - Name geändert
+        // --- GEÄNDERT: Feldname und Werte für Creator-Art (Option-Feld) ---
+        field: 'creatortype', // Webflow Feld-ID (Slug) - Name geändert
         filters: [
              // Wert ist jetzt die Option-ID
-            { id: "vorort", value: "096401b55fe1fc511bd2f7b4d8c6a26b", display: "Ort: Vor Ort" },
+            { id: "influencer", value: "6feb96f95ec4037985d5b65bc97ac482", display: "Creator: Influencer" },
              // Wert ist jetzt die Option-ID
+            { id: "ugc", value: "601abdcb4984b44f9188caec03e2ed59", display: "Creator: UGC" },
+             // --- NEU: Model hinzugefügt ---
+             // Wert ist die Option-ID
+            { id: "model", value: "dc4a8f7ad6191674745dcecbf763c827", display: "Creator: Model" }
+        ]
+    }, {
+        field: 'produktion', filters: [ // Option-Feld
+            { id: "vorort", value: "096401b55fe1fc511bd2f7b4d8c6a26b", display: "Ort: Vor Ort" },
             { id: "creatorproduktion", value: "a82d800f50eaa6671a2361428ee5a7d7", display: "Ort: Creatorproduktion" }
         ]
     }, {
-        field: 'anzeigentype', filters: [
-            { id: "paid", value: "paid", display: "Typ: Paid" },
-            { id: "werbung", value: "werbeanzeige", display: "Typ: Werbeanzeige" }
+        field: 'anzeige', filters: [ // Option-Feld
+            { id: "paid", value: "f2cdad102ae28465ff7eebfb496570d0", display: "Typ: Paid" },
+            { id: "werbung", value: "93704cc37eb0d87a732cf645309c9710", display: "Typ: Werbeanzeige" },
+            { id: "organisch", value: "a7e457d2518c7a2f617a2777ce897f93", display: "Typ: Organisch" }
         ]
     },
     {
-        field: 'kunden', // Das Multi-Referenz-Feld in der Video-Collection
-        filters: [
+        field: 'kunden', filters: [ // Multi-Referenz-Feld
             { id: "autoscout", value: "678f5b698973dba7df78f644", display: "Kunde: Autoscout" },
-            // --- GEÄNDERT: B&B Hotels ID eingefügt ---
             { id: "B-B", value: "64808c8079995e878fda4f67", display: "Kunde: B&B Hotels" }
             // Füge hier weitere Kundenfilter hinzu...
         ]
@@ -48,7 +50,8 @@ const filterConfig = [
 ];
 
 // --- Konfiguration für Suchfelder ---
-const searchableFields = ['name', 'creator', 'beschreibung', 'anzeigentype', 'video-name', 'kategorie', /* 'produktion' wird nicht durchsucht, da Option-ID */ 'produktionsort']; // 'produktionsort' ggf. entfernen, wenn es das Feld nicht mehr gibt
+// 'creatortype', 'produktion', 'anzeige' entfernt, da Suche nach Option-IDs nicht sinnvoll ist.
+const searchableFields = ['name', 'creator', 'beschreibung', /*'anzeigentype',*/ 'video-name', /*'kategorie',*/ 'produktionsort']; // 'produktionsort' ggf. entfernen, falls es nicht mehr existiert
 
 // 🛠️ Hilfsfunktionen
 
@@ -212,15 +215,12 @@ function renderFilterTags(activeFiltersFlat) {
 
         removeButton.addEventListener('click', (e) => {
             const checkboxIdToRemove = e.currentTarget.dataset.checkboxId;
-            console.log(`Attempting to remove filter for checkbox ID: ${checkboxIdToRemove}`);
             const correspondingCheckbox = document.getElementById(checkboxIdToRemove);
             if (correspondingCheckbox) {
-                console.log(`   Checkbox found:`, correspondingCheckbox);
                 correspondingCheckbox.checked = false;
-                console.log(`   Checkbox deselected.`);
                 applyFiltersAndRender();
             } else {
-                console.error(`   FEHLER: Konnte Checkbox mit ID ${checkboxIdToRemove} zum Entfernen nicht finden!`);
+                console.error(`FEHLER: Konnte Checkbox mit ID ${checkboxIdToRemove} zum Entfernen nicht finden!`);
             }
         });
 
@@ -251,9 +251,7 @@ function applyFiltersAndRender() {
         group.filters.forEach(filter => {
             const checkbox = document.getElementById(filter.id);
             if (checkbox && checkbox.checked) {
-                // Speichere den 'value' aus der Konfiguration (kann Text oder ID sein)
-                // Wir normalisieren hier NICHT auf toLowerCase, da wir IDs brauchen könnten
-                activeFiltersByGroup[groupField].push(filter.value);
+                activeFiltersByGroup[groupField].push(filter.value); // Speichert Wert (Text oder ID)
                 allActiveCheckboxFiltersFlat.push({ ...filter, field: groupField });
             }
         });
@@ -268,35 +266,34 @@ function applyFiltersAndRender() {
         // a) Checkbox-Filter
         let matchesCheckboxFilters = true;
         for (const groupField in activeFiltersByGroup) {
-            const activeValuesInGroup = activeFiltersByGroup[groupField]; // Array der aktiven Werte (z.B. ['influencer'] oder ['kundenId1'] oder ['optionId1'])
+            const activeValuesInGroup = activeFiltersByGroup[groupField]; // Aktive Werte/IDs für diese Gruppe
 
             if (activeValuesInGroup.length > 0) {
+                const itemFieldValue = item?.fieldData?.[groupField]; // Wert/ID/Array aus dem Item
+
                 // --- Logik für Multi-Referenz 'kunden' ---
                 if (groupField === 'kunden') {
-                    const itemKundenIds = item?.fieldData?.[groupField];
-                    if (!itemKundenIds || !Array.isArray(itemKundenIds)) {
+                    if (!itemFieldValue || !Array.isArray(itemFieldValue)) {
                         matchesCheckboxFilters = false; break;
                     }
-                    // Prüft, ob *mindestens eine* der aktiven Kunden-IDs (aus activeValuesInGroup) im Array des Items vorkommt
                     const hasMatchingKunde = activeValuesInGroup.some(activeKundenId =>
-                        itemKundenIds.includes(activeKundenId) // Direkter Vergleich der IDs
+                        itemFieldValue.includes(activeKundenId)
                     );
                     if (!hasMatchingKunde) { matchesCheckboxFilters = false; break; }
                 }
-                // --- Logik für Option-Feld 'produktion' ---
-                else if (groupField === 'produktion') {
-                    const itemOptionId = item?.fieldData?.[groupField]; // Die Option-ID im Item
-                    if (itemOptionId === undefined || itemOptionId === null || !activeValuesInGroup.includes(itemOptionId)) {
-                         // Prüft, ob die Option-ID des Items in den ausgewählten Option-IDs enthalten ist
+                // --- Logik für Option-Felder ('creatortype', 'produktion', 'anzeige') ---
+                else if (groupField === 'creatortype' || groupField === 'produktion' || groupField === 'anzeige') {
+                    if (itemFieldValue === undefined || itemFieldValue === null || !activeValuesInGroup.includes(itemFieldValue)) {
                         matchesCheckboxFilters = false; break;
                     }
                 }
-                // --- Logik für normale Text-Felder ---
+                // --- Logik für normale Text-Felder (falls noch vorhanden) ---
                 else {
-                    const itemValue = item?.fieldData?.[groupField]?.toLowerCase(); // Wert des Feldes im Item, normalisiert
-                    // Prüft, ob der normalisierte Item-Wert in den (bereits normalisierten) aktiven Werten enthalten ist
+                    // Diese Logik wird aktuell nicht verwendet, da 'kategorie' entfernt wurde.
+                    // Falls wieder Textfelder hinzukommen, muss hier ggf. angepasst werden.
+                    const itemValueLower = itemFieldValue?.toLowerCase();
                     const normalizedActiveValues = activeValuesInGroup.map(v => v.toLowerCase());
-                    if (itemValue === undefined || itemValue === null || !normalizedActiveValues.includes(itemValue)) {
+                    if (itemValueLower === undefined || itemValueLower === null || !normalizedActiveValues.includes(itemValueLower)) {
                         matchesCheckboxFilters = false; break;
                     }
                 }
@@ -409,4 +406,4 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 /* --- Benötigtes CSS (Beispiele) --- */
-// CSS bleibt unverändert zum vorherigen Schritt
+// CSS bleibt unverändert

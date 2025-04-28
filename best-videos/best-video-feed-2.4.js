@@ -22,9 +22,13 @@ const filterConfig = [
             { id: "ugc", value: "ugc", display: "Kategorie: UGC" }
         ]
     }, {
-        field: 'produktionsort', filters: [
-            { id: "vorort", value: "vor ort", display: "Ort: Vor Ort" },
-            { id: "creatorproduktion", value: "creatorproduktion", display: "Ort: Creatorproduktion" }
+        // --- GEÄNDERT: Feldname und Werte für Produktionsart (Option-Feld) ---
+        field: 'produktion', // Webflow Feld-ID (Slug) - Name geändert
+        filters: [
+             // Wert ist jetzt die Option-ID
+            { id: "vorort", value: "096401b55fe1fc511bd2f7b4d8c6a26b", display: "Ort: Vor Ort" },
+             // Wert ist jetzt die Option-ID
+            { id: "creatorproduktion", value: "a82d800f50eaa6671a2361428ee5a7d7", display: "Ort: Creatorproduktion" }
         ]
     }, {
         field: 'anzeigentype', filters: [
@@ -32,14 +36,11 @@ const filterConfig = [
             { id: "werbung", value: "werbeanzeige", display: "Typ: Werbeanzeige" }
         ]
     },
-    // --- NEU: Kunden-Filtergruppe ---
     {
         field: 'kunden', // Das Multi-Referenz-Feld in der Video-Collection
         filters: [
-            // Checkbox-ID 'autoscout', Wert ist die Webflow Item ID des Kunden
             { id: "autoscout", value: "678f5b698973dba7df78f644", display: "Kunde: Autoscout" },
-            // Checkbox-ID 'B-B', Wert ist die Webflow Item ID des Kunden
-            // WICHTIG: Ersetze 'PLACEHOLDER_BB_HOTELS_ID' mit der echten ID!
+            // --- GEÄNDERT: B&B Hotels ID eingefügt ---
             { id: "B-B", value: "64808c8079995e878fda4f67", display: "Kunde: B&B Hotels" }
             // Füge hier weitere Kundenfilter hinzu...
         ]
@@ -47,8 +48,7 @@ const filterConfig = [
 ];
 
 // --- Konfiguration für Suchfelder ---
-const searchableFields = ['name', 'creator', 'beschreibung', 'anzeigentype', 'video-name', 'kategorie', 'produktionsort'];
-// Das 'kunden'-Feld wird hier *nicht* durchsucht, da es IDs enthält, kein Text.
+const searchableFields = ['name', 'creator', 'beschreibung', 'anzeigentype', 'video-name', 'kategorie', /* 'produktion' wird nicht durchsucht, da Option-ID */ 'produktionsort']; // 'produktionsort' ggf. entfernen, wenn es das Feld nicht mehr gibt
 
 // 🛠️ Hilfsfunktionen
 
@@ -99,7 +99,6 @@ async function fetchAllCollectionItems(collectionId) {
         if (data && data.items) {
             allItems = allItems.concat(data.items);
             totalFetched += data.items.length;
-            // console.log(`   - ${data.items.length} Items bei Offset ${offset} geladen (Gesamt bisher: ${totalFetched})`); // Weniger detailliertes Logging
 
             if (data.pagination && totalFetched >= data.pagination.total) {
                 hasMore = false;
@@ -209,20 +208,18 @@ function renderFilterTags(activeFiltersFlat) {
         removeButton.classList.add('filter-close-button');
         removeButton.textContent = '×';
         removeButton.setAttribute('aria-label', `Filter ${filter.display} entfernen`);
-        removeButton.dataset.checkboxId = filter.id; // Speichert die ID der Checkbox
+        removeButton.dataset.checkboxId = filter.id;
 
-        // Event Listener zum Entfernen des Tags und Deaktivieren der Checkbox
         removeButton.addEventListener('click', (e) => {
             const checkboxIdToRemove = e.currentTarget.dataset.checkboxId;
-            console.log(`Attempting to remove filter for checkbox ID: ${checkboxIdToRemove}`); // Zusätzliches Logging
+            console.log(`Attempting to remove filter for checkbox ID: ${checkboxIdToRemove}`);
             const correspondingCheckbox = document.getElementById(checkboxIdToRemove);
             if (correspondingCheckbox) {
                 console.log(`   Checkbox found:`, correspondingCheckbox);
-                correspondingCheckbox.checked = false; // Checkbox deaktivieren
+                correspondingCheckbox.checked = false;
                 console.log(`   Checkbox deselected.`);
-                applyFiltersAndRender(); // Filter neu anwenden
+                applyFiltersAndRender();
             } else {
-                // Dieser Fehler sollte nicht auftreten, wenn die IDs übereinstimmen
                 console.error(`   FEHLER: Konnte Checkbox mit ID ${checkboxIdToRemove} zum Entfernen nicht finden!`);
             }
         });
@@ -254,9 +251,9 @@ function applyFiltersAndRender() {
         group.filters.forEach(filter => {
             const checkbox = document.getElementById(filter.id);
             if (checkbox && checkbox.checked) {
-                // Für normale Felder: Wert direkt hinzufügen
-                // Für 'kunden' (Multi-Ref): Wert (Kunden-ID) hinzufügen
-                activeFiltersByGroup[groupField].push(filter.value.toLowerCase()); // Wert ist die Kunden-ID (oder Text für andere Felder)
+                // Speichere den 'value' aus der Konfiguration (kann Text oder ID sein)
+                // Wir normalisieren hier NICHT auf toLowerCase, da wir IDs brauchen könnten
+                activeFiltersByGroup[groupField].push(filter.value);
                 allActiveCheckboxFiltersFlat.push({ ...filter, field: groupField });
             }
         });
@@ -271,37 +268,41 @@ function applyFiltersAndRender() {
         // a) Checkbox-Filter
         let matchesCheckboxFilters = true;
         for (const groupField in activeFiltersByGroup) {
-            const activeValuesInGroup = activeFiltersByGroup[groupField]; // Array der aktiven Werte (z.B. ['influencer'] oder ['kundenId1', 'kundenId2'])
+            const activeValuesInGroup = activeFiltersByGroup[groupField]; // Array der aktiven Werte (z.B. ['influencer'] oder ['kundenId1'] oder ['optionId1'])
 
             if (activeValuesInGroup.length > 0) {
-                // --- NEUE Logik für Multi-Referenz 'kunden' ---
+                // --- Logik für Multi-Referenz 'kunden' ---
                 if (groupField === 'kunden') {
-                    const itemKundenIds = item?.fieldData?.[groupField]; // Das Array der Kunden-IDs im Video-Item
-                    // Prüfen, ob das Feld existiert und ein Array ist
+                    const itemKundenIds = item?.fieldData?.[groupField];
                     if (!itemKundenIds || !Array.isArray(itemKundenIds)) {
-                        matchesCheckboxFilters = false; // Video hat keine Kunden-Referenzen
-                        break;
+                        matchesCheckboxFilters = false; break;
                     }
-                    // Prüfen, ob *mindestens eine* der aktiven Kunden-IDs im Array des Items vorkommt (OR-Logik innerhalb der Gruppe)
+                    // Prüft, ob *mindestens eine* der aktiven Kunden-IDs (aus activeValuesInGroup) im Array des Items vorkommt
                     const hasMatchingKunde = activeValuesInGroup.some(activeKundenId =>
-                        itemKundenIds.includes(activeKundenId) // Prüft, ob die aktive ID im Array des Items ist (Groß/Klein ist bei IDs egal)
+                        itemKundenIds.includes(activeKundenId) // Direkter Vergleich der IDs
                     );
-                    if (!hasMatchingKunde) {
-                        matchesCheckboxFilters = false; // Keine der ausgewählten Kunden passt
-                        break;
+                    if (!hasMatchingKunde) { matchesCheckboxFilters = false; break; }
+                }
+                // --- Logik für Option-Feld 'produktion' ---
+                else if (groupField === 'produktion') {
+                    const itemOptionId = item?.fieldData?.[groupField]; // Die Option-ID im Item
+                    if (itemOptionId === undefined || itemOptionId === null || !activeValuesInGroup.includes(itemOptionId)) {
+                         // Prüft, ob die Option-ID des Items in den ausgewählten Option-IDs enthalten ist
+                        matchesCheckboxFilters = false; break;
                     }
                 }
-                // --- Alte Logik für normale Felder ---
+                // --- Logik für normale Text-Felder ---
                 else {
-                    const itemValue = item?.fieldData?.[groupField]?.toLowerCase(); // Wert des Feldes im Video-Item
-                    if (itemValue === undefined || itemValue === null || !activeValuesInGroup.includes(itemValue)) {
-                        matchesCheckboxFilters = false; // Wert passt nicht zu den aktiven Filtern dieser Gruppe
-                        break;
+                    const itemValue = item?.fieldData?.[groupField]?.toLowerCase(); // Wert des Feldes im Item, normalisiert
+                    // Prüft, ob der normalisierte Item-Wert in den (bereits normalisierten) aktiven Werten enthalten ist
+                    const normalizedActiveValues = activeValuesInGroup.map(v => v.toLowerCase());
+                    if (itemValue === undefined || itemValue === null || !normalizedActiveValues.includes(itemValue)) {
+                        matchesCheckboxFilters = false; break;
                     }
                 }
             }
         }
-        if (!matchesCheckboxFilters) return false; // Wenn Checkbox-Filter nicht passen, raus
+        if (!matchesCheckboxFilters) return false;
 
         // b) Suchfilter (unverändert)
         let matchesSearchTerm = true;
@@ -315,7 +316,7 @@ function applyFiltersAndRender() {
                 }
             }
         }
-        return matchesSearchTerm; // Nur zurückgeben, wenn Checkbox UND Suche passen
+        return matchesSearchTerm;
     });
 
     // 4. Aktive Checkbox-Filter-Tags rendern
@@ -406,3 +407,6 @@ window.addEventListener("DOMContentLoaded", () => {
         console.error("Video-Feed kann nicht initialisiert werden.");
     }
 });
+
+/* --- Benötigtes CSS (Beispiele) --- */
+// CSS bleibt unverändert zum vorherigen Schritt

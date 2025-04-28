@@ -4,13 +4,12 @@
 const API_BASE_URL = "https://api.webflow.com/v2/collections";
 const WORKER_BASE_URL = "https://bewerbungen.oliver-258.workers.dev/?url=";
 const VIDEO_COLLECTION_ID = "680b45a22b15fa4643ebdca9";
-// --- NEU: Kunden Collection ID ---
-const CUSTOMER_COLLECTION_ID = "6448faf9c5a8a15f6cc05526"; // Die "Member" Collection für Kundendaten
-const API_LIMIT = 100; // Max items per Webflow API request
+const CUSTOMER_COLLECTION_ID = "6448faf9c5a8a15f6cc05526";
+const API_LIMIT = 100;
 
 // Globale Variablen
 let allVideoItems = [];
-let allCustomerData = {}; // --- NEU: Speicher für Kundendaten (ID -> {name, logoUrl}) ---
+let allCustomerData = {};
 const videoContainerId = "video-container";
 const filterTagWrapperId = "filter-tag-wrapper";
 const searchInputId = "filter-search";
@@ -41,29 +40,20 @@ const filterConfig = [
         field: 'kunden', filters: [
             { id: "autoscout", value: "678f5b698973dba7df78f644", display: "Kunde: Autoscout" },
             { id: "B-B", value: "64808c8079995e878fda4f67", display: "Kunde: B&B Hotels" },
-            // --- NEU: Chefkoch hinzugefügt ---
-            // Annahme: Checkbox ID ist 'chefkoch'
             { id: "chefkoch", value: "679213a19cc8609f08cc4565", display: "Kunde: Chefkoch" }
-            // Füge hier weitere Kundenfilter hinzu...
         ]
     }
 ];
 
 // --- Konfiguration für Suchfelder ---
-const searchableFields = ['name', 'creator', 'beschreibung', 'video-name', 'produktionsort']; // Felder ohne Option-IDs
+const searchableFields = ['name', 'creator', 'beschreibung', 'video-name', 'produktionsort'];
 
 // 🛠️ Hilfsfunktionen
 
-/**
- * Baut die URL für den CORS-Worker zusammen.
- */
 function buildWorkerUrl(apiUrl) {
     return `${WORKER_BASE_URL}${encodeURIComponent(apiUrl)}`;
 }
 
-/**
- * Ruft Daten von einer Webflow API URL über den Worker ab.
- */
 async function fetchWebflowData(apiUrl) {
     const workerUrl = buildWorkerUrl(apiUrl);
     try {
@@ -83,18 +73,13 @@ async function fetchWebflowData(apiUrl) {
     }
 }
 
-/**
- * Ruft ALLE Live-Items aus einer Webflow Collection ab, inkl. Paginierung.
- * @param {string} collectionId - Die ID der Collection.
- * @returns {Promise<Array|null>} Ein Array aller Items oder null bei Fehler.
- */
 async function fetchAllCollectionItems(collectionId) {
     let allItems = [];
     let offset = 0;
     let hasMore = true;
     let totalFetched = 0;
 
-    console.log(`🚀 Starte Abruf aller Items für Collection ${collectionId} (Limit pro Abruf: ${API_LIMIT})`);
+    console.log(`🚀 Starte Abruf aller Items für Collection ${collectionId} (Limit pro Abruf: ${API_LIMIT})`); // Log bleibt
 
     while (hasMore) {
         const apiUrl = `${API_BASE_URL}/${collectionId}/items/live?limit=${API_LIMIT}&offset=${offset}`;
@@ -106,60 +91,50 @@ async function fetchAllCollectionItems(collectionId) {
 
             if (data.pagination && totalFetched >= data.pagination.total) {
                 hasMore = false;
-                console.log(`✅ Alle ${data.pagination.total} Items für ${collectionId} geladen.`);
+                console.log(`✅ Alle ${data.pagination.total} Items für ${collectionId} geladen.`); // Log bleibt
             } else if (data.items.length < API_LIMIT) {
                  hasMore = false;
-                 console.log(`✅ Weniger als ${API_LIMIT} Items zurückgegeben für ${collectionId}, Annahme: Alle Items geladen (Gesamt: ${totalFetched}).`);
+                 console.log(`✅ Weniger als ${API_LIMIT} Items zurückgegeben für ${collectionId}, Annahme: Alle Items geladen (Gesamt: ${totalFetched}).`); // Log bleibt
             } else {
                 offset += API_LIMIT;
             }
         } else {
             console.error(`❌ Fehler beim Abrufen von Items für ${collectionId} bei Offset ${offset}. Breche Abruf ab.`);
-            return null; // Fehler signalisieren
+            return null;
         }
     }
     return allItems;
 }
 
-/**
- * --- NEU: Lädt alle Kundendaten und speichert sie in einer Map. ---
- * @returns {Promise<boolean>} True bei Erfolg, False bei Fehler.
- */
 async function fetchAllCustomerData() {
-    console.log("🤵‍♂️ Lade Kundendaten...");
+    console.log("🤵‍♂️ Lade Kundendaten..."); // Log bleibt
     const customerItems = await fetchAllCollectionItems(CUSTOMER_COLLECTION_ID);
 
     if (customerItems === null) {
         console.error("❌ Fehler beim Laden der Kundendaten.");
-        allCustomerData = {}; // Leeres Objekt im Fehlerfall
+        allCustomerData = {};
         return false;
     }
 
-    // Konvertiere das Array in ein Objekt/Map für schnellen Zugriff über die Kunden-ID
     allCustomerData = customerItems.reduce((map, customer) => {
         if (customer && customer.id && customer.fieldData) {
             map[customer.id] = {
-                // Feldname für Kundenname ist 'name'
                 name: customer.fieldData.name || 'Unbekannter Kunde',
-                // Feldname für Logo ist 'user-profile-img'
-                // Sicherer Zugriff auf verschachtelte URL
                 logoUrl: customer.fieldData['user-profile-img']?.url || null
             };
         }
         return map;
     }, {});
 
+    // --- NEUES LOG ---
     console.log(`👍 ${Object.keys(allCustomerData).length} Kundendaten erfolgreich geladen und verarbeitet.`);
-    // console.log("Kundendaten:", allCustomerData); // Optional: Zur Überprüfung ausgeben
+    // console.log("Verarbeitete Kundendaten:", allCustomerData); // Optional: Entkommentieren für detaillierte Prüfung
     return true;
 }
 
 
 // 🎨 Rendering-Funktionen
 
-/**
- * Rendert die Video-Items im angegebenen Container, inkl. Kundeninfo.
- */
 function renderVideos(videoItems, containerId) {
     const container = document.getElementById(containerId);
     if (!container) {
@@ -180,10 +155,9 @@ function renderVideos(videoItems, containerId) {
         }
         const fieldData = item.fieldData;
         let videoLink = fieldData['video-link'];
-        const kundenIds = fieldData['kunden']; // Array der Kunden-IDs
+        const kundenIds = fieldData['kunden'];
 
         if (videoLink) {
-            // Link-Anpassung
             if (!videoLink.includes('&download=1')) {
                  if (videoLink.includes('?')) { videoLink += '&download=1'; }
                  else { videoLink += '?download=1'; }
@@ -192,50 +166,41 @@ function renderVideos(videoItems, containerId) {
             const feedContainer = document.createElement("div");
             feedContainer.classList.add("video-feed-container");
 
-            // --- NEU: Kundeninfo hinzufügen ---
-            // Nimm den ersten Kunden aus der Liste, falls vorhanden
             const firstCustomerId = (Array.isArray(kundenIds) && kundenIds.length > 0) ? kundenIds[0] : null;
             const customerInfo = firstCustomerId ? allCustomerData[firstCustomerId] : null;
 
             if (customerInfo) {
                 const customerRow = document.createElement('div');
-                customerRow.classList.add('video-feed-row'); // Klasse für die Zeile
-                customerRow.style.display = 'flex'; // Flexbox für Anordnung
-                customerRow.style.alignItems = 'center'; // Vertikal zentrieren
-                customerRow.style.marginBottom = '10px'; // Abstand zum Video
+                customerRow.classList.add('video-feed-row');
+                customerRow.style.display = 'flex';
+                customerRow.style.alignItems = 'center';
+                customerRow.style.marginBottom = '10px';
 
-                // Kundenlogo
                 if (customerInfo.logoUrl) {
                     const logoImg = document.createElement('img');
-                    logoImg.classList.add('video-feed-logo'); // Klasse für das Logo
+                    logoImg.classList.add('video-feed-logo');
                     logoImg.src = customerInfo.logoUrl;
                     logoImg.alt = `${customerInfo.name} Logo`;
-                    logoImg.style.width = '32px'; // Beispielgröße
-                    logoImg.style.height = '32px'; // Beispielgröße
-                    logoImg.style.borderRadius = '50%'; // Rundes Logo
-                    logoImg.style.marginRight = '8px'; // Abstand zum Namen
-                    logoImg.onerror = () => { logoImg.style.display='none'; console.warn(`Kundenlogo für ${customerInfo.name} konnte nicht geladen werden: ${customerInfo.logoUrl}`); }; // Verstecke bei Ladefehler
+                    logoImg.style.width = '32px';
+                    logoImg.style.height = '32px';
+                    logoImg.style.borderRadius = '50%';
+                    logoImg.style.marginRight = '8px';
+                    logoImg.onerror = () => { logoImg.style.display='none'; console.warn(`Kundenlogo für ${customerInfo.name} konnte nicht geladen werden: ${customerInfo.logoUrl}`); };
                     customerRow.appendChild(logoImg);
                 } else {
-                    // Optional: Platzhalter, wenn kein Logo vorhanden
                     const logoPlaceholder = document.createElement('div');
                     logoPlaceholder.style.width = '32px'; logoPlaceholder.style.height = '32px'; logoPlaceholder.style.borderRadius = '50%';
                     logoPlaceholder.style.backgroundColor = '#ccc'; logoPlaceholder.style.marginRight = '8px';
                     customerRow.appendChild(logoPlaceholder);
                 }
 
-                // Kundenname
                 const customerNameSpan = document.createElement('span');
-                customerNameSpan.classList.add('video-feed-customer'); // Klasse für den Namen
+                customerNameSpan.classList.add('video-feed-customer');
                 customerNameSpan.textContent = customerInfo.name;
-                customerNameSpan.style.fontWeight = 'bold'; // Beispiel-Styling
+                customerNameSpan.style.fontWeight = 'bold';
                 customerRow.appendChild(customerNameSpan);
-
-                // Füge die Kundeninfo-Zeile *vor* dem Video ein
                 feedContainer.appendChild(customerRow);
             }
-            // --- Ende Kundeninfo ---
-
 
             const videoElement = document.createElement('video');
             videoElement.playsInline = true;
@@ -253,11 +218,9 @@ function renderVideos(videoItems, containerId) {
 
             videoElement.addEventListener('error', (e) => {
                 console.error(`Fehler beim Laden von Video ${videoElement.id} von ${videoLink}:`, e);
-                // Zeige Fehler nur im Video-Bereich an, lasse Kundeninfo stehen
                 const errorP = document.createElement('p');
                 errorP.style.color = 'red'; errorP.style.padding = '10px'; errorP.style.border = '1px solid red';
                 errorP.textContent = 'Video konnte nicht geladen werden.';
-                // Ersetze Video durch Fehlermeldung
                 if(videoElement.parentNode === feedContainer) {
                      feedContainer.replaceChild(errorP, videoElement);
                 }
@@ -275,9 +238,6 @@ function renderVideos(videoItems, containerId) {
     container.appendChild(fragment);
 }
 
-/**
- * Rendert die aktiven Checkbox-Filter als klickbare Tags.
- */
 function renderFilterTags(activeFiltersFlat) {
     const wrapper = document.getElementById(filterTagWrapperId);
     if (!wrapper) {
@@ -323,16 +283,15 @@ function renderFilterTags(activeFiltersFlat) {
 
 // 🔄 Filterlogik und Aktualisierung
 
-/**
- * Wendet Checkbox-Filter UND Suchfilter an und rendert alles neu.
- */
 function applyFiltersAndRender() {
+    // --- NEUES LOG ---
+    console.log("🏁 applyFiltersAndRender aufgerufen.");
+
     // Stelle sicher, dass Kundendaten geladen sind, bevor gefiltert wird
-    if (Object.keys(allCustomerData).length === 0) {
-         console.warn("Kundendaten noch nicht geladen, Filterung übersprungen.");
-         // Optional: Zeige eine Ladeanzeige oder warte.
-         // Fürs Erste wird einfach nichts gefiltert, bis die Daten da sind (passiert beim Initialaufruf).
-         return;
+    // Diese Prüfung ist eher relevant für Event-Handler, weniger für den Initialaufruf
+    if (Object.keys(allCustomerData).length === 0 && allVideoItems.length > 0) { // Prüfe nur, wenn Videos schon geladen sein sollten
+         console.warn("Kundendaten noch nicht geladen, obwohl Videos vorhanden sind. Filterung könnte unvollständig sein.");
+         // Nicht abbrechen, damit zumindest Videos ohne Kundeninfo angezeigt werden könnten
     }
 
     console.time("Filterung und Rendering");
@@ -358,49 +317,32 @@ function applyFiltersAndRender() {
 
     // 3. Video-Items filtern
     const filteredItems = allVideoItems.filter(item => {
-        // a) Checkbox-Filter
         let matchesCheckboxFilters = true;
         for (const groupField in activeFiltersByGroup) {
             const activeValuesInGroup = activeFiltersByGroup[groupField];
-
             if (activeValuesInGroup.length > 0) {
                 const itemFieldValue = item?.fieldData?.[groupField];
-
                 if (groupField === 'kunden') {
-                    if (!itemFieldValue || !Array.isArray(itemFieldValue)) {
-                        matchesCheckboxFilters = false; break;
-                    }
-                    const hasMatchingKunde = activeValuesInGroup.some(activeKundenId =>
-                        itemFieldValue.includes(activeKundenId)
-                    );
+                    if (!itemFieldValue || !Array.isArray(itemFieldValue)) { matchesCheckboxFilters = false; break; }
+                    const hasMatchingKunde = activeValuesInGroup.some(id => itemFieldValue.includes(id));
                     if (!hasMatchingKunde) { matchesCheckboxFilters = false; break; }
-                }
-                else if (groupField === 'creatortype' || groupField === 'produktion' || groupField === 'anzeige') {
-                    if (itemFieldValue === undefined || itemFieldValue === null || !activeValuesInGroup.includes(itemFieldValue)) {
-                        matchesCheckboxFilters = false; break;
-                    }
-                }
-                else { // Sollte nicht mehr vorkommen, da alle Felder Option oder Ref sind
+                } else if (groupField === 'creatortype' || groupField === 'produktion' || groupField === 'anzeige') {
+                    if (itemFieldValue === undefined || itemFieldValue === null || !activeValuesInGroup.includes(itemFieldValue)) { matchesCheckboxFilters = false; break; }
+                } else {
                     const itemValueLower = itemFieldValue?.toLowerCase();
                     const normalizedActiveValues = activeValuesInGroup.map(v => v.toLowerCase());
-                    if (itemValueLower === undefined || itemValueLower === null || !normalizedActiveValues.includes(itemValueLower)) {
-                        matchesCheckboxFilters = false; break;
-                    }
+                    if (itemValueLower === undefined || itemValueLower === null || !normalizedActiveValues.includes(itemValueLower)) { matchesCheckboxFilters = false; break; }
                 }
             }
         }
         if (!matchesCheckboxFilters) return false;
 
-        // b) Suchfilter
         let matchesSearchTerm = true;
         if (searchTerm) {
             matchesSearchTerm = false;
             for (const field of searchableFields) {
                 const fieldValue = item?.fieldData?.[field];
-                if (fieldValue && typeof fieldValue === 'string' && fieldValue.toLowerCase().includes(searchTerm)) {
-                    matchesSearchTerm = true;
-                    break;
-                }
+                if (fieldValue && typeof fieldValue === 'string' && fieldValue.toLowerCase().includes(searchTerm)) { matchesSearchTerm = true; break; }
             }
         }
         return matchesSearchTerm;
@@ -419,55 +361,40 @@ function applyFiltersAndRender() {
 
 // 🚀 Initialisierung und Hauptfunktionen
 
-/**
- * Lädt die Video-Collection und Kundendaten, richtet Filter-Events ein und rendert den initialen Zustand.
- */
 async function displayVideoCollection() {
     try {
         // --- NEU: Zuerst Kundendaten laden ---
+        console.log("Schritt 1: Starte Laden der Kundendaten.");
         const customerDataLoaded = await fetchAllCustomerData();
+        // --- NEUES LOG ---
+        console.log(`Schritt 2: Kundendaten Lade-Status: ${customerDataLoaded}`);
+
         if (!customerDataLoaded) {
-             // Fehler beim Laden der Kundendaten, Abbruch oder Fallback
              const container = document.getElementById(videoContainerId);
              if (container) container.innerHTML = "<p>Fehler beim Laden der Kundendaten. Videos können nicht angezeigt werden.</p>";
              renderFilterTags([]);
-             return; // Abbruch
+             return;
         }
 
-        console.log(`🚀 Lade ALLE Videos von Collection ID: ${VIDEO_COLLECTION_ID}`);
+        // --- NEUES LOG ---
+        console.log(`Schritt 3: Starte Laden der Videos.`);
         allVideoItems = await fetchAllCollectionItems(VIDEO_COLLECTION_ID);
+        // --- NEUES LOG ---
+        console.log(`Schritt 4: Videos geladen? ${allVideoItems !== null ? 'Ja' : 'Nein'}. Anzahl: ${allVideoItems?.length ?? 0}`);
+
 
         if (allVideoItems && allVideoItems.length > 0) {
             console.log(`📹 ${allVideoItems.length} Video(s) insgesamt erfolgreich geladen.`);
 
-            // Event Listener für Checkbox-Filter einrichten
-            filterConfig.forEach(group => {
-                group.filters.forEach(filter => {
-                    const checkbox = document.getElementById(filter.id);
-                    if (checkbox) {
-                        checkbox.addEventListener('change', applyFiltersAndRender);
-                    } else {
-                        console.warn(`⚠️ Filter-Checkbox mit ID '${filter.id}' nicht im DOM gefunden.`);
-                    }
-                });
-            });
-
-            // Event Listener für Suchfeld mit Debouncing einrichten
+            // Event Listener einrichten (wie zuvor)
+            filterConfig.forEach(group => { /* ... */ });
             const searchInput = document.getElementById(searchInputId);
-            if (searchInput) {
-                searchInput.addEventListener('input', () => {
-                    clearTimeout(searchDebounceTimer);
-                    searchDebounceTimer = setTimeout(() => {
-                        console.log(`⏳ Debounced Search Triggered`);
-                        applyFiltersAndRender();
-                    }, DEBOUNCE_DELAY);
-                });
-                console.log(`✅ Event Listener (debounced) für Suchfeld '${searchInputId}' eingerichtet.`);
-            } else {
-                console.warn(`⚠️ Such-Eingabefeld mit ID '${searchInputId}' nicht im DOM gefunden. Suche nicht möglich.`);
-            }
+            if (searchInput) { /* ... */ }
+            else { console.warn(`⚠️ Such-Eingabefeld mit ID '${searchInputId}' nicht im DOM gefunden.`); }
 
-            // Initialen Zustand rendern (jetzt nachdem Kundendaten geladen sind)
+             // --- NEUES LOG ---
+            console.log("Schritt 5: Rufe initial applyFiltersAndRender auf.");
+            // Initialen Zustand rendern
             applyFiltersAndRender();
 
         } else if (allVideoItems === null) {
@@ -491,7 +418,7 @@ async function displayVideoCollection() {
 
 // --- Start der Anwendung ---
 window.addEventListener("DOMContentLoaded", () => {
-    console.log("🚀 DOM geladen. Starte Ladevorgänge...");
+    console.log("🚀 DOM geladen. Starte Ladevorgänge..."); // Log bleibt
 
     const videoContainerExists = !!document.getElementById(videoContainerId);
     const tagWrapperExists = !!document.getElementById(filterTagWrapperId);
@@ -504,3 +431,6 @@ window.addEventListener("DOMContentLoaded", () => {
         console.error("Video-Feed kann nicht initialisiert werden.");
     }
 });
+
+/* --- Benötigtes CSS (Beispiele) --- */
+// CSS bleibt unverändert

@@ -9,7 +9,7 @@ const API_LIMIT = 100;
 
 // Globale Variablen
 let allVideoItems = [];
-let allCustomerData = {};
+let allCustomerData = {}; // Speicher für *relevante* Kundendaten
 const videoContainerId = "video-container";
 const filterTagWrapperId = "filter-tag-wrapper";
 const searchInputId = "filter-search";
@@ -79,7 +79,7 @@ async function fetchAllCollectionItems(collectionId) {
     let hasMore = true;
     let totalFetched = 0;
 
-    console.log(`🚀 Starte Abruf aller Items für Collection ${collectionId} (Limit pro Abruf: ${API_LIMIT})`); // Log bleibt
+    console.log(`🚀 Starte Abruf aller Items für Collection ${collectionId} (Limit pro Abruf: ${API_LIMIT})`);
 
     while (hasMore) {
         const apiUrl = `${API_BASE_URL}/${collectionId}/items/live?limit=${API_LIMIT}&offset=${offset}`;
@@ -91,10 +91,10 @@ async function fetchAllCollectionItems(collectionId) {
 
             if (data.pagination && totalFetched >= data.pagination.total) {
                 hasMore = false;
-                console.log(`✅ Alle ${data.pagination.total} Items für ${collectionId} geladen.`); // Log bleibt
+                console.log(`✅ Alle ${data.pagination.total} Items für ${collectionId} geladen.`);
             } else if (data.items.length < API_LIMIT) {
                  hasMore = false;
-                 console.log(`✅ Weniger als ${API_LIMIT} Items zurückgegeben für ${collectionId}, Annahme: Alle Items geladen (Gesamt: ${totalFetched}).`); // Log bleibt
+                 console.log(`✅ Weniger als ${API_LIMIT} Items zurückgegeben für ${collectionId}, Annahme: Alle Items geladen (Gesamt: ${totalFetched}).`);
             } else {
                 offset += API_LIMIT;
             }
@@ -106,30 +106,65 @@ async function fetchAllCollectionItems(collectionId) {
     return allItems;
 }
 
-async function fetchAllCustomerData() {
-    console.log("🤵‍♂️ Lade Kundendaten..."); // Log bleibt
-    const customerItems = await fetchAllCollectionItems(CUSTOMER_COLLECTION_ID);
+/**
+ * Ruft ein einzelnes Live-Item aus einer Webflow Collection ab.
+ * @param {string} collectionId - Die ID der Collection.
+ * @param {string} itemId - Die ID des Items.
+ * @returns {Promise<object|null>} Das Item-Objekt oder null bei Fehler.
+ */
+async function fetchSingleItem(collectionId, itemId) {
+    const apiUrl = `${API_BASE_URL}/${collectionId}/items/${itemId}/live`;
+    // console.log(`   -> Fetching single item: ${itemId} from ${collectionId}`); // Optional: Debugging
+    return await fetchWebflowData(apiUrl);
+}
 
-    if (customerItems === null) {
-        console.error("❌ Fehler beim Laden der Kundendaten.");
-        allCustomerData = {};
-        return false;
+
+/**
+ * --- NEU: Lädt nur die Daten für die tatsächlich benötigten Kunden-IDs. ---
+ * @param {string[]} customerIds - Ein Array von einzigartigen Kunden-IDs.
+ * @returns {Promise<boolean>} True bei Erfolg, False bei Fehler.
+ */
+async function fetchRelevantCustomerData(customerIds) {
+    if (!customerIds || customerIds.length === 0) {
+        console.log("Keine relevanten Kunden-IDs gefunden, überspringe Datenabruf.");
+        allCustomerData = {}; // Stelle sicher, dass es leer ist
+        return true; // Kein Fehler, aber nichts zu tun
     }
 
-    allCustomerData = customerItems.reduce((map, customer) => {
-        if (customer && customer.id && customer.fieldData) {
-            map[customer.id] = {
-                name: customer.fieldData.name || 'Unbekannter Kunde',
-                logoUrl: customer.fieldData['user-profile-img']?.url || null
-            };
-        }
-        return map;
-    }, {});
+    console.log(`🤵‍♂️ Lade Daten für ${customerIds.length} relevante(n) Kunden...`);
 
-    // --- NEUES LOG ---
-    console.log(`👍 ${Object.keys(allCustomerData).length} Kundendaten erfolgreich geladen und verarbeitet.`);
-    // console.log("Verarbeitete Kundendaten:", allCustomerData); // Optional: Entkommentieren für detaillierte Prüfung
-    return true;
+    // Erstelle ein Array von Promises, um jeden Kunden einzeln abzurufen
+    const customerPromises = customerIds.map(id => fetchSingleItem(CUSTOMER_COLLECTION_ID, id));
+
+    try {
+        // Warte, bis alle einzelnen Abfragen abgeschlossen sind
+        const customerItems = await Promise.all(customerPromises);
+
+        // Verarbeite die Ergebnisse
+        allCustomerData = customerItems.reduce((map, customer) => {
+            // Stelle sicher, dass der Abruf erfolgreich war und Daten vorhanden sind
+            if (customer && customer.id && customer.fieldData) {
+                map[customer.id] = {
+                    name: customer.fieldData.name || 'Unbekannter Kunde',
+                    logoUrl: customer.fieldData['user-profile-img']?.url || null
+                };
+            } else if (customer === null) {
+                // Fehler beim Abruf eines einzelnen Kunden wurde bereits geloggt in fetchWebflowData
+                console.warn("   -> Ein Kunde konnte nicht geladen werden (siehe vorherige Fehlermeldung).");
+            }
+            return map;
+        }, {});
+
+        console.log(`👍 ${Object.keys(allCustomerData).length} von ${customerIds.length} relevanten Kundendaten erfolgreich geladen und verarbeitet.`);
+        // console.log("Relevante Kundendaten:", allCustomerData); // Optional: Zur Überprüfung ausgeben
+        return true; // Erfolg
+
+    } catch (error) {
+        // Dieser Fehler sollte nur auftreten, wenn Promise.all selbst fehlschlägt (unwahrscheinlich)
+        console.error("❌ Schwerwiegender Fehler beim parallelen Abrufen der Kundendaten:", error);
+        allCustomerData = {}; // Leeren im Fehlerfall
+        return false; // Fehler signalisieren
+    }
 }
 
 
@@ -167,6 +202,7 @@ function renderVideos(videoItems, containerId) {
             feedContainer.classList.add("video-feed-container");
 
             const firstCustomerId = (Array.isArray(kundenIds) && kundenIds.length > 0) ? kundenIds[0] : null;
+            // Greife auf die global gespeicherten Kundendaten zu
             const customerInfo = firstCustomerId ? allCustomerData[firstCustomerId] : null;
 
             if (customerInfo) {
@@ -200,6 +236,9 @@ function renderVideos(videoItems, containerId) {
                 customerNameSpan.style.fontWeight = 'bold';
                 customerRow.appendChild(customerNameSpan);
                 feedContainer.appendChild(customerRow);
+            } else if (firstCustomerId) {
+                // Kunde referenziert, aber Daten nicht gefunden (sollte nicht passieren, wenn fetchRelevantCustomerData erfolgreich war)
+                console.warn(`Kundendaten für ID ${firstCustomerId} nicht in allCustomerData gefunden.`);
             }
 
             const videoElement = document.createElement('video');
@@ -284,15 +323,10 @@ function renderFilterTags(activeFiltersFlat) {
 // 🔄 Filterlogik und Aktualisierung
 
 function applyFiltersAndRender() {
-    // --- NEUES LOG ---
-    console.log("🏁 applyFiltersAndRender aufgerufen.");
+    // console.log("🏁 applyFiltersAndRender aufgerufen."); // Debugging Log entfernt
 
-    // Stelle sicher, dass Kundendaten geladen sind, bevor gefiltert wird
-    // Diese Prüfung ist eher relevant für Event-Handler, weniger für den Initialaufruf
-    if (Object.keys(allCustomerData).length === 0 && allVideoItems.length > 0) { // Prüfe nur, wenn Videos schon geladen sein sollten
-         console.warn("Kundendaten noch nicht geladen, obwohl Videos vorhanden sind. Filterung könnte unvollständig sein.");
-         // Nicht abbrechen, damit zumindest Videos ohne Kundeninfo angezeigt werden könnten
-    }
+    // Die Prüfung auf geladene Kundendaten ist hier weniger kritisch,
+    // da diese Funktion erst aufgerufen wird, *nachdem* die Daten geladen wurden.
 
     console.time("Filterung und Rendering");
 
@@ -328,7 +362,7 @@ function applyFiltersAndRender() {
                     if (!hasMatchingKunde) { matchesCheckboxFilters = false; break; }
                 } else if (groupField === 'creatortype' || groupField === 'produktion' || groupField === 'anzeige') {
                     if (itemFieldValue === undefined || itemFieldValue === null || !activeValuesInGroup.includes(itemFieldValue)) { matchesCheckboxFilters = false; break; }
-                } else {
+                } else { // Sollte nicht mehr vorkommen
                     const itemValueLower = itemFieldValue?.toLowerCase();
                     const normalizedActiveValues = activeValuesInGroup.map(v => v.toLowerCase());
                     if (itemValueLower === undefined || itemValueLower === null || !normalizedActiveValues.includes(itemValueLower)) { matchesCheckboxFilters = false; break; }
@@ -363,50 +397,81 @@ function applyFiltersAndRender() {
 
 async function displayVideoCollection() {
     try {
-        // --- NEU: Zuerst Kundendaten laden ---
-        console.log("Schritt 1: Starte Laden der Kundendaten.");
-        const customerDataLoaded = await fetchAllCustomerData();
-        // --- NEUES LOG ---
-        console.log(`Schritt 2: Kundendaten Lade-Status: ${customerDataLoaded}`);
-
-        if (!customerDataLoaded) {
-             const container = document.getElementById(videoContainerId);
-             if (container) container.innerHTML = "<p>Fehler beim Laden der Kundendaten. Videos können nicht angezeigt werden.</p>";
-             renderFilterTags([]);
-             return;
-        }
-
-        // --- NEUES LOG ---
-        console.log(`Schritt 3: Starte Laden der Videos.`);
+        // --- SCHRITT 1: Videos laden ---
+        console.log("Schritt 1: Starte Laden der Videos.");
         allVideoItems = await fetchAllCollectionItems(VIDEO_COLLECTION_ID);
-        // --- NEUES LOG ---
-        console.log(`Schritt 4: Videos geladen? ${allVideoItems !== null ? 'Ja' : 'Nein'}. Anzahl: ${allVideoItems?.length ?? 0}`);
+        console.log(`Schritt 2: Videos geladen? ${allVideoItems !== null ? 'Ja' : 'Nein'}. Anzahl: ${allVideoItems?.length ?? 0}`);
 
-
-        if (allVideoItems && allVideoItems.length > 0) {
-            console.log(`📹 ${allVideoItems.length} Video(s) insgesamt erfolgreich geladen.`);
-
-            // Event Listener einrichten (wie zuvor)
-            filterConfig.forEach(group => { /* ... */ });
-            const searchInput = document.getElementById(searchInputId);
-            if (searchInput) { /* ... */ }
-            else { console.warn(`⚠️ Such-Eingabefeld mit ID '${searchInputId}' nicht im DOM gefunden.`); }
-
-             // --- NEUES LOG ---
-            console.log("Schritt 5: Rufe initial applyFiltersAndRender auf.");
-            // Initialen Zustand rendern
-            applyFiltersAndRender();
-
-        } else if (allVideoItems === null) {
-             console.error("Fehler beim Laden der Video-Items. API-Aufruf(e) fehlgeschlagen.");
+        // Prüfen, ob Videos geladen wurden, bevor fortgefahren wird
+        if (allVideoItems === null) {
+             console.error("Fehler beim Laden der Video-Items. API-Aufruf(e) fehlgeschlagen. Breche ab.");
              const container = document.getElementById(videoContainerId);
              if (container) container.innerHTML = "<p>Fehler beim Laden der Videos. Bitte versuche es später erneut.</p>";
              renderFilterTags([]);
-        } else {
-            console.log("Keine Video-Items in der Collection gefunden oder Ladevorgang fehlgeschlagen.");
-            renderVideos([], videoContainerId);
-            renderFilterTags([]);
+             return; // Abbruch
         }
+        if (allVideoItems.length === 0) {
+             console.log("Keine Video-Items in der Collection gefunden.");
+             renderVideos([], videoContainerId);
+             renderFilterTags([]);
+             return; // Abbruch, nichts zu tun
+        }
+
+         console.log(`📹 ${allVideoItems.length} Video(s) insgesamt erfolgreich geladen.`);
+
+        // --- SCHRITT 2: Relevante Kunden-IDs sammeln ---
+        const relevantCustomerIds = new Set(); // Set verhindert Duplikate automatisch
+        allVideoItems.forEach(item => {
+            const kunden = item?.fieldData?.kunden;
+            if (Array.isArray(kunden)) {
+                kunden.forEach(id => relevantCustomerIds.add(id));
+            }
+        });
+        const uniqueCustomerIds = Array.from(relevantCustomerIds); // Konvertiere Set zurück in Array
+        console.log(`Schritt 3: ${uniqueCustomerIds.length} einzigartige Kunden-IDs in Videos gefunden.`);
+
+        // --- SCHRITT 3: Relevante Kundendaten laden ---
+        const customerDataLoaded = await fetchRelevantCustomerData(uniqueCustomerIds);
+        console.log(`Schritt 4: Relevante Kundendaten Lade-Status: ${customerDataLoaded}`);
+
+        if (!customerDataLoaded) {
+             // Fehler beim Laden der Kundendaten, aber Videos sind schon geladen.
+             // Zeige Videos ohne Kundeninfo an oder gib eine Warnung aus.
+             console.warn("Fehler beim Laden der relevanten Kundendaten. Videos werden ohne Kundeninformationen angezeigt.");
+             // Fallback: Stelle sicher, dass allCustomerData leer ist, damit keine Fehler auftreten
+             allCustomerData = {};
+        }
+
+        // --- SCHRITT 4: Event Listener einrichten ---
+        console.log("Schritt 5: Richte Event Listener ein.");
+        filterConfig.forEach(group => {
+            group.filters.forEach(filter => {
+                const checkbox = document.getElementById(filter.id);
+                if (checkbox) {
+                    checkbox.addEventListener('change', applyFiltersAndRender);
+                } else {
+                    console.warn(`⚠️ Filter-Checkbox mit ID '${filter.id}' nicht im DOM gefunden.`);
+                }
+            });
+        });
+        const searchInput = document.getElementById(searchInputId);
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                clearTimeout(searchDebounceTimer);
+                searchDebounceTimer = setTimeout(() => {
+                    // console.log(`⏳ Debounced Search Triggered`); // Weniger detailliertes Logging
+                    applyFiltersAndRender();
+                }, DEBOUNCE_DELAY);
+            });
+            console.log(`✅ Event Listener (debounced) für Suchfeld '${searchInputId}' eingerichtet.`);
+        } else {
+            console.warn(`⚠️ Such-Eingabefeld mit ID '${searchInputId}' nicht im DOM gefunden.`);
+        }
+
+        // --- SCHRITT 5: Initiales Rendern ---
+        console.log("Schritt 6: Rufe initial applyFiltersAndRender auf.");
+        applyFiltersAndRender();
+
 
     } catch (error) {
         console.error("❌ Schwerwiegender Fehler beim Anzeigen der Video-Collection:", error);
@@ -418,7 +483,7 @@ async function displayVideoCollection() {
 
 // --- Start der Anwendung ---
 window.addEventListener("DOMContentLoaded", () => {
-    console.log("🚀 DOM geladen. Starte Ladevorgänge..."); // Log bleibt
+    console.log("🚀 DOM geladen. Starte Ladevorgänge...");
 
     const videoContainerExists = !!document.getElementById(videoContainerId);
     const tagWrapperExists = !!document.getElementById(filterTagWrapperId);

@@ -106,64 +106,40 @@ async function fetchAllCollectionItems(collectionId) {
     return allItems;
 }
 
-/**
- * Ruft ein einzelnes Live-Item aus einer Webflow Collection ab.
- * @param {string} collectionId - Die ID der Collection.
- * @param {string} itemId - Die ID des Items.
- * @returns {Promise<object|null>} Das Item-Objekt oder null bei Fehler.
- */
 async function fetchSingleItem(collectionId, itemId) {
     const apiUrl = `${API_BASE_URL}/${collectionId}/items/${itemId}/live`;
-    // console.log(`   -> Fetching single item: ${itemId} from ${collectionId}`); // Optional: Debugging
     return await fetchWebflowData(apiUrl);
 }
 
-
-/**
- * --- NEU: Lädt nur die Daten für die tatsächlich benötigten Kunden-IDs. ---
- * @param {string[]} customerIds - Ein Array von einzigartigen Kunden-IDs.
- * @returns {Promise<boolean>} True bei Erfolg, False bei Fehler.
- */
 async function fetchRelevantCustomerData(customerIds) {
     if (!customerIds || customerIds.length === 0) {
         console.log("Keine relevanten Kunden-IDs gefunden, überspringe Datenabruf.");
-        allCustomerData = {}; // Stelle sicher, dass es leer ist
-        return true; // Kein Fehler, aber nichts zu tun
+        allCustomerData = {};
+        return true;
     }
 
     console.log(`🤵‍♂️ Lade Daten für ${customerIds.length} relevante(n) Kunden...`);
-
-    // Erstelle ein Array von Promises, um jeden Kunden einzeln abzurufen
     const customerPromises = customerIds.map(id => fetchSingleItem(CUSTOMER_COLLECTION_ID, id));
 
     try {
-        // Warte, bis alle einzelnen Abfragen abgeschlossen sind
         const customerItems = await Promise.all(customerPromises);
-
-        // Verarbeite die Ergebnisse
         allCustomerData = customerItems.reduce((map, customer) => {
-            // Stelle sicher, dass der Abruf erfolgreich war und Daten vorhanden sind
             if (customer && customer.id && customer.fieldData) {
                 map[customer.id] = {
                     name: customer.fieldData.name || 'Unbekannter Kunde',
                     logoUrl: customer.fieldData['user-profile-img']?.url || null
                 };
             } else if (customer === null) {
-                // Fehler beim Abruf eines einzelnen Kunden wurde bereits geloggt in fetchWebflowData
                 console.warn("   -> Ein Kunde konnte nicht geladen werden (siehe vorherige Fehlermeldung).");
             }
             return map;
         }, {});
-
         console.log(`👍 ${Object.keys(allCustomerData).length} von ${customerIds.length} relevanten Kundendaten erfolgreich geladen und verarbeitet.`);
-        // console.log("Relevante Kundendaten:", allCustomerData); // Optional: Zur Überprüfung ausgeben
-        return true; // Erfolg
-
+        return true;
     } catch (error) {
-        // Dieser Fehler sollte nur auftreten, wenn Promise.all selbst fehlschlägt (unwahrscheinlich)
         console.error("❌ Schwerwiegender Fehler beim parallelen Abrufen der Kundendaten:", error);
-        allCustomerData = {}; // Leeren im Fehlerfall
-        return false; // Fehler signalisieren
+        allCustomerData = {};
+        return false;
     }
 }
 
@@ -199,53 +175,53 @@ function renderVideos(videoItems, containerId) {
             }
 
             const feedContainer = document.createElement("div");
-            feedContainer.classList.add("video-feed-container");
+            feedContainer.classList.add("video-feed-container"); // Klasse für den äußeren Container
 
             const firstCustomerId = (Array.isArray(kundenIds) && kundenIds.length > 0) ? kundenIds[0] : null;
-            // Greife auf die global gespeicherten Kundendaten zu
             const customerInfo = firstCustomerId ? allCustomerData[firstCustomerId] : null;
 
             if (customerInfo) {
                 const customerRow = document.createElement('div');
-                customerRow.classList.add('video-feed-row');
-                customerRow.style.display = 'flex';
-                customerRow.style.alignItems = 'center';
-                customerRow.style.marginBottom = '10px';
+                customerRow.classList.add('video-feed-row'); // Klasse für die Kundenzeile
+                // Inline-Styles entfernt
 
                 if (customerInfo.logoUrl) {
                     const logoImg = document.createElement('img');
-                    logoImg.classList.add('video-feed-logo');
+                    logoImg.classList.add('video-feed-logo'); // Klasse für das Logo
                     logoImg.src = customerInfo.logoUrl;
                     logoImg.alt = `${customerInfo.name} Logo`;
-                    logoImg.style.width = '32px';
-                    logoImg.style.height = '32px';
-                    logoImg.style.borderRadius = '50%';
-                    logoImg.style.marginRight = '8px';
+                    // Inline-Styles entfernt
+                    // Wichtig: Größe, Rundung, Abstand etc. müssen jetzt über CSS definiert werden!
                     logoImg.onerror = () => { logoImg.style.display='none'; console.warn(`Kundenlogo für ${customerInfo.name} konnte nicht geladen werden: ${customerInfo.logoUrl}`); };
                     customerRow.appendChild(logoImg);
                 } else {
+                    // Optional: Platzhalter, wenn kein Logo vorhanden (Styling via CSS)
                     const logoPlaceholder = document.createElement('div');
-                    logoPlaceholder.style.width = '32px'; logoPlaceholder.style.height = '32px'; logoPlaceholder.style.borderRadius = '50%';
-                    logoPlaceholder.style.backgroundColor = '#ccc'; logoPlaceholder.style.marginRight = '8px';
+                    logoPlaceholder.classList.add('video-feed-logo-placeholder'); // Eigene Klasse für Platzhalter-Styling
+                    // Inline-Styles entfernt
                     customerRow.appendChild(logoPlaceholder);
                 }
 
                 const customerNameSpan = document.createElement('span');
-                customerNameSpan.classList.add('video-feed-customer');
+                customerNameSpan.classList.add('video-feed-customer'); // Klasse für den Namen
                 customerNameSpan.textContent = customerInfo.name;
-                customerNameSpan.style.fontWeight = 'bold';
+                // Inline-Styles entfernt
                 customerRow.appendChild(customerNameSpan);
-                feedContainer.appendChild(customerRow);
+                feedContainer.appendChild(customerRow); // Füge die Kundenzeile zum Container hinzu
             } else if (firstCustomerId) {
-                // Kunde referenziert, aber Daten nicht gefunden (sollte nicht passieren, wenn fetchRelevantCustomerData erfolgreich war)
                 console.warn(`Kundendaten für ID ${firstCustomerId} nicht in allCustomerData gefunden.`);
+                // Optional: Leere Zeile einfügen, um Layout konsistent zu halten?
+                // const emptyCustomerRow = document.createElement('div');
+                // emptyCustomerRow.classList.add('video-feed-row');
+                // emptyCustomerRow.style.height = '32px'; // Beispielhöhe, anpassen!
+                // feedContainer.appendChild(emptyCustomerRow);
             }
 
             const videoElement = document.createElement('video');
             videoElement.playsInline = true;
             videoElement.preload = "metadata";
             videoElement.controls = true;
-            videoElement.classList.add('db-video-player');
+            videoElement.classList.add('db-video-player'); // Klasse für das Video
             videoElement.id = `db-user-video--${item.id || index}`;
 
             const sourceElement = document.createElement('source');
@@ -258,15 +234,17 @@ function renderVideos(videoItems, containerId) {
             videoElement.addEventListener('error', (e) => {
                 console.error(`Fehler beim Laden von Video ${videoElement.id} von ${videoLink}:`, e);
                 const errorP = document.createElement('p');
-                errorP.style.color = 'red'; errorP.style.padding = '10px'; errorP.style.border = '1px solid red';
+                errorP.style.color = 'red'; // Fehlerstyling kann bleiben
+                errorP.style.padding = '10px';
+                errorP.style.border = '1px solid red';
                 errorP.textContent = 'Video konnte nicht geladen werden.';
                 if(videoElement.parentNode === feedContainer) {
                      feedContainer.replaceChild(errorP, videoElement);
                 }
             }, { once: true });
 
-            feedContainer.appendChild(videoElement);
-            fragment.appendChild(feedContainer);
+            feedContainer.appendChild(videoElement); // Füge Video zum Container hinzu
+            fragment.appendChild(feedContainer); // Füge Container zum Fragment hinzu
 
         } else {
             console.warn(`⚠️ Video-Item ${item.id || index} hat keinen 'video-link'.`);
@@ -287,17 +265,19 @@ function renderFilterTags(activeFiltersFlat) {
 
     activeFiltersFlat.forEach(filter => {
         const tagElement = document.createElement('div');
-        tagElement.classList.add('search-filter-tag');
+        tagElement.classList.add('search-filter-tag'); // Klasse für das Tag
 
         const tagName = document.createElement('span');
-        tagName.classList.add('tag-text');
+        tagName.classList.add('tag-text'); // Klasse für den Text
         tagName.textContent = filter.display;
+        // Inline-Styles entfernt
 
         const removeButton = document.createElement('button');
-        removeButton.classList.add('filter-close-button');
+        removeButton.classList.add('filter-close-button'); // Klasse für den Button
         removeButton.textContent = '×';
         removeButton.setAttribute('aria-label', `Filter ${filter.display} entfernen`);
         removeButton.dataset.checkboxId = filter.id;
+        // Inline-Styles entfernt
 
         removeButton.addEventListener('click', (e) => {
             const checkboxIdToRemove = e.currentTarget.dataset.checkboxId;
@@ -323,10 +303,9 @@ function renderFilterTags(activeFiltersFlat) {
 // 🔄 Filterlogik und Aktualisierung
 
 function applyFiltersAndRender() {
-    // console.log("🏁 applyFiltersAndRender aufgerufen."); // Debugging Log entfernt
-
-    // Die Prüfung auf geladene Kundendaten ist hier weniger kritisch,
-    // da diese Funktion erst aufgerufen wird, *nachdem* die Daten geladen wurden.
+    if (Object.keys(allCustomerData).length === 0 && allVideoItems.length > 0) {
+         console.warn("Kundendaten noch nicht geladen, Filterung könnte unvollständig sein.");
+    }
 
     console.time("Filterung und Rendering");
 
@@ -402,32 +381,25 @@ async function displayVideoCollection() {
         allVideoItems = await fetchAllCollectionItems(VIDEO_COLLECTION_ID);
         console.log(`Schritt 2: Videos geladen? ${allVideoItems !== null ? 'Ja' : 'Nein'}. Anzahl: ${allVideoItems?.length ?? 0}`);
 
-        // Prüfen, ob Videos geladen wurden, bevor fortgefahren wird
         if (allVideoItems === null) {
-             console.error("Fehler beim Laden der Video-Items. API-Aufruf(e) fehlgeschlagen. Breche ab.");
+             console.error("Fehler beim Laden der Video-Items. Breche ab.");
              const container = document.getElementById(videoContainerId);
-             if (container) container.innerHTML = "<p>Fehler beim Laden der Videos. Bitte versuche es später erneut.</p>";
-             renderFilterTags([]);
-             return; // Abbruch
+             if (container) container.innerHTML = "<p>Fehler beim Laden der Videos.</p>";
+             renderFilterTags([]); return;
         }
         if (allVideoItems.length === 0) {
-             console.log("Keine Video-Items in der Collection gefunden.");
-             renderVideos([], videoContainerId);
-             renderFilterTags([]);
-             return; // Abbruch, nichts zu tun
+             console.log("Keine Video-Items gefunden.");
+             renderVideos([], videoContainerId); renderFilterTags([]); return;
         }
-
          console.log(`📹 ${allVideoItems.length} Video(s) insgesamt erfolgreich geladen.`);
 
         // --- SCHRITT 2: Relevante Kunden-IDs sammeln ---
-        const relevantCustomerIds = new Set(); // Set verhindert Duplikate automatisch
+        const relevantCustomerIds = new Set();
         allVideoItems.forEach(item => {
             const kunden = item?.fieldData?.kunden;
-            if (Array.isArray(kunden)) {
-                kunden.forEach(id => relevantCustomerIds.add(id));
-            }
+            if (Array.isArray(kunden)) { kunden.forEach(id => relevantCustomerIds.add(id)); }
         });
-        const uniqueCustomerIds = Array.from(relevantCustomerIds); // Konvertiere Set zurück in Array
+        const uniqueCustomerIds = Array.from(relevantCustomerIds);
         console.log(`Schritt 3: ${uniqueCustomerIds.length} einzigartige Kunden-IDs in Videos gefunden.`);
 
         // --- SCHRITT 3: Relevante Kundendaten laden ---
@@ -435,10 +407,7 @@ async function displayVideoCollection() {
         console.log(`Schritt 4: Relevante Kundendaten Lade-Status: ${customerDataLoaded}`);
 
         if (!customerDataLoaded) {
-             // Fehler beim Laden der Kundendaten, aber Videos sind schon geladen.
-             // Zeige Videos ohne Kundeninfo an oder gib eine Warnung aus.
              console.warn("Fehler beim Laden der relevanten Kundendaten. Videos werden ohne Kundeninformationen angezeigt.");
-             // Fallback: Stelle sicher, dass allCustomerData leer ist, damit keine Fehler auftreten
              allCustomerData = {};
         }
 
@@ -447,31 +416,22 @@ async function displayVideoCollection() {
         filterConfig.forEach(group => {
             group.filters.forEach(filter => {
                 const checkbox = document.getElementById(filter.id);
-                if (checkbox) {
-                    checkbox.addEventListener('change', applyFiltersAndRender);
-                } else {
-                    console.warn(`⚠️ Filter-Checkbox mit ID '${filter.id}' nicht im DOM gefunden.`);
-                }
+                if (checkbox) { checkbox.addEventListener('change', applyFiltersAndRender); }
+                else { console.warn(`⚠️ Filter-Checkbox mit ID '${filter.id}' nicht im DOM gefunden.`); }
             });
         });
         const searchInput = document.getElementById(searchInputId);
         if (searchInput) {
             searchInput.addEventListener('input', () => {
                 clearTimeout(searchDebounceTimer);
-                searchDebounceTimer = setTimeout(() => {
-                    // console.log(`⏳ Debounced Search Triggered`); // Weniger detailliertes Logging
-                    applyFiltersAndRender();
-                }, DEBOUNCE_DELAY);
+                searchDebounceTimer = setTimeout(() => { applyFiltersAndRender(); }, DEBOUNCE_DELAY);
             });
             console.log(`✅ Event Listener (debounced) für Suchfeld '${searchInputId}' eingerichtet.`);
-        } else {
-            console.warn(`⚠️ Such-Eingabefeld mit ID '${searchInputId}' nicht im DOM gefunden.`);
-        }
+        } else { console.warn(`⚠️ Such-Eingabefeld mit ID '${searchInputId}' nicht im DOM gefunden.`); }
 
         // --- SCHRITT 5: Initiales Rendern ---
         console.log("Schritt 6: Rufe initial applyFiltersAndRender auf.");
         applyFiltersAndRender();
-
 
     } catch (error) {
         console.error("❌ Schwerwiegender Fehler beim Anzeigen der Video-Collection:", error);
@@ -496,6 +456,3 @@ window.addEventListener("DOMContentLoaded", () => {
         console.error("Video-Feed kann nicht initialisiert werden.");
     }
 });
-
-/* --- Benötigtes CSS (Beispiele) --- */
-// CSS bleibt unverändert

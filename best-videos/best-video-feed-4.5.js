@@ -54,10 +54,19 @@ const filterConfig = [
             { id: "ernstings", value: "66e0598b4020e3128a9faae8", display: "Kunde: Ernsting's family" },
             { id: "ferrero", value: "671b5d82a4c065998cbb9b12", display: "Kunde: Ferrero" },
             { id: "fitness", value: "66570cf8eb2dcf329fa802e4", display: "Kunde: Fitness" },
-            // NEUE Kunden (29.04.2025)
             { id: "flaconi", value: "65043631a18ce904e98d3711", display: "Kunde: Flaconi" },
-            { id: "glossy", value: "6448faf9c5a8a1c22bc05c2d", display: "Kunde: Glossybox" }, // Annahme: Glossybox
-            { id: "kfc", value: "6451010e96cc6f08cc6c2ae9", display: "Kunde: KFC" }
+            { id: "glossy", value: "6448faf9c5a8a1c22bc05c2d", display: "Kunde: Glossybox" },
+            { id: "kfc", value: "6451010e96cc6f08cc6c2ae9", display: "Kunde: KFC" },
+            { id: "liebherr", value: "6540d6bdd3236739321232a9", display: "Kunde: Liebherr" },
+            { id: "mainz05", value: "6448faf9c5a8a16f3cc05606", display: "Kunde: Mainz 05" },
+            { id: "meggle", value: "65524df86c5f776f41dce75a", display: "Kunde: Meggle" },
+            { id: "mezzo", value: "672256fcfe4471c902ab3f81", display: "Kunde: Mezzo Mix" }, // Annahme: Mezzo Mix
+            { id: "ninja", value: "67add369f3351b0978213be2", display: "Kunde: Ninja" },
+            { id: "nutribullet", value: "67f7a99771b7233f2651d732", display: "Kunde: Nutribullet" },
+            { id: "valentine", value: "6697bf815c39b80cf3a85e6c", display: "Kunde: Veltins" }, // Annahme: Veltins (statt Valentine)
+            { id: "shark", value: "647f039715031d91efbb5911", display: "Kunde: Shark" },
+            // NEUER Kunde (29.04.2025 - Teil 3)
+            { id: "o2", value: "667c15ac8883530952e83903", display: "Kunde: o2" }
         ]
     }
 ];

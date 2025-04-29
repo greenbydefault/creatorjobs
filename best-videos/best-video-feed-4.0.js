@@ -91,7 +91,6 @@ async function applyFiltersAndRender() {
     // 1. Aktive Filter und Suchbegriff sammeln -> Query-Parameter bauen
     let allActiveCheckboxFiltersFlat = [];
     const queryParams = new URLSearchParams();
-    // --- KORREKTUR HIER: Deklaration innerhalb der Funktion, vor der Schleife ---
     const activeFiltersByGroup = {};
 
     if (!Array.isArray(filterConfig)) {
@@ -101,25 +100,56 @@ async function applyFiltersAndRender() {
         return;
     }
 
-    filterConfig.forEach(group => {
-        if (!group || !Array.isArray(group.filters)) {
-             console.error("FEHLER: Ungültiges Objekt in filterConfig gefunden:", group);
+    filterConfig.forEach((group, index) => { // Füge Index für Logging hinzu
+        console.log(`   Verarbeite Filtergruppe ${index}, Feld: ${group?.field}`); // Log vor der Prüfung
+
+        // --- Noch robustere Prüfung ---
+        if (!group || typeof group !== 'object') {
+             console.error(`FEHLER: Ungültiges Objekt (kein Objekt) in filterConfig bei Index ${index}:`, group);
+             return; // Überspringe dieses fehlerhafte Objekt
+        }
+        if (!group.field) {
+             console.error(`FEHLER: Fehlendes 'field' in filterConfig bei Index ${index}:`, group);
              return;
         }
+         if (!Array.isArray(group.filters)) {
+             console.error(`FEHLER: 'filters' ist kein Array in filterConfig für Feld '${group.field}' bei Index ${index}:`, group.filters);
+             return; // Überspringe, da die innere Schleife fehlschlagen würde
+        }
+        // --- Ende der robusten Prüfung ---
+
         const groupField = group.field;
         activeFiltersByGroup[groupField] = []; // Initialisiere Array für diese Gruppe
+
+        console.log(`      -> Iteriere über ${group.filters.length} Filter für Feld '${groupField}'`); // Log vor innerer Schleife
+
+        // --- Innere Schleife (vermutlich Fehlerquelle) ---
         group.filters.forEach(filter => {
+            // Prüfung auf gültiges Filter-Objekt (optional, aber sicher)
+            if (!filter || typeof filter.id === 'undefined' || typeof filter.value === 'undefined') {
+                console.warn(`      -> Ungültiges Filter-Objekt übersprungen in Gruppe '${groupField}':`, filter);
+                return;
+            }
+
             const checkbox = document.getElementById(filter.id);
             if (checkbox && checkbox.checked) {
-                activeFiltersByGroup[groupField].push(filter.value);
-                allActiveCheckboxFiltersFlat.push({ ...filter, field: groupField });
+                // Stelle sicher, dass activeFiltersByGroup[groupField] noch existiert (sollte es)
+                if(activeFiltersByGroup[groupField]) {
+                    activeFiltersByGroup[groupField].push(filter.value);
+                    allActiveCheckboxFiltersFlat.push({ ...filter, field: groupField });
+                } else {
+                     console.error(`      -> FEHLER: activeFiltersByGroup['${groupField}'] ist unerwartet undefined!`);
+                }
             }
         });
-        // Füge Parameter nur hinzu, wenn Werte vorhanden sind
+        // --- Ende der inneren Schleife ---
+
+
         if (activeFiltersByGroup[groupField] && activeFiltersByGroup[groupField].length > 0) {
              queryParams.set(groupField, activeFiltersByGroup[groupField].join(','));
         }
-    });
+    }); // Ende der äußeren Schleife
+
     const searchInput = document.getElementById(searchInputId);
     const searchTerm = searchInput ? searchInput.value.trim().toLowerCase() : "";
     if (searchTerm) { queryParams.set("search", searchTerm); }
@@ -194,8 +224,12 @@ const handleScroll = throttle(() => { renderVisibleVideos(); }, SCROLL_THROTTLE_
 async function displayVideoCollection() {
     try {
         console.log("Schritt 1: Richte Event Listener ein.");
-        // --- KORREKTUR: Entferne die überflüssige Deklaration von hier ---
-        // const activeFiltersByGroup = {}; // <--- DIESE ZEILE ENTFERNEN
+
+        // Prüfe filterConfig bei der Initialisierung
+         if (!Array.isArray(filterConfig)) {
+            console.error("FATAL: filterConfig ist kein Array bei Initialisierung!");
+            return; // Breche ab, wenn die Konfiguration ungültig ist
+         }
 
         filterConfig.forEach(group => {
             if (!group || !Array.isArray(group.filters)) {

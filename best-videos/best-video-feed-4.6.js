@@ -65,7 +65,6 @@ const filterConfig = [
             { id: "nutribullet", value: "67f7a99771b7233f2651d732", display: "Kunde: Nutribullet" },
             { id: "valentine", value: "6697bf815c39b80cf3a85e6c", display: "Kunde: Veltins" }, // Annahme: Veltins (statt Valentine)
             { id: "shark", value: "647f039715031d91efbb5911", display: "Kunde: Shark" },
-            // NEUER Kunde (29.04.2025 - Teil 3)
             { id: "o2", value: "667c15ac8883530952e83903", display: "Kunde: o2" }
         ]
     }
@@ -389,6 +388,8 @@ function renderFilterTags(activeFiltersFlat) {
             const correspondingCheckbox = document.getElementById(checkboxIdToRemove);
             if (correspondingCheckbox) {
                 correspondingCheckbox.checked = false; // Deaktiviere die Checkbox
+                // *** NEU: Debugging Log ***
+                console.log(`[Debug] Checkbox ${checkboxIdToRemove} checked state set to: ${correspondingCheckbox.checked}`);
                 applyFiltersAndRender(); // Wende Filter neu an und rendere neu
             } else {
                 // Sollte nicht passieren, wenn die IDs übereinstimmen
@@ -437,12 +438,18 @@ function applyFiltersAndRender() {
         activeFiltersByGroup[groupField] = []; // Initialisiere Array für jede Gruppe
         group.filters.forEach(filter => {
             const checkbox = document.getElementById(filter.id);
+            // *** DEBUGGING: Logge den Zustand VOR dem Lesen ***
+            // if (checkbox) { console.log(`[Debug] Reading Checkbox ${filter.id} state: ${checkbox.checked}`); }
             if (checkbox && checkbox.checked) {
                 activeFiltersByGroup[groupField].push(filter.value); // Füge Wert zur Gruppe hinzu
                 allActiveCheckboxFiltersFlat.push({ ...filter, field: groupField }); // Füge zur flachen Liste hinzu
             }
         });
     });
+     // *** DEBUGGING: Logge die erkannten aktiven Filter ***
+    // console.log("[Debug] Active filters found:", JSON.stringify(activeFiltersByGroup));
+    // console.log("[Debug] Active filters flat:", JSON.stringify(allActiveCheckboxFiltersFlat));
+
 
     // 2. Suchbegriff holen und normalisieren
     const searchInput = document.getElementById(searchInputId);
@@ -538,6 +545,8 @@ function clearAllFilters() {
             const checkbox = document.getElementById(filter.id);
             if (checkbox) {
                 checkbox.checked = false;
+                 // *** NEU: Debugging Log ***
+                 console.log(`[Debug] Resetting Checkbox ${filter.id} checked state set to: ${checkbox.checked}`);
             }
         });
     });

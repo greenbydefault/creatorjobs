@@ -43,11 +43,21 @@ const filterConfig = [
     {
         field: 'kunden', // Multi-Referenz-Feldname in Webflow
         filters: [
+            // Bestehende Kunden
             { id: "autoscout", value: "678f5b698973dba7df78f644", display: "Kunde: Autoscout" },
             { id: "B-B", value: "64808c8079995e878fda4f67", display: "Kunde: B&B Hotels" },
-            { id: "chefkoch", value: "679213a19cc8609f08cc4565", display: "Kunde: Chefkoch" }, // Korrigierte ID
-            { id: "telekom", value: "659d5ef1dd74610abc7f44c6", display: "Kunde: Telekom" }
-            // Füge hier weitere Kundenfilter hinzu, falls nötig
+            { id: "chefkoch", value: "679213a19cc8609f08cc4565", display: "Kunde: Chefkoch" },
+            { id: "telekom", value: "659d5ef1dd74610abc7f44c6", display: "Kunde: Telekom" },
+            { id: "db-regio", value: "662fb3e88b60f28bb988a53a", display: "Kunde: DB Regio" },
+            { id: "longhi", value: "67b3556684d18546111157be", display: "Kunde: Longhi" },
+            { id: "ergo", value: "6448faf9c5a8a18d60c0560a", display: "Kunde: Ergo" },
+            { id: "ernstings", value: "66e0598b4020e3128a9faae8", display: "Kunde: Ernsting's family" },
+            { id: "ferrero", value: "671b5d82a4c065998cbb9b12", display: "Kunde: Ferrero" },
+            { id: "fitness", value: "66570cf8eb2dcf329fa802e4", display: "Kunde: Fitness" },
+            // NEUE Kunden (29.04.2025)
+            { id: "flaconi", value: "65043631a18ce904e98d3711", display: "Kunde: Flaconi" },
+            { id: "glossy", value: "6448faf9c5a8a1c22bc05c2d", display: "Kunde: Glossybox" }, // Annahme: Glossybox
+            { id: "kfc", value: "6451010e96cc6f08cc6c2ae9", display: "Kunde: KFC" }
         ]
     }
 ];
@@ -257,7 +267,13 @@ function renderVideos(videoItems, containerId) {
                         // Optional: Platzhalter anzeigen
                         const placeholder = document.createElement('div');
                         placeholder.classList.add('video-feed-logo-placeholder'); // Eigene Klasse für Platzhalter-Styling
-                        customerRow.insertBefore(placeholder, customerNameSpan); // Füge Platzhalter vor dem Namen ein
+                        // Sicherstellen, dass customerNameSpan existiert, bevor insertBefore aufgerufen wird
+                        const customerNameSpan = customerRow.querySelector('.video-feed-customer');
+                        if (customerNameSpan) {
+                            customerRow.insertBefore(placeholder, customerNameSpan); // Füge Platzhalter vor dem Namen ein
+                        } else {
+                            customerRow.appendChild(placeholder); // Füge am Ende hinzu, falls Name nicht da ist
+                        }
                     };
                     customerRow.appendChild(logoImg);
                 } else {
@@ -383,7 +399,10 @@ function renderFilterTags(activeFiltersFlat) {
     // Zeige/Verstecke den Reset-Button basierend darauf, ob Filter aktiv sind
     const resetButton = document.getElementById(filterResetButtonId);
     if (resetButton) {
-        resetButton.style.display = activeFiltersFlat.length > 0 ? 'inline-block' : 'none'; // Oder 'block', je nach Layout
+        // Zeige Button nur, wenn Filter aktiv sind ODER Text im Suchfeld steht
+        const searchInput = document.getElementById(searchInputId);
+        const isSearchActive = searchInput && searchInput.value.trim() !== "";
+        resetButton.style.display = (activeFiltersFlat.length > 0 || isSearchActive) ? 'inline-block' : 'none'; // Oder 'block', je nach Layout
     }
 }
 
@@ -470,8 +489,8 @@ function applyFiltersAndRender() {
                     matchesSearchTerm = true;
                     break; // Übereinstimmung gefunden, keine weiteren Felder prüfen
                 }
-                // Optional: Suche auch in Kundenamen (wenn Kundendaten geladen sind)
-                if (field === 'kunden' && Array.isArray(item?.fieldData?.kunden)) {
+                 // Suche auch in Kundenamen (wenn Kundendaten geladen sind) - Korrigierte Logik
+                 if (field === 'kunden' && Array.isArray(item?.fieldData?.kunden) && Object.keys(allCustomerData).length > 0) {
                     const customerNames = item.fieldData.kunden
                         .map(id => allCustomerData[id]?.name) // Hole Namen aus geladenen Daten
                         .filter(name => name) // Entferne undefinierte Namen
@@ -479,7 +498,7 @@ function applyFiltersAndRender() {
                         .toLowerCase();
                     if (customerNames.includes(searchTerm)) {
                         matchesSearchTerm = true;
-                        break;
+                        break; // Übereinstimmung im Kundennamen gefunden
                     }
                 }
             }
@@ -488,7 +507,7 @@ function applyFiltersAndRender() {
         return matchesSearchTerm;
     });
 
-    // 4. Aktive Checkbox-Filter-Tags rendern
+    // 4. Aktive Checkbox-Filter-Tags rendern (und Reset-Button steuern)
     renderFilterTags(allActiveCheckboxFiltersFlat);
 
     // 5. Gefilterte Videos rendern
@@ -520,7 +539,7 @@ function clearAllFilters() {
         searchInput.value = "";
     }
 
-    // 3. Filter anwenden und neu rendern
+    // 3. Filter anwenden und neu rendern (dies aktualisiert auch die Tags und den Reset-Button)
     applyFiltersAndRender();
 }
 
@@ -605,7 +624,7 @@ async function displayVideoCollection() {
             console.warn(`⚠️ Such-Eingabefeld mit ID '${searchInputId}' nicht im DOM gefunden.`);
         }
 
-        // NEU: Event Listener für den Reset-Button
+        // Event Listener für den Reset-Button
         const resetButton = document.getElementById(filterResetButtonId);
         if (resetButton) {
             resetButton.addEventListener('click', clearAllFilters); // Bei Klick alle Filter löschen

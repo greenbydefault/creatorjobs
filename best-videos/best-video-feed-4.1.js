@@ -100,40 +100,33 @@ async function applyFiltersAndRender() {
         return;
     }
 
-    filterConfig.forEach((group, index) => { // Füge Index für Logging hinzu
-        console.log(`   Verarbeite Filtergruppe ${index}, Feld: ${group?.field}`); // Log vor der Prüfung
+    filterConfig.forEach((group, index) => {
+        console.log(`   Verarbeite Filtergruppe ${index}, Feld: ${group?.field}`);
 
-        // --- Noch robustere Prüfung ---
-        if (!group || typeof group !== 'object') {
-             console.error(`FEHLER: Ungültiges Objekt (kein Objekt) in filterConfig bei Index ${index}:`, group);
-             return; // Überspringe dieses fehlerhafte Objekt
+        if (!group || typeof group !== 'object' || !group.field) {
+             console.error(`FEHLER: Ungültiges Gruppenobjekt oder fehlendes 'field' in filterConfig bei Index ${index}:`, group);
+             return; // Überspringe ungültige Gruppe
         }
-        if (!group.field) {
-             console.error(`FEHLER: Fehlendes 'field' in filterConfig bei Index ${index}:`, group);
-             return;
-        }
-         if (!Array.isArray(group.filters)) {
-             console.error(`FEHLER: 'filters' ist kein Array in filterConfig für Feld '${group.field}' bei Index ${index}:`, group.filters);
-             return; // Überspringe, da die innere Schleife fehlschlagen würde
-        }
-        // --- Ende der robusten Prüfung ---
 
         const groupField = group.field;
         activeFiltersByGroup[groupField] = []; // Initialisiere Array für diese Gruppe
 
-        console.log(`      -> Iteriere über ${group.filters.length} Filter für Feld '${groupField}'`); // Log vor innerer Schleife
+        // --- ALLERLETZTE Prüfung vor dem Aufruf der inneren Schleife ---
+        if (!Array.isArray(group.filters)) {
+            console.error(`FEHLER: 'filters' ist KEIN Array direkt vor der inneren Schleife für Feld '${groupField}'! Überspringe Gruppe. Wert:`, group.filters);
+            return; // Gehe zur nächsten Iteration der äußeren Schleife
+        }
+        // --- Ende der Prüfung ---
 
-        // --- Innere Schleife (vermutlich Fehlerquelle) ---
+        console.log(`      -> Iteriere über ${group.filters.length} Filter für Feld '${groupField}'`);
+
         group.filters.forEach(filter => {
-            // Prüfung auf gültiges Filter-Objekt (optional, aber sicher)
             if (!filter || typeof filter.id === 'undefined' || typeof filter.value === 'undefined') {
                 console.warn(`      -> Ungültiges Filter-Objekt übersprungen in Gruppe '${groupField}':`, filter);
                 return;
             }
-
             const checkbox = document.getElementById(filter.id);
             if (checkbox && checkbox.checked) {
-                // Stelle sicher, dass activeFiltersByGroup[groupField] noch existiert (sollte es)
                 if(activeFiltersByGroup[groupField]) {
                     activeFiltersByGroup[groupField].push(filter.value);
                     allActiveCheckboxFiltersFlat.push({ ...filter, field: groupField });
@@ -142,13 +135,11 @@ async function applyFiltersAndRender() {
                 }
             }
         });
-        // --- Ende der inneren Schleife ---
-
 
         if (activeFiltersByGroup[groupField] && activeFiltersByGroup[groupField].length > 0) {
              queryParams.set(groupField, activeFiltersByGroup[groupField].join(','));
         }
-    }); // Ende der äußeren Schleife
+    });
 
     const searchInput = document.getElementById(searchInputId);
     const searchTerm = searchInput ? searchInput.value.trim().toLowerCase() : "";
@@ -224,17 +215,12 @@ const handleScroll = throttle(() => { renderVisibleVideos(); }, SCROLL_THROTTLE_
 async function displayVideoCollection() {
     try {
         console.log("Schritt 1: Richte Event Listener ein.");
-
-        // Prüfe filterConfig bei der Initialisierung
          if (!Array.isArray(filterConfig)) {
-            console.error("FATAL: filterConfig ist kein Array bei Initialisierung!");
-            return; // Breche ab, wenn die Konfiguration ungültig ist
+            console.error("FATAL: filterConfig ist kein Array bei Initialisierung!"); return;
          }
-
         filterConfig.forEach(group => {
             if (!group || !Array.isArray(group.filters)) {
-                console.error("FEHLER: Ungültiges Objekt in filterConfig bei Initialisierung:", group);
-                return;
+                console.error("FEHLER: Ungültiges Objekt in filterConfig bei Initialisierung:", group); return;
             }
             group.filters.forEach(filter => {
                 const checkbox = document.getElementById(filter.id);
@@ -277,3 +263,6 @@ window.addEventListener("DOMContentLoaded", () => {
     if (videoContainerExists && tagWrapperExists) { displayVideoCollection(); }
     else { console.error("FEHLER: Video-Container oder Tag-Wrapper nicht gefunden!"); }
 });
+
+/* --- Benötigtes CSS (Beispiele) --- */
+// CSS bleibt unverändert

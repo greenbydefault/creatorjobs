@@ -13,18 +13,16 @@
     const DATA_ATTR_NEXT_BTN = 'data-multistep-next';
     const DATA_ATTR_PREV_BTN = 'data-multistep-prev';
     const DATA_ATTR_SUBMIT_BTN = 'data-multistep-submit';
-    // Neu für Guide
+    // Guide Attributes
     const DATA_ATTR_GUIDE_CONTAINER = 'data-step-guide-container';
     const DATA_ATTR_GUIDE = 'data-step-guide';
 
 
     // CSS classes
-    const CLASS_ACTIVE_STEP = 'active'; // Optional für Step-Styling
+    const CLASS_ACTIVE_STEP = 'active';
     const CLASS_ACTIVE_INDICATOR = 'active';
-    const CLASS_HIDDEN = 'hidden'; // Für Buttons
-    const CLASS_INPUT_ERROR = 'input-error'; // Für Validierungsfehler
-    // Neu für Guide Fade Effekt
-    const CLASS_GUIDE_VISIBLE = 'visible'; // Macht Guide sichtbar und löst Fade-In aus
+    const CLASS_HIDDEN = 'hidden';
+    const CLASS_INPUT_ERROR = 'input-error';
 
 
     /**
@@ -47,7 +45,10 @@
     class MultiStepForm {
         constructor(formElement) {
             this.form = formElement;
-            // Finde Elemente innerhalb des Formulars
+            const formId = this.form.id || 'form without id'; // Get form ID for logging
+            console.log(`[DEBUG MultiStepForm ${formId}] Initializing...`);
+
+            // Find form elements
             this.steps = Array.from(findAll(`[${DATA_ATTR_STEP}]`, this.form));
             this.indicatorContainer = find(`[${DATA_ATTR_INDICATOR_CONTAINER}]`, this.form);
             this.indicators = this.indicatorContainer ? Array.from(findAll(`[${DATA_ATTR_INDICATOR}]`, this.indicatorContainer)) : [];
@@ -55,58 +56,57 @@
             this.prevButton = find(`[${DATA_ATTR_PREV_BTN}]`, this.form);
             this.submitButton = find(`[${DATA_ATTR_SUBMIT_BTN}]`, this.form);
 
-            // Finde Guide-Elemente (können außerhalb des <form> Tags sein, suchen im document)
-            // Wichtig: Geht davon aus, dass der Guide-Container relativ zum Formular gefunden werden kann
-            // oder eindeutig im Dokument ist. Hier wird im ganzen Dokument gesucht.
-            // Besser: Guide-Container eine ID geben und gezielt suchen oder relativ zum Formular finden.
-            this.guideContainer = find(`[${DATA_ATTR_GUIDE_CONTAINER}]`); // Sucht global
+            // --- DEBUGGING STEPS ---
+            console.log(`[DEBUG MultiStepForm ${formId}] Found Step Elements (${this.steps.length}):`, this.steps);
+            // --- END DEBUGGING ---
+
+            // Find guide elements (globally)
+            this.guideContainer = find(`[${DATA_ATTR_GUIDE_CONTAINER}]`);
             this.guides = this.guideContainer ? Array.from(findAll(`[${DATA_ATTR_GUIDE}]`, this.guideContainer)) : [];
+
+            // --- DEBUGGING GUIDES ---
+            console.log(`[DEBUG MultiStepForm ${formId}] Found Guide Container:`, this.guideContainer);
+            console.log(`[DEBUG MultiStepForm ${formId}] Found Guide Elements (${this.guides.length}):`, this.guides);
+             // --- END DEBUGGING ---
 
 
             this.currentStepIndex = 0;
             this.totalSteps = this.steps.length;
 
             if (this.totalSteps === 0) {
-                console.warn('MultiStepForm: No steps found in form:', this.form.id || this.form);
+                console.warn(`MultiStepForm (${formId}): No steps found.`);
                 return;
             }
-            // Warnungen für inkonsistente Anzahlen
+
+            // Warnings for inconsistent counts (original warning kept)
             if (this.guides.length > 0 && this.guides.length !== this.totalSteps) {
-                 console.warn(`MultiStepForm (${this.form.id || 'form'}): Number of steps (${this.totalSteps}) does not match number of guides (${this.guides.length}). Ensure each step has a corresponding guide element with [${DATA_ATTR_GUIDE}].`);
+                 console.warn(`MultiStepForm (${formId}): Number of steps (${this.totalSteps}) does not match number of guides (${this.guides.length}). Ensure each step has a corresponding guide element with [${DATA_ATTR_GUIDE}].`);
             }
             if (this.indicators.length > 0 && this.indicators.length !== this.totalSteps) {
-                console.warn(`MultiStepForm (${this.form.id || 'form'}): Number of steps (${this.totalSteps}) does not match number of indicators (${this.indicators.length}).`);
+                console.warn(`MultiStepForm (${formId}): Number of steps (${this.totalSteps}) does not match number of indicators (${this.indicators.length}).`);
             }
 
-             // Initialer Zustand: Nur erster Schritt und erster Guide sichtbar
+             // Initial state: Only first step and first guide visible (set styles directly)
              this.steps.forEach((step, index) => {
                 step.style.display = index === 0 ? 'block' : 'none';
                 index === 0 ? addClass(step, CLASS_ACTIVE_STEP) : removeClass(step, CLASS_ACTIVE_STEP);
             });
             this.guides.forEach((guide, index) => {
-                 // Verwende die data-step-guide Nummer zum Abgleich
                  const guideStepNumber = parseInt(guide.getAttribute(DATA_ATTR_GUIDE), 10);
-                 const targetStepNumber = 1; // Erster Schritt
+                 const targetStepNumber = 1; // First step
 
-                 // Prüfe ob die Guide-Nummer mit dem ersten Schritt übereinstimmt ODER
-                 // (als Fallback) ob der Index 0 ist, falls keine Nummer angegeben wurde.
                  if (!isNaN(guideStepNumber) && guideStepNumber === targetStepNumber || isNaN(guideStepNumber) && index === 0) {
-                     // Mache den ersten Guide direkt sichtbar (ohne Fade-In beim Laden)
                      guide.style.display = 'block';
-                     guide.style.opacity = '1'; // Direkt sichtbar machen
-                     addClass(guide, CLASS_GUIDE_VISIBLE); // Klasse für Konsistenz setzen
+                     guide.style.opacity = '1';
                  } else {
-                     // Andere Guides initial verstecken
-                     removeClass(guide, CLASS_GUIDE_VISIBLE);
                      guide.style.display = 'none';
-                     guide.style.opacity = '0'; // Sicherstellen, dass Opacity 0 ist
+                     guide.style.opacity = '0';
                  }
             });
         }
 
         init() {
             this.addEventListeners();
-            // Rufe goToStep(0) auf, um sicherzustellen, dass Buttons initial korrekt sind
             this.goToStep(0);
         }
 
@@ -115,35 +115,29 @@
             this.prevButton?.addEventListener('click', () => this.goToPreviousStep());
             this.form.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
-                    // Verhindern, wenn Enter gedrückt wird und es nicht der Submit-Button ist oder dieser versteckt ist
                     if (document.activeElement !== this.submitButton || this.submitButton?.classList.contains(CLASS_HIDDEN)) {
                         event.preventDefault();
-                        // Wenn der Weiter-Button sichtbar ist, löse dessen Aktion aus
                         if (this.nextButton && !this.nextButton.classList.contains(CLASS_HIDDEN)) {
                            this.goToNextStep();
                         }
                     }
-                    // Wenn Enter auf dem Submit-Button gedrückt wird, wird das Formular normal abgeschickt (kein preventDefault)
                 }
             });
         }
 
         goToNextStep() {
-             // 1. Validieren
              if (!this.validateStep(this.currentStepIndex)) {
                  console.log("Validation failed for step", this.currentStepIndex + 1);
                  const firstInvalid = find(':invalid', this.steps[this.currentStepIndex]);
-                 firstInvalid?.focus(); // Fokus auf erstes ungültiges Feld
-                 return; // Abbrechen
+                 firstInvalid?.focus();
+                 return;
              }
-             // 2. Zum nächsten Schritt gehen, wenn nicht der letzte
             if (this.currentStepIndex < this.totalSteps - 1) {
                 this.goToStep(this.currentStepIndex + 1);
             }
         }
 
         goToPreviousStep() {
-            // Zum vorherigen Schritt gehen, wenn nicht der erste
             if (this.currentStepIndex > 0) {
                 this.goToStep(this.currentStepIndex - 1);
             }
@@ -155,86 +149,68 @@
                 return;
             }
 
-            // Alten Index speichern für Guide-Handling
             const previousStepIndex = this.currentStepIndex;
             this.currentStepIndex = stepIndex;
-            const targetStepNumber = this.currentStepIndex + 1; // Schrittnummer (1-basiert)
+            const targetStepNumber = this.currentStepIndex + 1;
 
-            // Schritte aktualisieren (Sichtbarkeit & Klasse)
+            // Update steps (visibility & class)
             this.steps.forEach((step, index) => {
                 if (index === this.currentStepIndex) {
-                    step.style.display = 'block'; // Aktiven anzeigen
+                    step.style.display = 'block';
                     addClass(step, CLASS_ACTIVE_STEP);
                 } else {
-                    step.style.display = 'none'; // Andere verstecken
+                    step.style.display = 'none';
                     removeClass(step, CLASS_ACTIVE_STEP);
                 }
             });
 
-            // Guides aktualisieren (Fade-Effekt)
+            // Update guides (fade effect using style properties)
             this.updateGuides(targetStepNumber);
 
-            // Indikatoren aktualisieren
+            // Update indicators
             this.updateIndicators();
 
-            // Button-Sichtbarkeit aktualisieren
+            // Update button states
             this.updateButtonStates();
         }
 
-        // Methode zum Aktualisieren der Guides mit Fade
+        // Updated method to handle guide fading via style properties
         updateGuides(targetStepNumber) {
              this.guides.forEach((guide) => {
                 const guideStep = parseInt(guide.getAttribute(DATA_ATTR_GUIDE), 10);
                 const isTargetGuide = !isNaN(guideStep) && guideStep === targetStepNumber;
 
-                // Ziel-Guide: Sichtbar machen und Fade-In
+                // Target Guide: Fade In
                 if (isTargetGuide) {
-                    // Falls es schon sichtbar ist (z.B. durch zurück/vor), nichts tun
-                    if (guide.classList.contains(CLASS_GUIDE_VISIBLE)) return;
-
-                    // Erst display ändern, dann opacity für den Fade-In
+                    if (guide.style.opacity === '1' && guide.style.display === 'block') return;
                     guide.style.display = 'block';
-                    // requestAnimationFrame stellt sicher, dass Browser 'display: block' gerendert hat
                     requestAnimationFrame(() => {
-                        // Kurze Verzögerung kann manchmal helfen, falls rAF nicht reicht
                         setTimeout(() => {
-                            addClass(guide, CLASS_GUIDE_VISIBLE); // Löst Transition aus (opacity 0 -> 1)
-                        }, 10); // Kleine Verzögerung
+                            guide.style.opacity = '1';
+                        }, 10);
                     });
                 }
-                // Nicht-Ziel-Guide: Fade-Out und dann verstecken
+                // Non-Target Guide: Fade Out
                 else {
-                     // Wenn es schon versteckt ist, nichts tun
-                    if (!guide.classList.contains(CLASS_GUIDE_VISIBLE) && guide.style.display === 'none') return;
+                    if (guide.style.opacity === '0' && guide.style.display === 'none') return;
+                    guide.style.opacity = '0';
 
-                    // Fade-Out auslösen
-                    removeClass(guide, CLASS_GUIDE_VISIBLE); // Löst Transition aus (opacity 1 -> 0)
-
-                     // Callback definieren, der nach der Transition aufgerufen wird
-                     const onFadeOutComplete = () => {
-                        // Nur verstecken, wenn es immer noch nicht der sichtbare Guide sein soll
-                        if (!guide.classList.contains(CLASS_GUIDE_VISIBLE)) {
+                     const onFadeOutComplete = (event) => {
+                        if (event.propertyName === 'opacity' && guide.style.opacity === '0') {
                              guide.style.display = 'none';
+                             guide.removeEventListener('transitionend', onFadeOutComplete);
                         }
-                        // Event Listener entfernen, um Memory Leaks zu vermeiden
-                        guide.removeEventListener('transitionend', onFadeOutComplete);
                      };
+                    guide.removeEventListener('transitionend', onFadeOutComplete);
+                    guide.addEventListener('transitionend', onFadeOutComplete);
 
-                     // Event Listener hinzufügen
-                     guide.addEventListener('transitionend', onFadeOutComplete);
-
-                     // Sicherheitsnetz: Falls keine Transition stattfindet (z.B. Element war schon opacity 0),
-                     // verstecke es nach der erwarteten Transitionsdauer manuell.
-                     // Hole die Dauer aus dem CSS (vereinfacht hier: nehme den Wert aus dem CSS an)
-                     const transitionDuration = 400; // Muss mit CSS übereinstimmen (0.4s)
+                     const transitionDuration = 400;
                      setTimeout(() => {
-                        // Prüfe erneut, ob es immer noch versteckt sein soll
-                         if (!guide.classList.contains(CLASS_GUIDE_VISIBLE)) {
+                         if (guide.style.opacity === '0') {
                              guide.style.display = 'none';
+                             guide.removeEventListener('transitionend', onFadeOutComplete);
                          }
-                         // Entferne den Listener auch hier, falls transitionend nie gefeuert hat
-                         guide.removeEventListener('transitionend', onFadeOutComplete);
-                     }, transitionDuration);
+                     }, transitionDuration + 50);
                 }
             });
         }
@@ -244,7 +220,6 @@
             const targetStepNumber = this.currentStepIndex + 1;
             this.indicators.forEach((indicator, index) => {
                 const indicatorStep = parseInt(indicator.getAttribute(DATA_ATTR_INDICATOR), 10);
-                // Prüfe Nummer ODER Index als Fallback
                 if (!isNaN(indicatorStep) && indicatorStep === targetStepNumber || isNaN(indicatorStep) && index === this.currentStepIndex) {
                      addClass(indicator, CLASS_ACTIVE_INDICATOR);
                 } else {
@@ -254,15 +229,12 @@
         }
 
         updateButtonStates() {
-            // Zurück-Button: Sichtbar ab Schritt 2 (Index 1)
             if (this.prevButton) {
                 this.currentStepIndex === 0 ? hideElement(this.prevButton) : showElement(this.prevButton);
             }
-            // Weiter-Button: Sichtbar bis zum vorletzten Schritt
             if (this.nextButton) {
                 this.currentStepIndex === this.totalSteps - 1 ? hideElement(this.nextButton) : showElement(this.nextButton);
             }
-            // Senden-Button: Nur im letzten Schritt sichtbar
             if (this.submitButton) {
                  this.currentStepIndex === this.totalSteps - 1 ? showElement(this.submitButton) : hideElement(this.submitButton);
             }
@@ -270,24 +242,21 @@
 
         validateStep(stepIndex) {
             const currentStepElement = this.steps[stepIndex];
-            if (!currentStepElement) return false; // Schritt nicht gefunden
-            // Finde alle erforderlichen Inputs, Selects, Textareas im aktuellen Schritt
+            if (!currentStepElement) return false;
             const requiredInputs = findAll('input[required], select[required], textarea[required]', currentStepElement);
             let isStepValid = true;
 
             requiredInputs.forEach(input => {
-                removeClass(input, CLASS_INPUT_ERROR); // Fehlerklasse entfernen
-                // HTML5 Validierung nutzen
+                removeClass(input, CLASS_INPUT_ERROR);
                 if (!input.checkValidity()) {
                     isStepValid = false;
-                    addClass(input, CLASS_INPUT_ERROR); // Fehlerklasse hinzufügen
+                    addClass(input, CLASS_INPUT_ERROR);
                 }
             });
 
-             // Wenn ungültig, zeige die Browser-Meldung für das *erste* ungültige Feld
              if (!isStepValid) {
                  const firstInvalid = find(':invalid', currentStepElement);
-                 firstInvalid?.reportValidity(); // Zeigt die native Browser-Validierungs-Bubble
+                 firstInvalid?.reportValidity();
              }
             return isStepValid;
         }
@@ -299,21 +268,15 @@
      * ------------------------------------------------------------------------
      */
     document.addEventListener('DOMContentLoaded', () => {
-        // Finde alle Formulare, die als Multi-Step markiert sind
         const multiStepForms = findAll(`[${DATA_ATTR_FORM}]`);
         if (multiStepForms.length === 0) {
             console.info('MultiStepForm: No forms with attribute ' + DATA_ATTR_FORM + ' found.');
             return;
         }
-        // Initialisiere jedes gefundene Formular
         multiStepForms.forEach(formElement => {
             try {
-                // Prüfe, ob ein Guide-Container existiert, bevor initialisiert wird
-                // (Geht davon aus, dass ein Formular einen Guide haben *könnte*)
-                // Wenn kein Guide-Container da ist, wird das Formular trotzdem initialisiert.
                 new MultiStepForm(formElement).init();
-                console.log(`MultiStepForm initialized for: #${formElement.id || 'form without id'}`);
-
+                // Initialisierungs-Log verschoben in den Konstruktor für frühere Ausgabe
             } catch (error) {
                  console.error(`Failed to initialize MultiStepForm for: #${formElement.id || 'form without id'}`, error);
             }

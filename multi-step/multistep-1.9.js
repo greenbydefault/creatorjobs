@@ -19,9 +19,9 @@
     // CSS classes
     const CLASS_ACTIVE_STEP = 'active';
     const CLASS_ACTIVE_INDICATOR = 'active';
-    const CLASS_HIDE = 'hide'; // Geändert von CLASS_HIDDEN
+    const CLASS_HIDE = 'hide'; // Use existing .hide class
     const CLASS_INPUT_ERROR = 'input-error';
-    const CLASS_INDICATOR_REACHABLE = 'reachable'; // Für klickbare Indikatoren
+    const CLASS_INDICATOR_REACHABLE = 'reachable'; // For clickable indicators
 
     // Transition duration (should match CSS)
     const TRANSITION_DURATION = 400; // ms
@@ -35,9 +35,9 @@
     const findAll = (selector, element = document) => element.querySelectorAll(selector);
     const addClass = (element, className) => element?.classList.add(className);
     const removeClass = (element, className) => element?.classList.remove(className);
-    // Helper zum Anzeigen/Verstecken von Elementen über die .hide Klasse
-    const showElement = (element) => removeClass(element, CLASS_HIDE); // Verwendet jetzt CLASS_HIDE
-    const hideElement = (element) => addClass(element, CLASS_HIDE); // Verwendet jetzt CLASS_HIDE
+    // Helper to show/hide elements using the .hide class
+    const showElement = (element) => removeClass(element, CLASS_HIDE);
+    const hideElement = (element) => addClass(element, CLASS_HIDE);
 
 
     // Helper to handle fade out and set display none after transition
@@ -101,16 +101,23 @@
 
             this.currentStepIndex = 0;
             this.totalSteps = this.steps.length;
-            this.maxReachedStepIndex = 0; // Track highest step reached successfully
+            this.maxReachedStepIndex = 0;
             this.isTransitioning = false;
 
             if (this.totalSteps === 0) {
                 console.warn(`MultiStepForm (${formId}): No steps found.`);
                 return;
             }
-            // Warnings... (kept as before)
+            // Warnings...
 
-             // Initial state
+             // *** NEW: Explicitly hide prev and submit buttons initially ***
+             if (this.prevButton) hideElement(this.prevButton);
+             if (this.submitButton) hideElement(this.submitButton);
+             // Optional: Ensure next button is initially visible if it exists
+             // if (this.nextButton) showElement(this.nextButton); // Usually not needed if default state is visible
+
+
+             // Initial state for steps and guides
              this.steps.forEach((step, index) => {
                 if (index === 0) {
                     step.style.display = 'block';
@@ -137,7 +144,7 @@
 
         init() {
             this.addEventListeners();
-            this.goToStep(0, true); // Initial load
+            this.goToStep(0, true); // Initial load - will call updateButtonStates
         }
 
         addEventListeners() {
@@ -153,51 +160,42 @@
             this.nextButton?.addEventListener('click', handleNext);
             this.prevButton?.addEventListener('click', handlePrev);
 
-            // Add listeners for indicators
+            // Indicator listeners... (kept as before)
             this.indicators.forEach(indicator => {
                 indicator.addEventListener('click', (event) => {
-                    event.preventDefault(); // Prevent default link behavior if indicators are <a> tags
+                    event.preventDefault();
                     if (this.isTransitioning) return;
-
                     const targetStepNumber = parseInt(indicator.getAttribute(DATA_ATTR_INDICATOR), 10);
-                    if (isNaN(targetStepNumber)) return; // Ignore if attribute is invalid
+                    if (isNaN(targetStepNumber)) return;
+                    const targetIndex = targetStepNumber - 1;
 
-                    const targetIndex = targetStepNumber - 1; // Convert to 0-based index
-
-                    // Check if the target step is reachable
                     if (targetIndex >= 0 && targetIndex < this.totalSteps && targetIndex <= this.maxReachedStepIndex + 1) {
-                         // If moving forward, validate intermediate steps
                          if (targetIndex > this.currentStepIndex) {
                             let canProceed = true;
                             for (let i = this.currentStepIndex; i < targetIndex; i++) {
                                 if (!this.validateStep(i)) {
-                                    console.log(`Validation failed for intermediate step ${i + 1}, cannot jump to step ${targetStepNumber}.`);
-                                    // Optionally focus the first invalid field in the blocking step
+                                    console.log(`Validation failed for intermediate step ${i + 1}, cannot jump.`);
                                     const firstInvalid = find(':invalid', this.steps[i]);
                                     firstInvalid?.focus();
                                     canProceed = false;
-                                    break; // Stop checking further steps
+                                    break;
                                 }
                             }
-                            if (!canProceed) return; // Stop if any intermediate validation failed
+                            if (!canProceed) return;
                          }
-                         // Navigate if valid or moving backward
                          this.goToStep(targetIndex);
                     } else {
-                        console.log(`Cannot jump to step ${targetStepNumber}. Previous steps might not be validated yet.`);
-                        // Optional: Visual feedback like shaking the indicator
+                        console.log(`Cannot jump to step ${targetStepNumber}.`);
                     }
                 });
             });
 
-
+            // Keydown listener... (kept as before)
             this.form.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
-                    // Check if submit button exists and is NOT hidden by the class
                     const isSubmitVisible = this.submitButton && !this.submitButton.classList.contains(CLASS_HIDE);
                     if (document.activeElement !== this.submitButton || !isSubmitVisible) {
                         event.preventDefault();
-                         // Check if next button exists and is NOT hidden by the class
                         if (this.nextButton && !this.nextButton.classList.contains(CLASS_HIDE)) {
                            handleNext();
                         }
@@ -207,21 +205,19 @@
         }
 
         goToNextStep() {
-             // Validate current step BEFORE proceeding
              if (!this.validateStep(this.currentStepIndex)) {
                  console.log("Validation failed for step", this.currentStepIndex + 1);
                  const firstInvalid = find(':invalid', this.steps[this.currentStepIndex]);
+                 firstInvalid?.reportValidity(); // Show validation message on explicit next click failure
                  firstInvalid?.focus();
                  return;
              }
-             // Proceed if valid and not the last step
             if (this.currentStepIndex < this.totalSteps - 1) {
                 this.goToStep(this.currentStepIndex + 1);
             }
         }
 
         goToPreviousStep() {
-            // No validation needed for going back
             if (this.currentStepIndex > 0) {
                 this.goToStep(this.currentStepIndex - 1);
             }
@@ -238,7 +234,6 @@
             this.currentStepIndex = stepIndex;
             const targetStepNumber = this.currentStepIndex + 1;
 
-            // Update max reached step index if moving forward successfully
             if (this.currentStepIndex > this.maxReachedStepIndex) {
                 this.maxReachedStepIndex = this.currentStepIndex;
             }
@@ -249,11 +244,10 @@
             const incomingGuide = this.guides.find(g => parseInt(g.getAttribute(DATA_ATTR_GUIDE), 10) === targetStepNumber);
 
             // Update indicators and button states immediately
-            this.updateIndicators(); // Update indicators based on new current and maxReached index
+            this.updateIndicators();
             this.updateButtonStates();
 
             if (isInitialLoad) {
-                // Set initial styles without transition
                  this.steps.forEach((s, i) => {
                     s.style.display = i === this.currentStepIndex ? 'block' : 'none';
                     s.style.opacity = i === this.currentStepIndex ? '1' : '0';
@@ -287,15 +281,16 @@
                  removeClass(outgoingStep, CLASS_ACTIVE_STEP);
                  fadeOutElement(outgoingStep, fadeInNewElements);
             } else {
-                 fadeInNewElements(); // Should only happen if previousStepIndex was invalid
+                 fadeInNewElements();
             }
         }
+
 
         updateIndicators() {
             const targetStepNumber = this.currentStepIndex + 1;
             this.indicators.forEach((indicator, index) => {
                 const indicatorStepNumber = parseInt(indicator.getAttribute(DATA_ATTR_INDICATOR), 10);
-                const indicatorIndex = indicatorStepNumber - 1; // 0-based index
+                const indicatorIndex = indicatorStepNumber - 1;
 
                 removeClass(indicator, CLASS_ACTIVE_INDICATOR);
                 removeClass(indicator, CLASS_INDICATOR_REACHABLE);
@@ -336,11 +331,12 @@
                 }
             });
 
-             if (!isStepValid) {
-                 // Optional: Only report validity when user explicitly tries to proceed
+             // Only show validation message if the step is invalid AND the user tried to proceed
+             // This check is now primarily done in goToNextStep and the indicator click handler
+             // if (!isStepValid) {
                  // const firstInvalid = find(':invalid', currentStepElement);
-                 // firstInvalid?.reportValidity();
-             }
+                 // firstInvalid?.reportValidity(); // Consider calling reportValidity only on explicit user action failure
+             // }
             return isStepValid;
         }
     }

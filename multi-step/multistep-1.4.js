@@ -19,10 +19,10 @@
 
 
     // CSS classes
-    const CLASS_ACTIVE_STEP = 'active';
+    const CLASS_ACTIVE_STEP = 'active'; // Optional für Step-Styling
     const CLASS_ACTIVE_INDICATOR = 'active';
-    const CLASS_HIDDEN = 'hidden';
-    const CLASS_INPUT_ERROR = 'input-error';
+    const CLASS_HIDDEN = 'hidden'; // Für Buttons
+    const CLASS_INPUT_ERROR = 'input-error'; // Für Validierungsfehler
 
 
     /**
@@ -46,7 +46,7 @@
         constructor(formElement) {
             this.form = formElement;
             const formId = this.form.id || 'form without id'; // Get form ID for logging
-            console.log(`[DEBUG MultiStepForm ${formId}] Initializing...`);
+            // console.log(`[DEBUG MultiStepForm ${formId}] Initializing...`); // Debugging entfernt
 
             // Find form elements
             this.steps = Array.from(findAll(`[${DATA_ATTR_STEP}]`, this.form));
@@ -56,18 +56,14 @@
             this.prevButton = find(`[${DATA_ATTR_PREV_BTN}]`, this.form);
             this.submitButton = find(`[${DATA_ATTR_SUBMIT_BTN}]`, this.form);
 
-            // --- DEBUGGING STEPS ---
-            console.log(`[DEBUG MultiStepForm ${formId}] Found Step Elements (${this.steps.length}):`, this.steps);
-            // --- END DEBUGGING ---
+            // console.log(`[DEBUG MultiStepForm ${formId}] Found Step Elements (${this.steps.length}):`, this.steps); // Debugging entfernt
 
             // Find guide elements (globally)
             this.guideContainer = find(`[${DATA_ATTR_GUIDE_CONTAINER}]`);
             this.guides = this.guideContainer ? Array.from(findAll(`[${DATA_ATTR_GUIDE}]`, this.guideContainer)) : [];
 
-            // --- DEBUGGING GUIDES ---
-            console.log(`[DEBUG MultiStepForm ${formId}] Found Guide Container:`, this.guideContainer);
-            console.log(`[DEBUG MultiStepForm ${formId}] Found Guide Elements (${this.guides.length}):`, this.guides);
-             // --- END DEBUGGING ---
+            // console.log(`[DEBUG MultiStepForm ${formId}] Found Guide Container:`, this.guideContainer); // Debugging entfernt
+            // console.log(`[DEBUG MultiStepForm ${formId}] Found Guide Elements (${this.guides.length}):`, this.guides); // Debugging entfernt
 
 
             this.currentStepIndex = 0;
@@ -78,7 +74,7 @@
                 return;
             }
 
-            // Warnings for inconsistent counts (original warning kept)
+            // Warnings for inconsistent counts
             if (this.guides.length > 0 && this.guides.length !== this.totalSteps) {
                  console.warn(`MultiStepForm (${formId}): Number of steps (${this.totalSteps}) does not match number of guides (${this.guides.length}). Ensure each step has a corresponding guide element with [${DATA_ATTR_GUIDE}].`);
             }
@@ -86,10 +82,17 @@
                 console.warn(`MultiStepForm (${formId}): Number of steps (${this.totalSteps}) does not match number of indicators (${this.indicators.length}).`);
             }
 
-             // Initial state: Only first step and first guide visible (set styles directly)
+             // Initial state: Set styles directly for first step/guide, hide others
              this.steps.forEach((step, index) => {
-                step.style.display = index === 0 ? 'block' : 'none';
-                index === 0 ? addClass(step, CLASS_ACTIVE_STEP) : removeClass(step, CLASS_ACTIVE_STEP);
+                if (index === 0) {
+                    step.style.display = 'block';
+                    step.style.opacity = '1'; // Start fully visible
+                    addClass(step, CLASS_ACTIVE_STEP);
+                } else {
+                    step.style.display = 'none';
+                    step.style.opacity = '0'; // Start hidden and transparent
+                    removeClass(step, CLASS_ACTIVE_STEP);
+                }
             });
             this.guides.forEach((guide, index) => {
                  const guideStepNumber = parseInt(guide.getAttribute(DATA_ATTR_GUIDE), 10);
@@ -107,7 +110,7 @@
 
         init() {
             this.addEventListeners();
-            this.goToStep(0);
+            this.goToStep(0); // Ensure initial button states are correct
         }
 
         addEventListeners() {
@@ -143,6 +146,7 @@
             }
         }
 
+        // *** Updated goToStep function for Step Fade Effect ***
         goToStep(stepIndex) {
             if (stepIndex < 0 || stepIndex >= this.totalSteps) {
                 console.error('MultiStepForm: Invalid step index:', stepIndex);
@@ -151,16 +155,47 @@
 
             const previousStepIndex = this.currentStepIndex;
             this.currentStepIndex = stepIndex;
-            const targetStepNumber = this.currentStepIndex + 1;
+            const targetStepNumber = this.currentStepIndex + 1; // 1-based index for guides/indicators
 
-            // Update steps (visibility & class)
+            // Update steps with fade effect
             this.steps.forEach((step, index) => {
-                if (index === this.currentStepIndex) {
-                    step.style.display = 'block';
-                    addClass(step, CLASS_ACTIVE_STEP);
+                const isTargetStep = index === this.currentStepIndex;
+
+                if (isTargetStep) {
+                    // Target Step: Fade In
+                    if (step.style.opacity === '1' && step.style.display === 'block') return; // Already visible
+
+                    step.style.display = 'block'; // Make it block first
+                    addClass(step, CLASS_ACTIVE_STEP); // Add active class (optional)
+                    requestAnimationFrame(() => {
+                        setTimeout(() => {
+                            step.style.opacity = '1'; // Trigger fade-in
+                        }, 10);
+                    });
                 } else {
-                    step.style.display = 'none';
-                    removeClass(step, CLASS_ACTIVE_STEP);
+                    // Non-Target Step: Fade Out
+                    if (step.style.opacity === '0' && step.style.display === 'none') return; // Already hidden
+
+                    step.style.opacity = '0'; // Trigger fade-out
+                    removeClass(step, CLASS_ACTIVE_STEP); // Remove active class
+
+                    const onFadeOutComplete = (event) => {
+                        if (event.propertyName === 'opacity' && step.style.opacity === '0') {
+                            step.style.display = 'none'; // Hide after fade
+                            step.removeEventListener('transitionend', onFadeOutComplete);
+                        }
+                    };
+                    step.removeEventListener('transitionend', onFadeOutComplete); // Remove old listener first
+                    step.addEventListener('transitionend', onFadeOutComplete);
+
+                    // Fallback timeout
+                    const transitionDuration = 400; // Match CSS
+                    setTimeout(() => {
+                        if (step.style.opacity === '0') {
+                            step.style.display = 'none';
+                            step.removeEventListener('transitionend', onFadeOutComplete);
+                        }
+                    }, transitionDuration + 50);
                 }
             });
 
@@ -174,7 +209,7 @@
             this.updateButtonStates();
         }
 
-        // Updated method to handle guide fading via style properties
+        // Method to handle guide fading via style properties
         updateGuides(targetStepNumber) {
              this.guides.forEach((guide) => {
                 const guideStep = parseInt(guide.getAttribute(DATA_ATTR_GUIDE), 10);
@@ -276,7 +311,7 @@
         multiStepForms.forEach(formElement => {
             try {
                 new MultiStepForm(formElement).init();
-                // Initialisierungs-Log verschoben in den Konstruktor für frühere Ausgabe
+                // console.log(`MultiStepForm initialized for: #${formElement.id || 'form without id'}`); // Debugging entfernt
             } catch (error) {
                  console.error(`Failed to initialize MultiStepForm for: #${formElement.id || 'form without id'}`, error);
             }

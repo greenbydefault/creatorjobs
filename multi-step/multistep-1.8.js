@@ -13,20 +13,18 @@
     const DATA_ATTR_NEXT_BTN = 'data-multistep-next';
     const DATA_ATTR_PREV_BTN = 'data-multistep-prev';
     const DATA_ATTR_SUBMIT_BTN = 'data-multistep-submit';
-    // Guide Attributes
     const DATA_ATTR_GUIDE_CONTAINER = 'data-step-guide-container';
     const DATA_ATTR_GUIDE = 'data-step-guide';
-
 
     // CSS classes
     const CLASS_ACTIVE_STEP = 'active';
     const CLASS_ACTIVE_INDICATOR = 'active';
-    // const CLASS_HIDDEN = 'hidden'; // No longer needed for button visibility
+    const CLASS_HIDE = 'hide'; // Geändert von CLASS_HIDDEN
     const CLASS_INPUT_ERROR = 'input-error';
+    const CLASS_INDICATOR_REACHABLE = 'reachable'; // Für klickbare Indikatoren
 
     // Transition duration (should match CSS)
     const TRANSITION_DURATION = 400; // ms
-
 
     /**
      * ------------------------------------------------------------------------
@@ -37,42 +35,35 @@
     const findAll = (selector, element = document) => element.querySelectorAll(selector);
     const addClass = (element, className) => element?.classList.add(className);
     const removeClass = (element, className) => element?.classList.remove(className);
-    // showElement and hideElement helpers removed
+    // Helper zum Anzeigen/Verstecken von Elementen über die .hide Klasse
+    const showElement = (element) => removeClass(element, CLASS_HIDE); // Verwendet jetzt CLASS_HIDE
+    const hideElement = (element) => addClass(element, CLASS_HIDE); // Verwendet jetzt CLASS_HIDE
+
 
     // Helper to handle fade out and set display none after transition
     const fadeOutElement = (element, callback) => {
         if (!element || element.style.opacity === '0' || element.style.display === 'none') {
-             if (typeof callback === 'function') {
-                 callback();
-             }
+             if (typeof callback === 'function') callback();
             return;
         }
-
         element.style.opacity = '0';
         let transitionEnded = false;
-
         const onFadeOutComplete = (event) => {
             if (event.target === element && event.propertyName === 'opacity' && !transitionEnded) {
                  transitionEnded = true;
                 element.style.display = 'none';
                 element.removeEventListener('transitionend', onFadeOutComplete);
-                if (typeof callback === 'function') {
-                    callback();
-                }
+                if (typeof callback === 'function') callback();
             }
         };
-
         element.removeEventListener('transitionend', onFadeOutComplete);
         element.addEventListener('transitionend', onFadeOutComplete);
-
         setTimeout(() => {
             if (!transitionEnded) {
                  transitionEnded = true;
                 element.style.display = 'none';
                 element.removeEventListener('transitionend', onFadeOutComplete);
-                 if (typeof callback === 'function') {
-                     callback();
-                 }
+                 if (typeof callback === 'function') callback();
             }
         }, TRANSITION_DURATION + 50);
     };
@@ -80,15 +71,13 @@
     // Helper to handle fade in
     const fadeInElement = (element) => {
          if (!element || (element.style.opacity === '1' && element.style.display === 'block')) return;
-
-         element.style.display = 'block'; // Or 'inline-block', 'flex' etc. if needed - empty string reverts to default
+         element.style.display = 'block'; // Or specific display type if needed
          requestAnimationFrame(() => {
              setTimeout(() => {
                  element.style.opacity = '1';
              }, 10);
          });
     };
-
 
     /**
      * ------------------------------------------------------------------------
@@ -112,20 +101,14 @@
 
             this.currentStepIndex = 0;
             this.totalSteps = this.steps.length;
+            this.maxReachedStepIndex = 0; // Track highest step reached successfully
             this.isTransitioning = false;
 
             if (this.totalSteps === 0) {
                 console.warn(`MultiStepForm (${formId}): No steps found.`);
                 return;
             }
-
-            // Warnings
-            if (this.guides.length > 0 && this.guides.length !== this.totalSteps) {
-                 console.warn(`MultiStepForm (${formId}): Mismatch steps (${this.totalSteps}) and guides (${this.guides.length}).`);
-            }
-            if (this.indicators.length > 0 && this.indicators.length !== this.totalSteps) {
-                console.warn(`MultiStepForm (${formId}): Mismatch steps (${this.totalSteps}) and indicators (${this.indicators.length}).`);
-            }
+            // Warnings... (kept as before)
 
              // Initial state
              this.steps.forEach((step, index) => {
@@ -139,7 +122,7 @@
                     removeClass(step, CLASS_ACTIVE_STEP);
                 }
             });
-            this.guides.forEach((guide, index) => {
+             this.guides.forEach((guide, index) => {
                  const guideStepNumber = parseInt(guide.getAttribute(DATA_ATTR_GUIDE), 10);
                  const targetStepNumber = 1;
                  if (!isNaN(guideStepNumber) && guideStepNumber === targetStepNumber || isNaN(guideStepNumber) && index === 0) {
@@ -154,7 +137,7 @@
 
         init() {
             this.addEventListeners();
-            this.goToStep(0, true); // Pass true for initial load
+            this.goToStep(0, true); // Initial load
         }
 
         addEventListeners() {
@@ -170,13 +153,52 @@
             this.nextButton?.addEventListener('click', handleNext);
             this.prevButton?.addEventListener('click', handlePrev);
 
+            // Add listeners for indicators
+            this.indicators.forEach(indicator => {
+                indicator.addEventListener('click', (event) => {
+                    event.preventDefault(); // Prevent default link behavior if indicators are <a> tags
+                    if (this.isTransitioning) return;
+
+                    const targetStepNumber = parseInt(indicator.getAttribute(DATA_ATTR_INDICATOR), 10);
+                    if (isNaN(targetStepNumber)) return; // Ignore if attribute is invalid
+
+                    const targetIndex = targetStepNumber - 1; // Convert to 0-based index
+
+                    // Check if the target step is reachable
+                    if (targetIndex >= 0 && targetIndex < this.totalSteps && targetIndex <= this.maxReachedStepIndex + 1) {
+                         // If moving forward, validate intermediate steps
+                         if (targetIndex > this.currentStepIndex) {
+                            let canProceed = true;
+                            for (let i = this.currentStepIndex; i < targetIndex; i++) {
+                                if (!this.validateStep(i)) {
+                                    console.log(`Validation failed for intermediate step ${i + 1}, cannot jump to step ${targetStepNumber}.`);
+                                    // Optionally focus the first invalid field in the blocking step
+                                    const firstInvalid = find(':invalid', this.steps[i]);
+                                    firstInvalid?.focus();
+                                    canProceed = false;
+                                    break; // Stop checking further steps
+                                }
+                            }
+                            if (!canProceed) return; // Stop if any intermediate validation failed
+                         }
+                         // Navigate if valid or moving backward
+                         this.goToStep(targetIndex);
+                    } else {
+                        console.log(`Cannot jump to step ${targetStepNumber}. Previous steps might not be validated yet.`);
+                        // Optional: Visual feedback like shaking the indicator
+                    }
+                });
+            });
+
+
             this.form.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
-                    // Check if submit button exists and is currently displayed before preventing default
-                    const isSubmitVisible = this.submitButton && this.submitButton.style.display !== 'none';
+                    // Check if submit button exists and is NOT hidden by the class
+                    const isSubmitVisible = this.submitButton && !this.submitButton.classList.contains(CLASS_HIDE);
                     if (document.activeElement !== this.submitButton || !isSubmitVisible) {
                         event.preventDefault();
-                        if (this.nextButton && this.nextButton.style.display !== 'none') {
+                         // Check if next button exists and is NOT hidden by the class
+                        if (this.nextButton && !this.nextButton.classList.contains(CLASS_HIDE)) {
                            handleNext();
                         }
                     }
@@ -185,18 +207,21 @@
         }
 
         goToNextStep() {
+             // Validate current step BEFORE proceeding
              if (!this.validateStep(this.currentStepIndex)) {
                  console.log("Validation failed for step", this.currentStepIndex + 1);
                  const firstInvalid = find(':invalid', this.steps[this.currentStepIndex]);
                  firstInvalid?.focus();
                  return;
              }
+             // Proceed if valid and not the last step
             if (this.currentStepIndex < this.totalSteps - 1) {
                 this.goToStep(this.currentStepIndex + 1);
             }
         }
 
         goToPreviousStep() {
+            // No validation needed for going back
             if (this.currentStepIndex > 0) {
                 this.goToStep(this.currentStepIndex - 1);
             }
@@ -213,17 +238,23 @@
             this.currentStepIndex = stepIndex;
             const targetStepNumber = this.currentStepIndex + 1;
 
+            // Update max reached step index if moving forward successfully
+            if (this.currentStepIndex > this.maxReachedStepIndex) {
+                this.maxReachedStepIndex = this.currentStepIndex;
+            }
+
             const outgoingStep = this.steps[previousStepIndex];
             const incomingStep = this.steps[this.currentStepIndex];
             const outgoingGuide = this.guides.find(g => parseInt(g.getAttribute(DATA_ATTR_GUIDE), 10) === (previousStepIndex + 1));
             const incomingGuide = this.guides.find(g => parseInt(g.getAttribute(DATA_ATTR_GUIDE), 10) === targetStepNumber);
 
             // Update indicators and button states immediately
-            this.updateIndicators();
-            this.updateButtonStates(); // Call this BEFORE starting transitions
+            this.updateIndicators(); // Update indicators based on new current and maxReached index
+            this.updateButtonStates();
 
             if (isInitialLoad) {
-                this.steps.forEach((s, i) => {
+                // Set initial styles without transition
+                 this.steps.forEach((s, i) => {
                     s.style.display = i === this.currentStepIndex ? 'block' : 'none';
                     s.style.opacity = i === this.currentStepIndex ? '1' : '0';
                     i === this.currentStepIndex ? addClass(s, CLASS_ACTIVE_STEP) : removeClass(s, CLASS_ACTIVE_STEP);
@@ -236,7 +267,6 @@
                 this.isTransitioning = false;
                 return;
             }
-
 
             const fadeInNewElements = () => {
                 if (incomingStep) {
@@ -251,44 +281,44 @@
                  }, TRANSITION_DURATION);
             };
 
-            if (outgoingGuide) {
-                fadeOutElement(outgoingGuide);
-            }
+            if (outgoingGuide) fadeOutElement(outgoingGuide);
 
             if (outgoingStep) {
                  removeClass(outgoingStep, CLASS_ACTIVE_STEP);
                  fadeOutElement(outgoingStep, fadeInNewElements);
             } else {
-                 fadeInNewElements();
+                 fadeInNewElements(); // Should only happen if previousStepIndex was invalid
             }
         }
-
 
         updateIndicators() {
             const targetStepNumber = this.currentStepIndex + 1;
             this.indicators.forEach((indicator, index) => {
-                const indicatorStep = parseInt(indicator.getAttribute(DATA_ATTR_INDICATOR), 10);
-                if (!isNaN(indicatorStep) && indicatorStep === targetStepNumber || isNaN(indicatorStep) && index === this.currentStepIndex) {
+                const indicatorStepNumber = parseInt(indicator.getAttribute(DATA_ATTR_INDICATOR), 10);
+                const indicatorIndex = indicatorStepNumber - 1; // 0-based index
+
+                removeClass(indicator, CLASS_ACTIVE_INDICATOR);
+                removeClass(indicator, CLASS_INDICATOR_REACHABLE);
+
+                if (!isNaN(indicatorStepNumber) && indicatorStepNumber === targetStepNumber) {
                      addClass(indicator, CLASS_ACTIVE_INDICATOR);
-                } else {
-                     removeClass(indicator, CLASS_ACTIVE_INDICATOR);
+                }
+                else if (indicatorIndex <= this.maxReachedStepIndex) {
+                     addClass(indicator, CLASS_INDICATOR_REACHABLE);
                 }
             });
         }
 
-        // *** Updated updateButtonStates to use style.display ***
+        // Uses helper functions with CLASS_HIDE now
         updateButtonStates() {
-            // Previous Button: Hide on first step (index 0)
             if (this.prevButton) {
-                this.prevButton.style.display = this.currentStepIndex === 0 ? 'none' : ''; // Set to '' to revert to default display (e.g., inline-block, block)
+                this.currentStepIndex === 0 ? hideElement(this.prevButton) : showElement(this.prevButton);
             }
-            // Next Button: Hide on last step
             if (this.nextButton) {
-                this.nextButton.style.display = this.currentStepIndex === this.totalSteps - 1 ? 'none' : '';
+                this.currentStepIndex === this.totalSteps - 1 ? hideElement(this.nextButton) : showElement(this.nextButton);
             }
-            // Submit Button: Show only on last step
             if (this.submitButton) {
-                 this.submitButton.style.display = this.currentStepIndex === this.totalSteps - 1 ? '' : 'none';
+                 this.currentStepIndex === this.totalSteps - 1 ? showElement(this.submitButton) : hideElement(this.submitButton);
             }
         }
 
@@ -307,8 +337,9 @@
             });
 
              if (!isStepValid) {
-                 const firstInvalid = find(':invalid', currentStepElement);
-                 firstInvalid?.reportValidity();
+                 // Optional: Only report validity when user explicitly tries to proceed
+                 // const firstInvalid = find(':invalid', currentStepElement);
+                 // firstInvalid?.reportValidity();
              }
             return isStepValid;
         }

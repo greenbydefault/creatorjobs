@@ -19,10 +19,13 @@
 
 
     // CSS classes
-    const CLASS_ACTIVE_STEP = 'active'; // Optional für Step-Styling
+    const CLASS_ACTIVE_STEP = 'active';
     const CLASS_ACTIVE_INDICATOR = 'active';
-    const CLASS_HIDDEN = 'hidden'; // Für Buttons
-    const CLASS_INPUT_ERROR = 'input-error'; // Für Validierungsfehler
+    const CLASS_HIDDEN = 'hidden';
+    const CLASS_INPUT_ERROR = 'input-error';
+
+    // Transition duration (should match CSS)
+    const TRANSITION_DURATION = 400; // ms
 
 
     /**
@@ -37,6 +40,50 @@
     const showElement = (element) => removeClass(element, CLASS_HIDDEN);
     const hideElement = (element) => addClass(element, CLASS_HIDDEN);
 
+    // Helper to handle fade out and set display none after transition
+    const fadeOutElement = (element) => {
+        if (!element || (element.style.opacity === '0' && element.style.display === 'none')) return; // Already hidden or invalid
+
+        element.style.opacity = '0'; // Start fade-out
+
+        const onFadeOutComplete = (event) => {
+            // Ensure the event is for the opacity property and the element is still meant to be hidden
+            if (event.target === element && event.propertyName === 'opacity' && element.style.opacity === '0') {
+                element.style.display = 'none'; // Hide after fade
+                element.removeEventListener('transitionend', onFadeOutComplete); // Clean up listener
+            }
+        };
+
+        // Remove previous listener before adding a new one
+        element.removeEventListener('transitionend', onFadeOutComplete);
+        // Add listener for transition end
+        element.addEventListener('transitionend', onFadeOutComplete);
+
+        // Fallback timeout in case transitionend doesn't fire reliably
+        setTimeout(() => {
+            // If still opacity 0 after timeout, hide it and remove listener
+            if (element.style.opacity === '0') {
+                element.style.display = 'none';
+                element.removeEventListener('transitionend', onFadeOutComplete);
+            }
+        }, TRANSITION_DURATION + 50); // Add a small buffer
+    };
+
+    // Helper to handle fade in
+    const fadeInElement = (element) => {
+         if (!element || (element.style.opacity === '1' && element.style.display === 'block')) return; // Already visible or invalid
+
+         // Make element block first, then change opacity for transition
+         element.style.display = 'block';
+         // Use rAF and setTimeout to ensure 'display' is rendered before opacity change
+         requestAnimationFrame(() => {
+             setTimeout(() => {
+                 element.style.opacity = '1'; // Trigger fade-in
+             }, 10); // Small delay helps ensure display:block is rendered
+         });
+    };
+
+
     /**
      * ------------------------------------------------------------------------
      * Core Logic: MultiStepForm Class
@@ -45,26 +92,17 @@
     class MultiStepForm {
         constructor(formElement) {
             this.form = formElement;
-            const formId = this.form.id || 'form without id'; // Get form ID for logging
-            // console.log(`[DEBUG MultiStepForm ${formId}] Initializing...`); // Debugging entfernt
+            const formId = this.form.id || 'form without id';
 
-            // Find form elements
+            // Find elements
             this.steps = Array.from(findAll(`[${DATA_ATTR_STEP}]`, this.form));
             this.indicatorContainer = find(`[${DATA_ATTR_INDICATOR_CONTAINER}]`, this.form);
             this.indicators = this.indicatorContainer ? Array.from(findAll(`[${DATA_ATTR_INDICATOR}]`, this.indicatorContainer)) : [];
             this.nextButton = find(`[${DATA_ATTR_NEXT_BTN}]`, this.form);
             this.prevButton = find(`[${DATA_ATTR_PREV_BTN}]`, this.form);
             this.submitButton = find(`[${DATA_ATTR_SUBMIT_BTN}]`, this.form);
-
-            // console.log(`[DEBUG MultiStepForm ${formId}] Found Step Elements (${this.steps.length}):`, this.steps); // Debugging entfernt
-
-            // Find guide elements (globally)
             this.guideContainer = find(`[${DATA_ATTR_GUIDE_CONTAINER}]`);
             this.guides = this.guideContainer ? Array.from(findAll(`[${DATA_ATTR_GUIDE}]`, this.guideContainer)) : [];
-
-            // console.log(`[DEBUG MultiStepForm ${formId}] Found Guide Container:`, this.guideContainer); // Debugging entfernt
-            // console.log(`[DEBUG MultiStepForm ${formId}] Found Guide Elements (${this.guides.length}):`, this.guides); // Debugging entfernt
-
 
             this.currentStepIndex = 0;
             this.totalSteps = this.steps.length;
@@ -74,30 +112,29 @@
                 return;
             }
 
-            // Warnings for inconsistent counts
+            // Warnings
             if (this.guides.length > 0 && this.guides.length !== this.totalSteps) {
-                 console.warn(`MultiStepForm (${formId}): Number of steps (${this.totalSteps}) does not match number of guides (${this.guides.length}). Ensure each step has a corresponding guide element with [${DATA_ATTR_GUIDE}].`);
+                 console.warn(`MultiStepForm (${formId}): Mismatch steps (${this.totalSteps}) and guides (${this.guides.length}).`);
             }
             if (this.indicators.length > 0 && this.indicators.length !== this.totalSteps) {
-                console.warn(`MultiStepForm (${formId}): Number of steps (${this.totalSteps}) does not match number of indicators (${this.indicators.length}).`);
+                console.warn(`MultiStepForm (${formId}): Mismatch steps (${this.totalSteps}) and indicators (${this.indicators.length}).`);
             }
 
-             // Initial state: Set styles directly for first step/guide, hide others
+             // Initial state
              this.steps.forEach((step, index) => {
                 if (index === 0) {
                     step.style.display = 'block';
-                    step.style.opacity = '1'; // Start fully visible
+                    step.style.opacity = '1';
                     addClass(step, CLASS_ACTIVE_STEP);
                 } else {
                     step.style.display = 'none';
-                    step.style.opacity = '0'; // Start hidden and transparent
+                    step.style.opacity = '0';
                     removeClass(step, CLASS_ACTIVE_STEP);
                 }
             });
             this.guides.forEach((guide, index) => {
                  const guideStepNumber = parseInt(guide.getAttribute(DATA_ATTR_GUIDE), 10);
-                 const targetStepNumber = 1; // First step
-
+                 const targetStepNumber = 1;
                  if (!isNaN(guideStepNumber) && guideStepNumber === targetStepNumber || isNaN(guideStepNumber) && index === 0) {
                      guide.style.display = 'block';
                      guide.style.opacity = '1';
@@ -110,7 +147,7 @@
 
         init() {
             this.addEventListeners();
-            this.goToStep(0); // Ensure initial button states are correct
+            this.goToStep(0);
         }
 
         addEventListeners() {
@@ -146,109 +183,51 @@
             }
         }
 
-        // *** Updated goToStep function for Step Fade Effect ***
+        // *** Updated goToStep function for smoother Fade ***
         goToStep(stepIndex) {
-            if (stepIndex < 0 || stepIndex >= this.totalSteps) {
-                console.error('MultiStepForm: Invalid step index:', stepIndex);
-                return;
+            if (stepIndex < 0 || stepIndex >= this.totalSteps || stepIndex === this.currentStepIndex) {
+                // console.error('MultiStepForm: Invalid or same step index:', stepIndex); // Optional: Log if needed
+                return; // Do nothing if invalid or same step
             }
 
             const previousStepIndex = this.currentStepIndex;
             this.currentStepIndex = stepIndex;
-            const targetStepNumber = this.currentStepIndex + 1; // 1-based index for guides/indicators
+            const targetStepNumber = this.currentStepIndex + 1; // 1-based index
 
-            // Update steps with fade effect
-            this.steps.forEach((step, index) => {
-                const isTargetStep = index === this.currentStepIndex;
+            // Get outgoing and incoming elements
+            const outgoingStep = this.steps[previousStepIndex];
+            const incomingStep = this.steps[this.currentStepIndex];
+            const outgoingGuide = this.guides.find(g => parseInt(g.getAttribute(DATA_ATTR_GUIDE), 10) === (previousStepIndex + 1));
+            const incomingGuide = this.guides.find(g => parseInt(g.getAttribute(DATA_ATTR_GUIDE), 10) === targetStepNumber);
 
-                if (isTargetStep) {
-                    // Target Step: Fade In
-                    if (step.style.opacity === '1' && step.style.display === 'block') return; // Already visible
+            // 1. Start fading out outgoing elements
+            if (outgoingStep) {
+                fadeOutElement(outgoingStep);
+                removeClass(outgoingStep, CLASS_ACTIVE_STEP); // Remove active class immediately
+            }
+            if (outgoingGuide) {
+                fadeOutElement(outgoingGuide);
+            }
 
-                    step.style.display = 'block'; // Make it block first
-                    addClass(step, CLASS_ACTIVE_STEP); // Add active class (optional)
-                    requestAnimationFrame(() => {
-                        setTimeout(() => {
-                            step.style.opacity = '1'; // Trigger fade-in
-                        }, 10);
-                    });
-                } else {
-                    // Non-Target Step: Fade Out
-                    if (step.style.opacity === '0' && step.style.display === 'none') return; // Already hidden
-
-                    step.style.opacity = '0'; // Trigger fade-out
-                    removeClass(step, CLASS_ACTIVE_STEP); // Remove active class
-
-                    const onFadeOutComplete = (event) => {
-                        if (event.propertyName === 'opacity' && step.style.opacity === '0') {
-                            step.style.display = 'none'; // Hide after fade
-                            step.removeEventListener('transitionend', onFadeOutComplete);
-                        }
-                    };
-                    step.removeEventListener('transitionend', onFadeOutComplete); // Remove old listener first
-                    step.addEventListener('transitionend', onFadeOutComplete);
-
-                    // Fallback timeout
-                    const transitionDuration = 400; // Match CSS
-                    setTimeout(() => {
-                        if (step.style.opacity === '0') {
-                            step.style.display = 'none';
-                            step.removeEventListener('transitionend', onFadeOutComplete);
-                        }
-                    }, transitionDuration + 50);
+            // 2. After a short delay (allow fade-out to start), fade in incoming elements
+            //    This delay helps prevent the visual overlap. Adjust delay if needed.
+            setTimeout(() => {
+                if (incomingStep) {
+                    fadeInElement(incomingStep);
+                    addClass(incomingStep, CLASS_ACTIVE_STEP); // Add active class when fade-in starts
                 }
-            });
+                if (incomingGuide) {
+                    fadeInElement(incomingGuide);
+                }
+            }, 50); // Small delay in ms (e.g., 50ms)
 
-            // Update guides (fade effect using style properties)
-            this.updateGuides(targetStepNumber);
-
-            // Update indicators
+            // Update indicators and button states immediately
             this.updateIndicators();
-
-            // Update button states
             this.updateButtonStates();
         }
 
-        // Method to handle guide fading via style properties
-        updateGuides(targetStepNumber) {
-             this.guides.forEach((guide) => {
-                const guideStep = parseInt(guide.getAttribute(DATA_ATTR_GUIDE), 10);
-                const isTargetGuide = !isNaN(guideStep) && guideStep === targetStepNumber;
-
-                // Target Guide: Fade In
-                if (isTargetGuide) {
-                    if (guide.style.opacity === '1' && guide.style.display === 'block') return;
-                    guide.style.display = 'block';
-                    requestAnimationFrame(() => {
-                        setTimeout(() => {
-                            guide.style.opacity = '1';
-                        }, 10);
-                    });
-                }
-                // Non-Target Guide: Fade Out
-                else {
-                    if (guide.style.opacity === '0' && guide.style.display === 'none') return;
-                    guide.style.opacity = '0';
-
-                     const onFadeOutComplete = (event) => {
-                        if (event.propertyName === 'opacity' && guide.style.opacity === '0') {
-                             guide.style.display = 'none';
-                             guide.removeEventListener('transitionend', onFadeOutComplete);
-                        }
-                     };
-                    guide.removeEventListener('transitionend', onFadeOutComplete);
-                    guide.addEventListener('transitionend', onFadeOutComplete);
-
-                     const transitionDuration = 400;
-                     setTimeout(() => {
-                         if (guide.style.opacity === '0') {
-                             guide.style.display = 'none';
-                             guide.removeEventListener('transitionend', onFadeOutComplete);
-                         }
-                     }, transitionDuration + 50);
-                }
-            });
-        }
+        // updateGuides is no longer needed as logic is in goToStep
+        // updateGuides(targetStepNumber) { ... }
 
 
         updateIndicators() {
@@ -311,7 +290,6 @@
         multiStepForms.forEach(formElement => {
             try {
                 new MultiStepForm(formElement).init();
-                // console.log(`MultiStepForm initialized for: #${formElement.id || 'form without id'}`); // Debugging entfernt
             } catch (error) {
                  console.error(`Failed to initialize MultiStepForm for: #${formElement.id || 'form without id'}`, error);
             }

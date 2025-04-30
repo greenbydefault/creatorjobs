@@ -15,6 +15,9 @@
     const DATA_ATTR_SUBMIT_BTN = 'data-multistep-submit';
     const DATA_ATTR_GUIDE_CONTAINER = 'data-step-guide-container';
     const DATA_ATTR_GUIDE = 'data-step-guide';
+    // *** NEU: Data attribute for preview fields ***
+    const DATA_ATTR_PREVIEW_FIELD = 'data-preview-field';
+
 
     // CSS classes
     const CLASS_ACTIVE_STEP = 'active';
@@ -95,7 +98,6 @@
             this.submitButton = find(`[${DATA_ATTR_SUBMIT_BTN}]`, this.form);
             this.guideContainer = find(`[${DATA_ATTR_GUIDE_CONTAINER}]`);
             this.guides = this.guideContainer ? Array.from(findAll(`[${DATA_ATTR_GUIDE}]`, this.guideContainer)) : [];
-            // Find the preview wrapper within the form (assuming it's unique per form)
             this.previewWrapper = find(`.${CLASS_PREVIEW_WRAPPER}`, this.form);
 
 
@@ -244,7 +246,7 @@
             this.updateIndicators();
             this.updateButtonStates();
 
-            // *** NEW: Update preview if navigating TO the last step ***
+            // Update preview if navigating TO the last step
             if (this.currentStepIndex === this.totalSteps - 1) {
                 this.updatePreview();
             }
@@ -335,44 +337,50 @@
             return isStepValid;
         }
 
-        // *** NEW: Function to update the preview area ***
+        // *** UPDATED: Function to update the preview area using data attributes ***
         updatePreview() {
             if (!this.previewWrapper) {
                 console.warn('Preview wrapper not found. Cannot update preview.');
                 return;
             }
 
+            // Helper function to get value from field using data-preview-field
+            const getFieldValue = (fieldName) => {
+                const field = find(`[${DATA_ATTR_PREVIEW_FIELD}="${fieldName}"]`, this.form);
+                if (!field) return 'N/A'; // Field not found
+
+                // Handle different field types
+                if (field.type === 'checkbox' || field.type === 'radio') {
+                    // For multiple checkboxes/radios with the same name, you might need different logic
+                    return field.checked ? field.value || 'Ja' : 'Nein'; // Or return the value if set
+                } else if (field.tagName === 'SELECT') {
+                    return field.options[field.selectedIndex]?.text || field.value || 'N/A'; // Prefer selected text
+                } else {
+                    return field.value || ''; // Return value for text, number, textarea etc.
+                }
+            };
+
             let previewHTML = '';
 
-            // --- Example Data Gathering and HTML Generation ---
-            // !!! IMPORTANT: Adjust selectors and labels based on your actual form fields !!!
-
-            // Example: Get value from an input with id="project-name"
-            const projectNameInput = find('#project-name', this.form); // Use the correct ID
-            const projectName = projectNameInput ? projectNameInput.value : 'N/A';
+            // --- Data Gathering using getFieldValue ---
+            const projectName = getFieldValue('projectName');
             previewHTML += `
                 <div class="preview-item">
                     <div class="preview-label">Wie heißt dein Projekt?</div>
                     <div class="preview-value">${projectName || '<i>Keine Angabe</i>'}</div>
                 </div>`;
 
-            // Example: Get value from an input with id="budget-amount"
-            const budgetInput = find('#budget-amount', this.form); // Use the correct ID
-            const budget = budgetInput ? budgetInput.value : 'N/A';
+            const budget = getFieldValue('budget');
              previewHTML += `
                 <div class="preview-item">
                     <div class="preview-label">Budget</div>
                     <div class="preview-value">${budget ? budget + ' €' : '<i>Keine Angabe</i>'}</div>
                 </div>`;
 
-             // Example: Get value from date inputs (assuming start and end dates)
-             const startDateInput = find('#start-date', this.form); // Use the correct ID
-             const endDateInput = find('#end-date', this.form); // Use the correct ID
-             const startDate = startDateInput ? startDateInput.value : '';
-             const endDate = endDateInput ? endDateInput.value : '';
+             const startDate = getFieldValue('startDate');
+             const endDate = getFieldValue('endDate');
              let productionPeriod = '<i>Keine Angabe</i>';
              if (startDate && endDate) {
-                 // Optional: Format dates if needed
                  productionPeriod = `${startDate} - ${endDate}`;
              } else if (startDate) {
                  productionPeriod = `Ab ${startDate}`;
@@ -385,14 +393,9 @@
                     <div class="preview-value">${productionPeriod}</div>
                 </div>`;
 
-             // Example: Get value from multiple related fields (Creator Count, Target Group, Follower Range)
-             const creatorCountInput = find('#creator-count', this.form); // Use the correct ID
-             const targetGroupSelect = find('#target-group', this.form); // Use the correct ID (assuming select)
-             const followerRangeInput = find('#follower-range', this.form); // Use the correct ID
-             const creatorCount = creatorCountInput ? creatorCountInput.value : 'N/A';
-             const targetGroup = targetGroupSelect ? targetGroupSelect.options[targetGroupSelect.selectedIndex]?.text : 'N/A'; // Get selected text
-             const followerRange = followerRangeInput ? followerRangeInput.value : 'N/A';
-
+             const creatorCount = getFieldValue('creatorCount');
+             const targetGroup = getFieldValue('targetGroup');
+             const followerRange = getFieldValue('followerRange');
              previewHTML += `
                 <div class="preview-grid"> <div>
                          <div class="preview-label">Anzahl der Creator:</div>
@@ -408,31 +411,22 @@
                      </div>
                 </div>`;
 
-
-            // Example: Get value from a textarea with id="creator-profile"
-            const profileTextarea = find('#creator-profile', this.form); // Use the correct ID
-            const profile = profileTextarea ? profileTextarea.value.replace(/\n/g, '<br>') : '<i>Keine Angabe</i>'; // Replace newlines with <br>
+            const profile = getFieldValue('creatorProfile').replace(/\n/g, '<br>');
              previewHTML += `
                 <div class="preview-item">
                     <div class="preview-label">Creator-Profil (Steckbrief)</div>
-                    <div class="preview-value">${profile}</div>
+                    <div class="preview-value">${profile || '<i>Keine Angabe</i>'}</div>
                 </div>`;
 
-             // Example: Get value from a textarea with id="task-description"
-             const taskTextarea = find('#task-description', this.form); // Use the correct ID
-             const taskDesc = taskTextarea ? taskTextarea.value.replace(/\n/g, '<br>') : '<i>Keine Angabe</i>';
+             const taskDesc = getFieldValue('taskDescription').replace(/\n/g, '<br>');
              previewHTML += `
                 <div class="preview-item">
                     <div class="preview-label">Aufgabenbeschreibung</div>
-                    <div class="preview-value">${taskDesc}</div>
+                    <div class="preview-value">${taskDesc || '<i>Keine Angabe</i>'}</div>
                 </div>`;
 
-             // Example: Optional fields (Script, Video Count)
-             const scriptCreatorSelect = find('#script-creator', this.form); // Use the correct ID
-             const videoCountInput = find('#video-count', this.form); // Use the correct ID
-             const scriptCreator = scriptCreatorSelect ? scriptCreatorSelect.options[scriptCreatorSelect.selectedIndex]?.text : 'N/A';
-             const videoCount = videoCountInput ? videoCountInput.value : 'N/A';
-
+             const scriptCreator = getFieldValue('scriptCreator');
+             const videoCount = getFieldValue('videoCount');
              previewHTML += `
                  <div class="preview-item optional-section">
                      <div class="preview-label">Optionale Angaben</div>
@@ -448,10 +442,8 @@
                      </div>
                  </div>`;
 
+            // --- End Data Gathering ---
 
-            // --- End Example Data Gathering ---
-
-            // Inject the generated HTML into the preview wrapper
             this.previewWrapper.innerHTML = previewHTML;
         }
     }

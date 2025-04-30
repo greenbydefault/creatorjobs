@@ -14,7 +14,8 @@
     const DATA_ATTR_PREV_BTN = 'data-multistep-prev';
     const DATA_ATTR_SUBMIT_BTN = 'data-multistep-submit';
 
-    const CLASS_ACTIVE_STEP = 'active'; // CSS-Klasse für den aktiven Schritt
+    // CSS classes remain useful for indicators and potentially other styling
+    const CLASS_ACTIVE_STEP = 'active'; // CSS-Klasse für den aktiven Schritt (optional für Styling)
     const CLASS_ACTIVE_INDICATOR = 'active'; // CSS-Klasse für den aktiven Indikator
     const CLASS_HIDDEN = 'hidden'; // CSS-Klasse zum Ausblenden von Elementen (z.B. Buttons)
 
@@ -57,30 +58,33 @@
             if (this.indicators.length > 0 && this.indicators.length !== this.totalSteps) {
                 console.warn(`MultiStepForm (${this.form.id || 'form'}): Number of steps (${this.totalSteps}) does not match number of indicators (${this.indicators.length}).`);
             }
+
+             // Ensure initial state hides all steps except the first one (if JS is enabled)
+             this.steps.forEach((step, index) => {
+                step.style.display = index === 0 ? 'block' : 'none';
+                if (index === 0) {
+                    addClass(step, CLASS_ACTIVE_STEP); // Add active class to the first step initially
+                } else {
+                    removeClass(step, CLASS_ACTIVE_STEP);
+                }
+            });
         }
 
         // Initialisiert das Formular
         init() {
             this.addEventListeners();
-            this.goToStep(0); // Gehe zum ersten Schritt
+            this.goToStep(0); // Gehe zum ersten Schritt (stellt sicher, dass Indikatoren/Buttons korrekt sind)
         }
 
         // Fügt Event Listener zu den Buttons hinzu
         addEventListeners() {
             this.nextButton?.addEventListener('click', () => this.goToNextStep());
             this.prevButton?.addEventListener('click', () => this.goToPreviousStep());
-            // Optional: Submit-Handler (Standard-Formular-Submit wird verwendet, wenn type="submit")
-            // this.submitButton?.addEventListener('click', (e) => this.handleSubmit(e));
         }
 
         // Geht zum nächsten Schritt
         goToNextStep() {
             if (this.currentStepIndex < this.totalSteps - 1) {
-                // Optional: Validierung des aktuellen Schritts vor dem Weitergehen
-                // if (!this.validateStep(this.currentStepIndex)) {
-                //     console.log("Validation failed for step", this.currentStepIndex + 1);
-                //     return; // Bleibe beim aktuellen Schritt, wenn Validierung fehlschlägt
-                // }
                 this.goToStep(this.currentStepIndex + 1);
             }
         }
@@ -101,12 +105,15 @@
 
             this.currentStepIndex = stepIndex;
 
-            // Alle Schritte ausblenden und aktiven Schritt anzeigen
+            // Alle Schritte durchlaufen: Aktiven anzeigen, andere ausblenden (direkt über style.display)
+            // Die active-Klasse wird trotzdem gesetzt/entfernt für Indikatoren/Styling.
             this.steps.forEach((step, index) => {
                 if (index === this.currentStepIndex) {
-                    addClass(step, CLASS_ACTIVE_STEP);
+                    step.style.display = 'block'; // Aktiven Schritt direkt anzeigen
+                    addClass(step, CLASS_ACTIVE_STEP); // Klasse für optionales Styling/Indikatoren hinzufügen
                 } else {
-                    removeClass(step, CLASS_ACTIVE_STEP);
+                    step.style.display = 'none'; // Inaktive Schritte direkt ausblenden
+                    removeClass(step, CLASS_ACTIVE_STEP); // Klasse entfernen
                 }
             });
 
@@ -120,10 +127,8 @@
         // Aktualisiert die visuellen Zustände der Indikatoren
         updateIndicators() {
             this.indicators.forEach((indicator, index) => {
-                // Prüfen, ob der Indikator dem aktuellen Schritt entspricht
-                // (Verwendet data-step-indicator Wert, falls vorhanden und numerisch, sonst Index)
                 const indicatorStep = parseInt(indicator.getAttribute(DATA_ATTR_INDICATOR), 10);
-                const targetStepNumber = this.currentStepIndex + 1; // Schrittnummer ist Index + 1
+                const targetStepNumber = this.currentStepIndex + 1;
 
                 if (!isNaN(indicatorStep) && indicatorStep === targetStepNumber || isNaN(indicatorStep) && index === this.currentStepIndex) {
                      addClass(indicator, CLASS_ACTIVE_INDICATOR);
@@ -135,61 +140,29 @@
 
         // Aktualisiert die Sichtbarkeit und den Zustand der Navigationsbuttons
         updateButtonStates() {
-            // Zurück-Button: Ausblenden auf dem ersten Schritt
             if (this.prevButton) {
                 this.currentStepIndex === 0 ? hideElement(this.prevButton) : showElement(this.prevButton);
             }
-
-            // Weiter-Button: Ausblenden auf dem letzten Schritt
             if (this.nextButton) {
                 this.currentStepIndex === this.totalSteps - 1 ? hideElement(this.nextButton) : showElement(this.nextButton);
             }
-
-            // Senden-Button: Nur auf dem letzten Schritt anzeigen
             if (this.submitButton) {
                  this.currentStepIndex === this.totalSteps - 1 ? showElement(this.submitButton) : hideElement(this.submitButton);
             }
         }
-
-        // Optional: Validierungslogik für einen Schritt
-        // validateStep(stepIndex) {
-        //     const stepElement = this.steps[stepIndex];
-        //     const inputs = findAll('input[required], select[required], textarea[required]', stepElement);
-        //     let isValid = true;
-        //     inputs.forEach(input => {
-        //         if (!input.checkValidity()) {
-        //             isValid = false;
-        //             // Optional: Fehlermeldung anzeigen oder Feld hervorheben
-        //             input.reportValidity(); // Zeigt die Standard-Browser-Validierungsmeldung
-        //         }
-        //     });
-        //     return isValid;
-        // }
-
-        // Optional: Eigene Logik beim Absenden
-        // handleSubmit(event) {
-        //     console.log('Form submitted!', this.form.id);
-        //     // Verhindern des Standard-Submits, wenn AJAX oder ähnliches verwendet wird
-        //     // event.preventDefault();
-        // }
     }
 
     /**
      * ------------------------------------------------------------------------
-     * Initialization (Hauptteil des IIFE)
+     * Initialization
      * ------------------------------------------------------------------------
      */
-    // Warten, bis das DOM vollständig geladen ist
     document.addEventListener('DOMContentLoaded', () => {
-        // Alle Formulare finden, die das Haupt-Attribut haben
         const multiStepForms = findAll(`[${DATA_ATTR_FORM}]`);
-
         if (multiStepForms.length === 0) {
             console.info('MultiStepForm: No forms with attribute ' + DATA_ATTR_FORM + ' found.');
             return;
         }
-
-        // Für jedes gefundene Formular eine Instanz der Klasse erstellen und initialisieren
         multiStepForms.forEach(formElement => {
             try {
                 new MultiStepForm(formElement).init();

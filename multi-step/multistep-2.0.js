@@ -22,6 +22,7 @@
     const CLASS_HIDE = 'hide'; // Use existing .hide class
     const CLASS_INPUT_ERROR = 'input-error';
     const CLASS_INDICATOR_REACHABLE = 'reachable'; // For clickable indicators
+    const CLASS_PREVIEW_WRAPPER = 'form-campaign-preview-wrapper'; // Class for the preview container
 
     // Transition duration (should match CSS)
     const TRANSITION_DURATION = 400; // ms
@@ -35,12 +36,9 @@
     const findAll = (selector, element = document) => element.querySelectorAll(selector);
     const addClass = (element, className) => element?.classList.add(className);
     const removeClass = (element, className) => element?.classList.remove(className);
-    // Helper to show/hide elements using the .hide class
     const showElement = (element) => removeClass(element, CLASS_HIDE);
     const hideElement = (element) => addClass(element, CLASS_HIDE);
 
-
-    // Helper to handle fade out and set display none after transition
     const fadeOutElement = (element, callback) => {
         if (!element || element.style.opacity === '0' || element.style.display === 'none') {
              if (typeof callback === 'function') callback();
@@ -68,10 +66,9 @@
         }, TRANSITION_DURATION + 50);
     };
 
-    // Helper to handle fade in
     const fadeInElement = (element) => {
          if (!element || (element.style.opacity === '1' && element.style.display === 'block')) return;
-         element.style.display = 'block'; // Or specific display type if needed
+         element.style.display = 'block';
          requestAnimationFrame(() => {
              setTimeout(() => {
                  element.style.opacity = '1';
@@ -98,6 +95,9 @@
             this.submitButton = find(`[${DATA_ATTR_SUBMIT_BTN}]`, this.form);
             this.guideContainer = find(`[${DATA_ATTR_GUIDE_CONTAINER}]`);
             this.guides = this.guideContainer ? Array.from(findAll(`[${DATA_ATTR_GUIDE}]`, this.guideContainer)) : [];
+            // Find the preview wrapper within the form (assuming it's unique per form)
+            this.previewWrapper = find(`.${CLASS_PREVIEW_WRAPPER}`, this.form);
+
 
             this.currentStepIndex = 0;
             this.totalSteps = this.steps.length;
@@ -110,12 +110,9 @@
             }
             // Warnings...
 
-             // *** NEW: Explicitly hide prev and submit buttons initially ***
+             // Explicitly hide prev and submit buttons initially
              if (this.prevButton) hideElement(this.prevButton);
              if (this.submitButton) hideElement(this.submitButton);
-             // Optional: Ensure next button is initially visible if it exists
-             // if (this.nextButton) showElement(this.nextButton); // Usually not needed if default state is visible
-
 
              // Initial state for steps and guides
              this.steps.forEach((step, index) => {
@@ -144,7 +141,7 @@
 
         init() {
             this.addEventListeners();
-            this.goToStep(0, true); // Initial load - will call updateButtonStates
+            this.goToStep(0, true); // Initial load
         }
 
         addEventListeners() {
@@ -160,7 +157,7 @@
             this.nextButton?.addEventListener('click', handleNext);
             this.prevButton?.addEventListener('click', handlePrev);
 
-            // Indicator listeners... (kept as before)
+            // Indicator listeners...
             this.indicators.forEach(indicator => {
                 indicator.addEventListener('click', (event) => {
                     event.preventDefault();
@@ -190,7 +187,7 @@
                 });
             });
 
-            // Keydown listener... (kept as before)
+            // Keydown listener...
             this.form.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
                     const isSubmitVisible = this.submitButton && !this.submitButton.classList.contains(CLASS_HIDE);
@@ -208,7 +205,7 @@
              if (!this.validateStep(this.currentStepIndex)) {
                  console.log("Validation failed for step", this.currentStepIndex + 1);
                  const firstInvalid = find(':invalid', this.steps[this.currentStepIndex]);
-                 firstInvalid?.reportValidity(); // Show validation message on explicit next click failure
+                 firstInvalid?.reportValidity();
                  firstInvalid?.focus();
                  return;
              }
@@ -247,7 +244,13 @@
             this.updateIndicators();
             this.updateButtonStates();
 
+            // *** NEW: Update preview if navigating TO the last step ***
+            if (this.currentStepIndex === this.totalSteps - 1) {
+                this.updatePreview();
+            }
+
             if (isInitialLoad) {
+                 // Set initial styles...
                  this.steps.forEach((s, i) => {
                     s.style.display = i === this.currentStepIndex ? 'block' : 'none';
                     s.style.opacity = i === this.currentStepIndex ? '1' : '0';
@@ -304,7 +307,6 @@
             });
         }
 
-        // Uses helper functions with CLASS_HIDE now
         updateButtonStates() {
             if (this.prevButton) {
                 this.currentStepIndex === 0 ? hideElement(this.prevButton) : showElement(this.prevButton);
@@ -330,14 +332,127 @@
                     addClass(input, CLASS_INPUT_ERROR);
                 }
             });
-
-             // Only show validation message if the step is invalid AND the user tried to proceed
-             // This check is now primarily done in goToNextStep and the indicator click handler
-             // if (!isStepValid) {
-                 // const firstInvalid = find(':invalid', currentStepElement);
-                 // firstInvalid?.reportValidity(); // Consider calling reportValidity only on explicit user action failure
-             // }
             return isStepValid;
+        }
+
+        // *** NEW: Function to update the preview area ***
+        updatePreview() {
+            if (!this.previewWrapper) {
+                console.warn('Preview wrapper not found. Cannot update preview.');
+                return;
+            }
+
+            let previewHTML = '';
+
+            // --- Example Data Gathering and HTML Generation ---
+            // !!! IMPORTANT: Adjust selectors and labels based on your actual form fields !!!
+
+            // Example: Get value from an input with id="project-name"
+            const projectNameInput = find('#project-name', this.form); // Use the correct ID
+            const projectName = projectNameInput ? projectNameInput.value : 'N/A';
+            previewHTML += `
+                <div class="preview-item">
+                    <div class="preview-label">Wie heißt dein Projekt?</div>
+                    <div class="preview-value">${projectName || '<i>Keine Angabe</i>'}</div>
+                </div>`;
+
+            // Example: Get value from an input with id="budget-amount"
+            const budgetInput = find('#budget-amount', this.form); // Use the correct ID
+            const budget = budgetInput ? budgetInput.value : 'N/A';
+             previewHTML += `
+                <div class="preview-item">
+                    <div class="preview-label">Budget</div>
+                    <div class="preview-value">${budget ? budget + ' €' : '<i>Keine Angabe</i>'}</div>
+                </div>`;
+
+             // Example: Get value from date inputs (assuming start and end dates)
+             const startDateInput = find('#start-date', this.form); // Use the correct ID
+             const endDateInput = find('#end-date', this.form); // Use the correct ID
+             const startDate = startDateInput ? startDateInput.value : '';
+             const endDate = endDateInput ? endDateInput.value : '';
+             let productionPeriod = '<i>Keine Angabe</i>';
+             if (startDate && endDate) {
+                 // Optional: Format dates if needed
+                 productionPeriod = `${startDate} - ${endDate}`;
+             } else if (startDate) {
+                 productionPeriod = `Ab ${startDate}`;
+             } else if (endDate) {
+                 productionPeriod = `Bis ${endDate}`;
+             }
+             previewHTML += `
+                <div class="preview-item">
+                    <div class="preview-label">Produktionszeitraum</div>
+                    <div class="preview-value">${productionPeriod}</div>
+                </div>`;
+
+             // Example: Get value from multiple related fields (Creator Count, Target Group, Follower Range)
+             const creatorCountInput = find('#creator-count', this.form); // Use the correct ID
+             const targetGroupSelect = find('#target-group', this.form); // Use the correct ID (assuming select)
+             const followerRangeInput = find('#follower-range', this.form); // Use the correct ID
+             const creatorCount = creatorCountInput ? creatorCountInput.value : 'N/A';
+             const targetGroup = targetGroupSelect ? targetGroupSelect.options[targetGroupSelect.selectedIndex]?.text : 'N/A'; // Get selected text
+             const followerRange = followerRangeInput ? followerRangeInput.value : 'N/A';
+
+             previewHTML += `
+                <div class="preview-grid"> <div>
+                         <div class="preview-label">Anzahl der Creator:</div>
+                         <div class="preview-value">${creatorCount || '<i>-</i>'}</div>
+                     </div>
+                     <div>
+                         <div class="preview-label">Zielgruppe:</div>
+                         <div class="preview-value">${targetGroup || '<i>-</i>'}</div>
+                     </div>
+                     <div>
+                         <div class="preview-label">Followerbereich:</div>
+                         <div class="preview-value">${followerRange || '<i>-</i>'}</div>
+                     </div>
+                </div>`;
+
+
+            // Example: Get value from a textarea with id="creator-profile"
+            const profileTextarea = find('#creator-profile', this.form); // Use the correct ID
+            const profile = profileTextarea ? profileTextarea.value.replace(/\n/g, '<br>') : '<i>Keine Angabe</i>'; // Replace newlines with <br>
+             previewHTML += `
+                <div class="preview-item">
+                    <div class="preview-label">Creator-Profil (Steckbrief)</div>
+                    <div class="preview-value">${profile}</div>
+                </div>`;
+
+             // Example: Get value from a textarea with id="task-description"
+             const taskTextarea = find('#task-description', this.form); // Use the correct ID
+             const taskDesc = taskTextarea ? taskTextarea.value.replace(/\n/g, '<br>') : '<i>Keine Angabe</i>';
+             previewHTML += `
+                <div class="preview-item">
+                    <div class="preview-label">Aufgabenbeschreibung</div>
+                    <div class="preview-value">${taskDesc}</div>
+                </div>`;
+
+             // Example: Optional fields (Script, Video Count)
+             const scriptCreatorSelect = find('#script-creator', this.form); // Use the correct ID
+             const videoCountInput = find('#video-count', this.form); // Use the correct ID
+             const scriptCreator = scriptCreatorSelect ? scriptCreatorSelect.options[scriptCreatorSelect.selectedIndex]?.text : 'N/A';
+             const videoCount = videoCountInput ? videoCountInput.value : 'N/A';
+
+             previewHTML += `
+                 <div class="preview-item optional-section">
+                     <div class="preview-label">Optionale Angaben</div>
+                     <div class="preview-grid">
+                          <div>
+                              <div class="preview-label">Wer erstellt das Script:</div>
+                              <div class="preview-value">${scriptCreator || '<i>-</i>'}</div>
+                          </div>
+                          <div>
+                              <div class="preview-label">Anzahl der Videos:</div>
+                              <div class="preview-value">${videoCount || '<i>-</i>'}</div>
+                          </div>
+                     </div>
+                 </div>`;
+
+
+            // --- End Example Data Gathering ---
+
+            // Inject the generated HTML into the preview wrapper
+            this.previewWrapper.innerHTML = previewHTML;
         }
     }
 

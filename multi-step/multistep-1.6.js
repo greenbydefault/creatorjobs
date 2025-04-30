@@ -40,17 +40,31 @@
     const showElement = (element) => removeClass(element, CLASS_HIDDEN);
     const hideElement = (element) => addClass(element, CLASS_HIDDEN);
 
+    // *** Updated fadeOutElement to accept a callback ***
     // Helper to handle fade out and set display none after transition
-    const fadeOutElement = (element) => {
-        if (!element || (element.style.opacity === '0' && element.style.display === 'none')) return; // Already hidden or invalid
+    const fadeOutElement = (element, callback) => {
+        // Check if element is valid and actually visible
+        if (!element || element.style.opacity === '0' || element.style.display === 'none') {
+             // If already hidden or invalid, execute callback immediately if provided
+             if (typeof callback === 'function') {
+                 callback();
+             }
+            return;
+        }
 
         element.style.opacity = '0'; // Start fade-out
+        let transitionEnded = false; // Flag to prevent multiple callback calls
 
         const onFadeOutComplete = (event) => {
-            // Ensure the event is for the opacity property and the element is still meant to be hidden
-            if (event.target === element && event.propertyName === 'opacity' && element.style.opacity === '0') {
+            // Ensure the event is for the opacity property and the target is the element itself
+            if (event.target === element && event.propertyName === 'opacity' && !transitionEnded) {
+                 transitionEnded = true; // Set flag
                 element.style.display = 'none'; // Hide after fade
                 element.removeEventListener('transitionend', onFadeOutComplete); // Clean up listener
+                // Execute the callback function if provided
+                if (typeof callback === 'function') {
+                    callback();
+                }
             }
         };
 
@@ -61,15 +75,20 @@
 
         // Fallback timeout in case transitionend doesn't fire reliably
         setTimeout(() => {
-            // If still opacity 0 after timeout, hide it and remove listener
-            if (element.style.opacity === '0') {
-                element.style.display = 'none';
-                element.removeEventListener('transitionend', onFadeOutComplete);
+            // If transition hasn't ended yet (flag is false)
+            if (!transitionEnded) {
+                 transitionEnded = true; // Set flag
+                element.style.display = 'none'; // Force hide
+                element.removeEventListener('transitionend', onFadeOutComplete); // Clean up listener
+                 // Execute the callback function if provided
+                 if (typeof callback === 'function') {
+                     callback();
+                 }
             }
         }, TRANSITION_DURATION + 50); // Add a small buffer
     };
 
-    // Helper to handle fade in
+    // Helper to handle fade in (remains mostly the same)
     const fadeInElement = (element) => {
          if (!element || (element.style.opacity === '1' && element.style.display === 'block')) return; // Already visible or invalid
 
@@ -106,6 +125,7 @@
 
             this.currentStepIndex = 0;
             this.totalSteps = this.steps.length;
+            this.isTransitioning = false; // Flag to prevent rapid clicks during transition
 
             if (this.totalSteps === 0) {
                 console.warn(`MultiStepForm (${formId}): No steps found.`);
@@ -147,18 +167,29 @@
 
         init() {
             this.addEventListeners();
-            this.goToStep(0);
+            this.goToStep(0, true); // Pass true for initial load (no transition needed)
         }
 
         addEventListeners() {
-            this.nextButton?.addEventListener('click', () => this.goToNextStep());
-            this.prevButton?.addEventListener('click', () => this.goToPreviousStep());
+            // Prevent multiple clicks during transition
+            const handleNext = () => {
+                 if (this.isTransitioning) return;
+                 this.goToNextStep();
+            };
+            const handlePrev = () => {
+                 if (this.isTransitioning) return;
+                 this.goToPreviousStep();
+            };
+
+            this.nextButton?.addEventListener('click', handleNext);
+            this.prevButton?.addEventListener('click', handlePrev);
+
             this.form.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
                     if (document.activeElement !== this.submitButton || this.submitButton?.classList.contains(CLASS_HIDDEN)) {
                         event.preventDefault();
                         if (this.nextButton && !this.nextButton.classList.contains(CLASS_HIDDEN)) {
-                           this.goToNextStep();
+                           handleNext(); // Use guarded handler
                         }
                     }
                 }
@@ -183,12 +214,14 @@
             }
         }
 
-        // *** Updated goToStep function for smoother Fade ***
-        goToStep(stepIndex) {
-            if (stepIndex < 0 || stepIndex >= this.totalSteps || stepIndex === this.currentStepIndex) {
-                // console.error('MultiStepForm: Invalid or same step index:', stepIndex); // Optional: Log if needed
-                return; // Do nothing if invalid or same step
+        // *** Updated goToStep function for Sequential Fade ***
+        goToStep(stepIndex, isInitialLoad = false) {
+             // Prevent action if already transitioning or invalid/same step
+            if (this.isTransitioning || stepIndex < 0 || stepIndex >= this.totalSteps || stepIndex === this.currentStepIndex) {
+                return;
             }
+
+            this.isTransitioning = true; // Set transition lock
 
             const previousStepIndex = this.currentStepIndex;
             this.currentStepIndex = stepIndex;
@@ -200,34 +233,59 @@
             const outgoingGuide = this.guides.find(g => parseInt(g.getAttribute(DATA_ATTR_GUIDE), 10) === (previousStepIndex + 1));
             const incomingGuide = this.guides.find(g => parseInt(g.getAttribute(DATA_ATTR_GUIDE), 10) === targetStepNumber);
 
-            // 1. Start fading out outgoing elements
-            if (outgoingStep) {
-                fadeOutElement(outgoingStep);
-                removeClass(outgoingStep, CLASS_ACTIVE_STEP); // Remove active class immediately
-            }
-            if (outgoingGuide) {
-                fadeOutElement(outgoingGuide);
+            // Update indicators and button states immediately
+            this.updateIndicators();
+            this.updateButtonStates();
+
+            // If it's the initial load, just set styles directly without transition
+            if (isInitialLoad) {
+                this.steps.forEach((s, i) => {
+                    s.style.display = i === this.currentStepIndex ? 'block' : 'none';
+                    s.style.opacity = i === this.currentStepIndex ? '1' : '0';
+                    i === this.currentStepIndex ? addClass(s, CLASS_ACTIVE_STEP) : removeClass(s, CLASS_ACTIVE_STEP);
+                });
+                 this.guides.forEach((g) => {
+                     const guideStep = parseInt(g.getAttribute(DATA_ATTR_GUIDE), 10);
+                     g.style.display = guideStep === targetStepNumber ? 'block' : 'none';
+                     g.style.opacity = guideStep === targetStepNumber ? '1' : '0';
+                 });
+                this.isTransitioning = false; // Release lock
+                return;
             }
 
-            // 2. After a short delay (allow fade-out to start), fade in incoming elements
-            //    This delay helps prevent the visual overlap. Adjust delay if needed.
-            setTimeout(() => {
+
+            // Define the function to fade in the new elements
+            const fadeInNewElements = () => {
                 if (incomingStep) {
                     fadeInElement(incomingStep);
-                    addClass(incomingStep, CLASS_ACTIVE_STEP); // Add active class when fade-in starts
+                    addClass(incomingStep, CLASS_ACTIVE_STEP);
                 }
                 if (incomingGuide) {
                     fadeInElement(incomingGuide);
                 }
-            }, 50); // Small delay in ms (e.g., 50ms)
+                 // Release the transition lock slightly after fade-in starts
+                 // or after the transition duration to be safe
+                 setTimeout(() => {
+                     this.isTransitioning = false;
+                 }, TRANSITION_DURATION);
+            };
 
-            // Update indicators and button states immediately
-            this.updateIndicators();
-            this.updateButtonStates();
+            // 1. Fade out the outgoing guide first (if it exists)
+            if (outgoingGuide) {
+                fadeOutElement(outgoingGuide);
+            }
+
+            // 2. Fade out the outgoing step. When it's done, fade in the new elements.
+            // We use the step's fade-out completion as the trigger for fading in both new elements.
+            if (outgoingStep) {
+                 removeClass(outgoingStep, CLASS_ACTIVE_STEP);
+                 // Pass fadeInNewElements as the callback to fadeOutElement
+                 fadeOutElement(outgoingStep, fadeInNewElements);
+            } else {
+                 // If there was no outgoing step (shouldn't happen after initial load), fade in directly
+                 fadeInNewElements();
+            }
         }
-
-        // updateGuides is no longer needed as logic is in goToStep
-        // updateGuides(targetStepNumber) { ... }
 
 
         updateIndicators() {

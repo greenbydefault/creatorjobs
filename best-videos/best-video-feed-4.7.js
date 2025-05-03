@@ -194,7 +194,7 @@ async function fetchRelevantCustomerData(customerIds) {
                 };
             } else if (customer === null) {
                 // Ein einzelner Abruf ist fehlgeschlagen (Fehler wurde bereits geloggt)
-                console.warn("   -> Ein Kunde konnte nicht geladen werden (siehe vorherige Fehlermeldung).");
+                console.warn("    -> Ein Kunde konnte nicht geladen werden (siehe vorherige Fehlermeldung).");
             }
             return map;
         }, {}); // Starte mit einem leeren Objekt
@@ -243,10 +243,10 @@ function renderVideos(videoItems, containerId) {
 
         // Prüfe, ob ein Video-Link vorhanden ist
         if (videoLink) {
-            // Füge ?download=1 oder &download=1 hinzu, falls nicht vorhanden (Workaround für bestimmte Hoster?)
-            if (!videoLink.includes('&download=1') && !videoLink.includes('?download=1')) {
-                videoLink += (videoLink.includes('?') ? '&' : '?') + 'download=1';
-            }
+            // *** ENTFERNT: Code zum Anhängen von ?download=1 oder &download=1 ***
+            // if (!videoLink.includes('&download=1') && !videoLink.includes('?download=1')) {
+            //     videoLink += (videoLink.includes('?') ? '&' : '?') + 'download=1';
+            // }
 
             // --- Äußerer Container für den gesamten Eintrag ---
             const feedContainer = document.createElement("div");
@@ -317,7 +317,7 @@ function renderVideos(videoItems, containerId) {
             videoElement.id = `db-user-video--${item.id || index}`; // Eindeutige ID
 
             const sourceElement = document.createElement('source');
-            sourceElement.src = videoLink;
+            sourceElement.src = videoLink; // Verwende den unveränderten Link
             sourceElement.type = 'video/mp4'; // Annahme: MP4 Format
 
             videoElement.appendChild(sourceElement);
@@ -424,9 +424,9 @@ function renderFilterTags(activeFiltersFlat) {
  */
 function applyFiltersAndRender() {
      // Warnung, falls Kundendaten noch fehlen, aber Videos schon da sind
-    if (Object.keys(allCustomerData).length === 0 && allVideoItems.length > 0) {
-         console.warn("Kundendaten noch nicht geladen, Filterung könnte unvollständig sein (betrifft Kundenfilter).");
-    }
+     if (Object.keys(allCustomerData).length === 0 && allVideoItems.length > 0) {
+          console.warn("Kundendaten noch nicht geladen, Filterung könnte unvollständig sein (betrifft Kundenfilter).");
+     }
 
     console.time("Filterung und Rendering"); // Zeitmessung starten
 
@@ -447,8 +447,8 @@ function applyFiltersAndRender() {
         });
     });
      // *** DEBUGGING: Logge die erkannten aktiven Filter ***
-    // console.log("[Debug] Active filters found:", JSON.stringify(activeFiltersByGroup));
-    // console.log("[Debug] Active filters flat:", JSON.stringify(allActiveCheckboxFiltersFlat));
+     // console.log("[Debug] Active filters found:", JSON.stringify(activeFiltersByGroup));
+     // console.log("[Debug] Active filters flat:", JSON.stringify(allActiveCheckboxFiltersFlat));
 
 
     // 2. Suchbegriff holen und normalisieren
@@ -476,9 +476,9 @@ function applyFiltersAndRender() {
                 } else if (groupField === 'creatortype' || groupField === 'produktion' || groupField === 'anzeige') {
                     // Item muss einen Wert haben und dieser muss im aktiven Filterset sein
                      if (itemFieldValue === undefined || itemFieldValue === null || !activeValuesInGroup.includes(itemFieldValue)) {
-                        matchesCheckboxFilters = false;
-                        break;
-                    }
+                         matchesCheckboxFilters = false;
+                         break;
+                     }
                 // Standardbehandlung für andere Felder (angenommen Text oder ähnliches)
                 } else {
                     // Normalisiere Item-Wert und vergleiche mit normalisierten Filterwerten
@@ -507,16 +507,16 @@ function applyFiltersAndRender() {
                 }
                  // Suche auch in Kundenamen (wenn Kundendaten geladen sind) - Korrigierte Logik
                  if (field === 'kunden' && Array.isArray(item?.fieldData?.kunden) && Object.keys(allCustomerData).length > 0) {
-                    const customerNames = item.fieldData.kunden
-                        .map(id => allCustomerData[id]?.name) // Hole Namen aus geladenen Daten
-                        .filter(name => name) // Entferne undefinierte Namen
-                        .join(' ') // Füge Namen zu einem String zusammen
-                        .toLowerCase();
-                    if (customerNames.includes(searchTerm)) {
-                        matchesSearchTerm = true;
-                        break; // Übereinstimmung im Kundennamen gefunden
-                    }
-                }
+                     const customerNames = item.fieldData.kunden
+                         .map(id => allCustomerData[id]?.name) // Hole Namen aus geladenen Daten
+                         .filter(name => name) // Entferne undefinierte Namen
+                         .join(' ') // Füge Namen zu einem String zusammen
+                         .toLowerCase();
+                     if (customerNames.includes(searchTerm)) {
+                         matchesSearchTerm = true;
+                         break; // Übereinstimmung im Kundennamen gefunden
+                     }
+                 }
             }
         }
         // Item passt nur, wenn es sowohl Checkbox-Filtern als auch dem Suchbegriff entspricht

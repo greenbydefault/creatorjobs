@@ -1,4 +1,4 @@
-// 🌐 Optimierte Webflow API Integration für GitHub-Hosting
+// 🌐 Optimierte Webflow API Integration für GitHub-Hosting mit "Load More"
 
 // 🔧 Konfiguration
 const API_BASE_URL = "https://api.webflow.com/v2/collections";
@@ -6,14 +6,21 @@ const WORKER_BASE_URL = "https://bewerbungen.oliver-258.workers.dev/?url="; // D
 const VIDEO_COLLECTION_ID = "680b45a22b15fa4643ebdca9"; // Video Collection
 const CUSTOMER_COLLECTION_ID = "6448faf9c5a8a15f6cc05526"; // Kunden/Member Collection
 const API_LIMIT = 100; // Max Items pro API-Aufruf
+const VIDEOS_PER_LOAD = 8; // Anzahl der Videos, die pro Klick geladen werden
 
 // Globale Variablen
-let allVideoItems = []; // Speichert alle geladenen Video-Items
+let allVideoItems = []; // Speichert *alle* jemals geladenen Video-Items von der API
 let allCustomerData = {}; // Speicher für *relevante* Kundendaten (ID -> {name, logoUrl})
+let currentFilteredItems = []; // Speichert die aktuell gefilterte Liste *aller* Videos
+let displayedVideoCount = 0; // Zählt, wie viele Videos der gefilterten Liste aktuell angezeigt werden
+
+// Element IDs
 const videoContainerId = "video-container"; // ID des Hauptcontainers für Videos
 const filterTagWrapperId = "filter-tag-wrapper"; // ID des Wrappers für aktive Filter-Tags
 const searchInputId = "filter-search"; // ID des Such-Eingabefelds
 const filterResetButtonId = "filter-reset"; // ID des "Alle Filter löschen"-Buttons
+const loadMoreButtonId = "load-more-button"; // ID für den "Mehr laden"-Button (MUSS im HTML existieren)
+
 let searchDebounceTimer = null; // Timer für Such-Debouncing
 const DEBOUNCE_DELAY = 300; // Verzögerung für Such-Debouncing (in ms)
 
@@ -71,11 +78,9 @@ const filterConfig = [
 ];
 
 // --- Konfiguration für Suchfelder ---
-// Feldnamen in Webflow, die durchsucht werden sollen
 const searchableFields = ['name', 'creator', 'beschreibung', 'video-name', 'produktionsort'];
 
-// 🛠️ Hilfsfunktionen
-
+// 🛠️ Hilfsfunktionen (fetchWebflowData, buildWorkerUrl, fetchAllCollectionItems, fetchSingleItem, fetchRelevantCustomerData bleiben gleich)
 /**
  * Baut die URL für den Worker, der als Proxy für die Webflow API dient.
  * @param {string} apiUrl - Die ursprüngliche Webflow API URL.
@@ -97,19 +102,17 @@ async function fetchWebflowData(apiUrl) {
         if (!response.ok) {
             let errorText = `Status: ${response.status}`;
             try {
-                // Versuche, eine detailliertere Fehlermeldung aus dem JSON-Body zu extrahieren
                 const errorData = await response.json();
                 errorText = `${errorText} - ${errorData.message || JSON.stringify(errorData)}`;
             } catch (e) {
-                // Fallback, falls der Body kein JSON ist
                 errorText = `${errorText} - ${await response.text()}`;
             }
             throw new Error(`API-Fehler: ${errorText}`);
         }
-        return await response.json(); // Gibt die geparsten JSON-Daten zurück
+        return await response.json();
     } catch (error) {
         console.error(`❌ Fehler beim Abrufen von ${apiUrl} über ${workerUrl}: ${error.message}`);
-        return null; // Gibt null zurück, um den Fehler anzuzeigen
+        return null;
     }
 }
 
@@ -123,33 +126,28 @@ async function fetchAllCollectionItems(collectionId) {
     let offset = 0;
     let hasMore = true;
     let totalFetched = 0;
-
     console.log(`🚀 Starte Abruf aller Items für Collection ${collectionId} (Limit pro Abruf: ${API_LIMIT})`);
-
     while (hasMore) {
         const apiUrl = `${API_BASE_URL}/${collectionId}/items/live?limit=${API_LIMIT}&offset=${offset}`;
         const data = await fetchWebflowData(apiUrl);
-
         if (data && data.items) {
             allItems = allItems.concat(data.items);
             totalFetched += data.items.length;
-
-            // Prüfe, ob die Paginierung abgeschlossen ist
             if (data.pagination && totalFetched >= data.pagination.total) {
-                hasMore = false; // Alle erwarteten Items laut 'total' wurden geladen
+                hasMore = false;
                 console.log(`✅ Alle ${data.pagination.total} Items für ${collectionId} geladen.`);
             } else if (data.items.length < API_LIMIT) {
-                 hasMore = false; // Weniger Items als das Limit zurückgegeben, Annahme: Ende erreicht
+                 hasMore = false;
                  console.log(`✅ Weniger als ${API_LIMIT} Items zurückgegeben für ${collectionId}, Annahme: Alle Items geladen (Gesamt: ${totalFetched}).`);
             } else {
-                 offset += API_LIMIT; // Es gibt wahrscheinlich mehr Items, erhöhe den Offset
+                 offset += API_LIMIT;
             }
         } else {
             console.error(`❌ Fehler beim Abrufen von Items für ${collectionId} bei Offset ${offset}. Breche Abruf ab.`);
-            return null; // Fehler beim Abrufen, gib null zurück
+            return null;
         }
     }
-    return allItems; // Gibt das Array mit allen gesammelten Items zurück
+    return allItems;
 }
 
 /**
@@ -160,7 +158,7 @@ async function fetchAllCollectionItems(collectionId) {
  */
 async function fetchSingleItem(collectionId, itemId) {
     const apiUrl = `${API_BASE_URL}/${collectionId}/items/${itemId}/live`;
-    return await fetchWebflowData(apiUrl); // Nutzt die zentrale Abruffunktion
+    return await fetchWebflowData(apiUrl);
 }
 
 /**
@@ -169,195 +167,228 @@ async function fetchSingleItem(collectionId, itemId) {
  * @returns {Promise<boolean>} Ein Promise, das true bei Erfolg oder false bei schwerwiegenden Fehlern zurückgibt.
  */
 async function fetchRelevantCustomerData(customerIds) {
-    // Wenn keine IDs vorhanden sind, ist nichts zu tun.
     if (!customerIds || customerIds.length === 0) {
         console.log("Keine relevanten Kunden-IDs gefunden, überspringe Datenabruf.");
-        allCustomerData = {}; // Stelle sicher, dass der Speicher leer ist
-        return true; // Kein Fehler, aber auch keine Daten geladen
+        allCustomerData = {};
+        return true;
     }
-
     console.log(`🤵‍♂️ Lade Daten für ${customerIds.length} relevante(n) Kunden...`);
-    // Erstelle ein Array von Promises, um alle Kunden parallel abzurufen
     const customerPromises = customerIds.map(id => fetchSingleItem(CUSTOMER_COLLECTION_ID, id));
-
     try {
-        // Warte, bis alle Promises abgeschlossen sind
         const customerItems = await Promise.all(customerPromises);
-
-        // Verarbeite die Ergebnisse und fülle das `allCustomerData`-Objekt
         allCustomerData = customerItems.reduce((map, customer) => {
-            // Prüfe, ob der Abruf erfolgreich war und das Item Daten enthält
             if (customer && customer.id && customer.fieldData) {
                 map[customer.id] = {
-                    name: customer.fieldData.name || 'Unbekannter Kunde', // Fallback-Name
-                    logoUrl: customer.fieldData['user-profile-img'] || null // Direkt die URL, falls vorhanden
+                    name: customer.fieldData.name || 'Unbekannter Kunde',
+                    logoUrl: customer.fieldData['user-profile-img'] || null
                 };
             } else if (customer === null) {
-                // Ein einzelner Abruf ist fehlgeschlagen (Fehler wurde bereits geloggt)
                 console.warn("    -> Ein Kunde konnte nicht geladen werden (siehe vorherige Fehlermeldung).");
             }
             return map;
-        }, {}); // Starte mit einem leeren Objekt
-
+        }, {});
         console.log(`👍 ${Object.keys(allCustomerData).length} von ${customerIds.length} relevanten Kundendaten erfolgreich geladen und verarbeitet.`);
-        return true; // Erfolg
+        return true;
     } catch (error) {
-        // Fängt Fehler ab, die von Promise.all geworfen werden könnten (sollte selten sein)
         console.error("❌ Schwerwiegender Fehler beim parallelen Abrufen der Kundendaten:", error);
-        allCustomerData = {}; // Setze den Speicher bei Fehlern zurück
-        return false; // Schwerwiegender Fehler
+        allCustomerData = {};
+        return false;
     }
 }
 
-
-// 🎨 Rendering-Funktionen
+// --- NEUE Rendering-Funktionen ---
 
 /**
- * Rendert die Video-Items im angegebenen Container mit angepasster HTML-Struktur.
- * @param {Array<object>} videoItems - Das Array der zu rendernden Video-Items.
- * @param {string} containerId - Die ID des HTML-Containers, in den gerendert werden soll.
+ * Rendert einen *Teil* der Video-Items im Container. Fügt die neuen Videos hinzu.
+ * @param {Array<object>} videoSlice - Das Array der Video-Items, die *diesmal* hinzugefügt werden sollen.
+ * @param {string} containerId - Die ID des HTML-Containers.
  */
-function renderVideos(videoItems, containerId) {
+function renderVideosSlice(videoSlice, containerId) {
     const container = document.getElementById(containerId);
     if (!container) {
         console.error(`❌ Video-Container mit ID '${containerId}' nicht gefunden.`);
         return;
     }
+    // Kein container.innerHTML = "" hier! Wir fügen hinzu.
+
     const fragment = document.createDocumentFragment(); // Effizienteres DOM-Update
 
-    // Fall: Keine Videos zum Anzeigen
-    if (!videoItems || videoItems.length === 0) {
-        container.innerHTML = "<p>Keine Videos entsprechen den aktuellen Filtern oder der Suche.</p>";
+    // Fall: Keine Videos in diesem Slice (sollte nicht vorkommen, aber sicher ist sicher)
+    if (!videoSlice || videoSlice.length === 0) {
         return;
     }
 
-    videoItems.forEach((item, index) => {
+    videoSlice.forEach((item, index) => {
         // Sicherheitsprüfung für ungültige Items
         if (!item || !item.fieldData) {
             console.warn("Ungültiges Video-Item übersprungen:", item);
             return;
         }
         const fieldData = item.fieldData;
-        let videoLink = fieldData['video-link']; // Hole den Video-Link
-        const kundenIds = fieldData['kunden']; // Hole die verknüpften Kunden-IDs (Array)
+        let videoLink = fieldData['video-link'];
+        const kundenIds = fieldData['kunden'];
 
-        // Prüfe, ob ein Video-Link vorhanden ist
         if (videoLink) {
-            // *** ENTFERNT: Code zum Anhängen von ?download=1 oder &download=1 ***
-            // if (!videoLink.includes('&download=1') && !videoLink.includes('?download=1')) {
-            //     videoLink += (videoLink.includes('?') ? '&' : '?') + 'download=1';
-            // }
-
-            // --- Äußerer Container für den gesamten Eintrag ---
             const feedContainer = document.createElement("div");
-            feedContainer.classList.add("video-feed-container"); // Behält die äußere Klasse
+            feedContainer.classList.add("video-feed-container");
 
-            // Hole Kundeninformationen für den *ersten* verknüpften Kunden
             const firstCustomerId = (Array.isArray(kundenIds) && kundenIds.length > 0) ? kundenIds[0] : null;
             const customerInfo = firstCustomerId ? allCustomerData[firstCustomerId] : null;
 
-            // --- Kundeninfo-Zeile (nur wenn Kundendaten vorhanden sind) ---
             if (customerInfo) {
                 const customerRow = document.createElement('div');
-                customerRow.classList.add('video-feed-row'); // Klasse für die Kundenzeile
+                customerRow.classList.add('video-feed-row');
 
-                // Kundenlogo (mit Fallback/Fehlerbehandlung)
                 if (customerInfo.logoUrl) {
                     const logoImg = document.createElement('img');
                     logoImg.classList.add('video-feed-logo');
                     logoImg.src = customerInfo.logoUrl;
                     logoImg.alt = `${customerInfo.name} Logo`;
-                    logoImg.loading = 'lazy'; // Lazy Loading für Bilder
-                    // Fehlerbehandlung, falls das Logo nicht geladen werden kann
+                    logoImg.loading = 'lazy';
                     logoImg.onerror = () => {
-                        logoImg.style.display = 'none'; // Verstecke das defekte Bild-Element
+                        logoImg.style.display = 'none';
                         console.warn(`Kundenlogo für ${customerInfo.name} konnte nicht geladen werden: ${customerInfo.logoUrl}`);
-                        // Optional: Platzhalter anzeigen
                         const placeholder = document.createElement('div');
-                        placeholder.classList.add('video-feed-logo-placeholder'); // Eigene Klasse für Platzhalter-Styling
-                        // Sicherstellen, dass customerNameSpan existiert, bevor insertBefore aufgerufen wird
+                        placeholder.classList.add('video-feed-logo-placeholder');
                         const customerNameSpan = customerRow.querySelector('.video-feed-customer');
                         if (customerNameSpan) {
-                            customerRow.insertBefore(placeholder, customerNameSpan); // Füge Platzhalter vor dem Namen ein
+                            customerRow.insertBefore(placeholder, customerNameSpan);
                         } else {
-                            customerRow.appendChild(placeholder); // Füge am Ende hinzu, falls Name nicht da ist
+                            customerRow.appendChild(placeholder);
                         }
                     };
                     customerRow.appendChild(logoImg);
                 } else {
-                    // Optional: Platzhalter anzeigen, wenn kein Logo vorhanden ist
                     const logoPlaceholder = document.createElement('div');
                     logoPlaceholder.classList.add('video-feed-logo-placeholder');
                     customerRow.appendChild(logoPlaceholder);
                 }
 
-                // Kundenname
                 const customerNameSpan = document.createElement('span');
                 customerNameSpan.classList.add('video-feed-customer');
                 customerNameSpan.textContent = customerInfo.name;
                 customerRow.appendChild(customerNameSpan);
-
-                feedContainer.appendChild(customerRow); // Füge Kundenzeile zum äußeren Container hinzu
+                feedContainer.appendChild(customerRow);
             } else if (firstCustomerId) {
-                // Warnung, wenn eine Kunden-ID vorhanden ist, aber keine Daten gefunden wurden
                 console.warn(`Kundendaten für ID ${firstCustomerId} nicht in allCustomerData gefunden.`);
-                // Optional: Leere Zeile oder Platzhalter einfügen
             }
 
-            // --- Innerer Container für das Video ---
             const videoInnerContainer = document.createElement('div');
-            videoInnerContainer.classList.add('feed-video-container'); // Wrapper für das Video-Element
+            videoInnerContainer.classList.add('feed-video-container');
 
-            // --- Video-Element ---
             const videoElement = document.createElement('video');
-            videoElement.playsInline = true; // Wichtig für mobile Browser
-            videoElement.preload = "metadata"; // Lädt nur Metadaten initial
-            videoElement.controls = true; // Zeigt Standard-Videosteuerung an
-            videoElement.classList.add('db-video-player'); // Klasse für das Video selbst
-            videoElement.id = `db-user-video--${item.id || index}`; // Eindeutige ID
+            videoElement.playsInline = true;
+            videoElement.preload = "metadata";
+            videoElement.controls = true;
+            videoElement.classList.add('db-video-player');
+            // Eindeutige ID basierend auf Webflow Item ID und Index im Slice (falls ID fehlt)
+            videoElement.id = `db-user-video--${item.id || `slice-${index}`}`;
 
             const sourceElement = document.createElement('source');
-            sourceElement.src = videoLink; // Verwende den unveränderten Link
-            sourceElement.type = 'video/mp4'; // Annahme: MP4 Format
+            sourceElement.src = videoLink;
+            sourceElement.type = 'video/mp4';
 
             videoElement.appendChild(sourceElement);
-            videoElement.appendChild(document.createTextNode('Dein Browser unterstützt das Video-Tag nicht.')); // Fallback-Text
+            videoElement.appendChild(document.createTextNode('Dein Browser unterstützt das Video-Tag nicht.'));
 
-            // Fehlerbehandlung für das Video-Element
             videoElement.addEventListener('error', (e) => {
                 console.error(`Fehler beim Laden von Video ${videoElement.id} von ${videoLink}:`, e);
                 const errorP = document.createElement('p');
-                // Style die Fehlermeldung direkt oder über CSS-Klassen
                 errorP.style.color = 'red';
                 errorP.style.padding = '10px';
                 errorP.style.border = '1px solid red';
                 errorP.textContent = 'Video konnte nicht geladen werden.';
-                // Ersetze den *Inhalt* des inneren Video-Containers durch die Fehlermeldung
-                videoInnerContainer.innerHTML = ''; // Entferne das fehlerhafte Video-Element
+                videoInnerContainer.innerHTML = '';
                 videoInnerContainer.appendChild(errorP);
-            }, { once: true }); // Listener nur einmal ausführen
+            }, { once: true });
 
-            // Füge Video zum *inneren* Container hinzu
             videoInnerContainer.appendChild(videoElement);
-            // Füge den *inneren* Container zum *äußeren* Container hinzu
             feedContainer.appendChild(videoInnerContainer);
-
-            // Füge den gesamten äußeren Container zum Fragment hinzu
             fragment.appendChild(feedContainer);
-
         } else {
-            // Warnung, wenn ein Video-Item keinen Link hat
-            console.warn(`⚠️ Video-Item ${item.id || index} hat keinen 'video-link'.`);
+            console.warn(`⚠️ Video-Item ${item.id || `slice-${index}`} hat keinen 'video-link'.`);
         }
     });
 
-    // Leere den Container und füge das Fragment mit allen neuen Elementen hinzu
-    container.innerHTML = "";
+    // Füge das Fragment mit den neuen Elementen zum Container hinzu
     container.appendChild(fragment);
 }
 
 /**
- * Rendert die Tags für die aktuell aktiven Filter.
+ * Leert den Video-Container und rendert die *erste* Ladung Videos.
+ */
+function renderInitialVideoBatch() {
+    const container = document.getElementById(videoContainerId);
+    if (!container) return;
+
+    // Container leeren, bevor die erste Charge gerendert wird
+    container.innerHTML = '';
+
+    // Bestimme, wie viele Videos initial angezeigt werden sollen
+    const initialCount = Math.min(VIDEOS_PER_LOAD, currentFilteredItems.length);
+    displayedVideoCount = initialCount; // Setze den Zähler
+
+    if (initialCount === 0) {
+        container.innerHTML = "<p>Keine Videos entsprechen den aktuellen Filtern oder der Suche.</p>";
+        console.log("Keine Videos zum initialen Rendern.");
+    } else {
+        const initialSlice = currentFilteredItems.slice(0, initialCount);
+        console.log(`Rendere initiale ${initialSlice.length} Videos.`);
+        renderVideosSlice(initialSlice, videoContainerId);
+    }
+    // Sichtbarkeit des "Mehr laden"-Buttons aktualisieren
+    updateLoadMoreButtonVisibility();
+}
+
+
+/**
+ * Aktualisiert die Sichtbarkeit des "Mehr laden"-Buttons.
+ */
+function updateLoadMoreButtonVisibility() {
+    const loadMoreButton = document.getElementById(loadMoreButtonId);
+    if (!loadMoreButton) {
+        // Button noch nicht im DOM oder falsche ID
+        // console.warn(`"Mehr laden"-Button mit ID '${loadMoreButtonId}' nicht gefunden.`);
+        return;
+    }
+
+    // Zeige Button nur, wenn noch nicht alle gefilterten Videos angezeigt werden
+    if (displayedVideoCount < currentFilteredItems.length) {
+        loadMoreButton.style.display = 'block'; // Oder 'inline-block', je nach Layout
+    } else {
+        loadMoreButton.style.display = 'none';
+    }
+}
+
+/**
+ * Behandelt den Klick auf den "Mehr laden"-Button.
+ */
+function handleLoadMore() {
+    const startIndex = displayedVideoCount; // Startet nach dem letzten angezeigten Video
+    const endIndex = Math.min(startIndex + VIDEOS_PER_LOAD, currentFilteredItems.length); // Bis zum nächsten Limit oder Ende
+
+    if (startIndex >= endIndex) {
+        // Sollte nicht passieren, wenn der Button korrekt angezeigt wird, aber sicher ist sicher
+        console.log("Keine weiteren Videos zum Laden.");
+        updateLoadMoreButtonVisibility(); // Button sicherheitshalber ausblenden
+        return;
+    }
+
+    const nextSlice = currentFilteredItems.slice(startIndex, endIndex);
+    console.log(`Lade ${nextSlice.length} weitere Videos (Index ${startIndex} bis ${endIndex-1}).`);
+
+    renderVideosSlice(nextSlice, videoContainerId); // Nächsten Teil rendern (anhängen)
+
+    displayedVideoCount = endIndex; // Zähler aktualisieren
+
+    updateLoadMoreButtonVisibility(); // Sichtbarkeit des Buttons neu prüfen
+}
+
+
+// --- Angepasste Filter- und Rendering-Logik ---
+
+/**
+ * Rendert die Tags für die aktuell aktiven Filter. (Unverändert)
  * @param {Array<object>} activeFiltersFlat - Ein flaches Array aller aktiven Filter-Objekte ({id, value, display, field}).
  */
 function renderFilterTags(activeFiltersFlat) {
@@ -366,33 +397,31 @@ function renderFilterTags(activeFiltersFlat) {
         console.warn(`⚠️ Filter-Tag-Wrapper mit ID '${filterTagWrapperId}' nicht gefunden.`);
         return;
     }
-    const fragment = document.createDocumentFragment(); // Effizientes DOM-Update
+    const fragment = document.createDocumentFragment();
 
     activeFiltersFlat.forEach(filter => {
         const tagElement = document.createElement('div');
-        tagElement.classList.add('search-filter-tag'); // Klasse für das Tag-Styling
+        tagElement.classList.add('search-filter-tag');
 
         const tagName = document.createElement('span');
         tagName.classList.add('tag-text');
-        tagName.textContent = filter.display; // Angezeigter Name des Filters
+        tagName.textContent = filter.display;
 
         const removeButton = document.createElement('button');
-        removeButton.classList.add('filter-close-button'); // Klasse für den Schließen-Button
-        removeButton.textContent = '×'; // Standard-Schließen-Symbol
+        removeButton.classList.add('filter-close-button');
+        removeButton.textContent = '×';
         removeButton.setAttribute('aria-label', `Filter ${filter.display} entfernen`);
-        removeButton.dataset.checkboxId = filter.id; // Speichere die ID der zugehörigen Checkbox
+        removeButton.dataset.checkboxId = filter.id;
 
-        // Event Listener zum Entfernen des Filters beim Klick auf den Button
         removeButton.addEventListener('click', (e) => {
             const checkboxIdToRemove = e.currentTarget.dataset.checkboxId;
             const correspondingCheckbox = document.getElementById(checkboxIdToRemove);
             if (correspondingCheckbox) {
-                correspondingCheckbox.checked = false; // Deaktiviere die Checkbox
-                // *** NEU: Debugging Log ***
-                console.log(`[Debug] Checkbox ${checkboxIdToRemove} checked state set to: ${correspondingCheckbox.checked}`);
-                applyFiltersAndRender(); // Wende Filter neu an und rendere neu
+                correspondingCheckbox.checked = false;
+                 const event = new Event('change', { bubbles: true });
+                 correspondingCheckbox.dispatchEvent(event);
+                // applyFiltersAndRender wird durch das 'change' Event auf der Checkbox getriggert
             } else {
-                // Sollte nicht passieren, wenn die IDs übereinstimmen
                 console.error(`FEHLER: Konnte Checkbox mit ID ${checkboxIdToRemove} zum Entfernen nicht finden!`);
             }
         });
@@ -402,163 +431,142 @@ function renderFilterTags(activeFiltersFlat) {
         fragment.appendChild(tagElement);
     });
 
-    // Leere den Wrapper und füge das Fragment mit den neuen Tags hinzu
     wrapper.innerHTML = '';
     wrapper.appendChild(fragment);
 
-    // Zeige/Verstecke den Reset-Button basierend darauf, ob Filter aktiv sind
     const resetButton = document.getElementById(filterResetButtonId);
     if (resetButton) {
-        // Zeige Button nur, wenn Filter aktiv sind ODER Text im Suchfeld steht
         const searchInput = document.getElementById(searchInputId);
         const isSearchActive = searchInput && searchInput.value.trim() !== "";
-        resetButton.style.display = (activeFiltersFlat.length > 0 || isSearchActive) ? 'inline-block' : 'none'; // Oder 'block', je nach Layout
+        resetButton.style.display = (activeFiltersFlat.length > 0 || isSearchActive) ? 'inline-block' : 'none';
     }
 }
 
-
-// 🔄 Filterlogik und Aktualisierung
-
 /**
- * Wendet die aktuellen Filter (Checkboxes und Suche) auf `allVideoItems` an und rendert das Ergebnis.
+ * Wendet die aktuellen Filter an, speichert das Ergebnis und triggert das initiale Rendering der ersten Charge.
  */
 function applyFiltersAndRender() {
-     // Warnung, falls Kundendaten noch fehlen, aber Videos schon da sind
-     if (Object.keys(allCustomerData).length === 0 && allVideoItems.length > 0) {
-          console.warn("Kundendaten noch nicht geladen, Filterung könnte unvollständig sein (betrifft Kundenfilter).");
-     }
+    if (Object.keys(allCustomerData).length === 0 && allVideoItems.length > 0) {
+         console.warn("Kundendaten noch nicht geladen, Filterung könnte unvollständig sein (betrifft Kundenfilter).");
+    }
 
-    console.time("Filterung und Rendering"); // Zeitmessung starten
+    console.time("Filterung");
 
     // 1. Aktive Checkbox-Filter identifizieren
-    const activeFiltersByGroup = {}; // Speichert aktive Filterwerte pro Feld { field: [value1, value2], ... }
-    let allActiveCheckboxFiltersFlat = []; // Flache Liste aller aktiven Filter für Tag-Rendering
+    const activeFiltersByGroup = {};
+    let allActiveCheckboxFiltersFlat = [];
     filterConfig.forEach(group => {
         const groupField = group.field;
-        activeFiltersByGroup[groupField] = []; // Initialisiere Array für jede Gruppe
+        activeFiltersByGroup[groupField] = [];
         group.filters.forEach(filter => {
             const checkbox = document.getElementById(filter.id);
-            // *** DEBUGGING: Logge den Zustand VOR dem Lesen ***
-            // if (checkbox) { console.log(`[Debug] Reading Checkbox ${filter.id} state: ${checkbox.checked}`); }
             if (checkbox && checkbox.checked) {
-                activeFiltersByGroup[groupField].push(filter.value); // Füge Wert zur Gruppe hinzu
-                allActiveCheckboxFiltersFlat.push({ ...filter, field: groupField }); // Füge zur flachen Liste hinzu
+                activeFiltersByGroup[groupField].push(filter.value);
+                allActiveCheckboxFiltersFlat.push({ ...filter, field: groupField });
             }
         });
     });
-     // *** DEBUGGING: Logge die erkannten aktiven Filter ***
-     // console.log("[Debug] Active filters found:", JSON.stringify(activeFiltersByGroup));
-     // console.log("[Debug] Active filters flat:", JSON.stringify(allActiveCheckboxFiltersFlat));
 
-
-    // 2. Suchbegriff holen und normalisieren
+    // 2. Suchbegriff holen
     const searchInput = document.getElementById(searchInputId);
     const searchTerm = searchInput ? searchInput.value.trim().toLowerCase() : "";
 
-    // 3. Video-Items filtern
-    const filteredItems = allVideoItems.filter(item => {
-        // --- Checkbox-Filter-Prüfung ---
+    // 3. Video-Items filtern (Logik bleibt gleich, speichert aber in `currentFilteredItems`)
+    currentFilteredItems = allVideoItems.filter(item => {
         let matchesCheckboxFilters = true;
         for (const groupField in activeFiltersByGroup) {
             const activeValuesInGroup = activeFiltersByGroup[groupField];
-            // Nur prüfen, wenn in dieser Gruppe Filter aktiv sind
             if (activeValuesInGroup.length > 0) {
-                const itemFieldValue = item?.fieldData?.[groupField]; // Wert des Feldes im aktuellen Item
-
-                // Spezialbehandlung für Multi-Referenz-Feld 'kunden'
+                const itemFieldValue = item?.fieldData?.[groupField];
                 if (groupField === 'kunden') {
-                    // Item muss ein Array von Kunden-IDs haben und mindestens eine davon muss im aktiven Filterset sein
                     if (!itemFieldValue || !Array.isArray(itemFieldValue) || !activeValuesInGroup.some(id => itemFieldValue.includes(id))) {
-                        matchesCheckboxFilters = false;
-                        break; // Item passt nicht, nächste Gruppe muss nicht geprüft werden
+                        matchesCheckboxFilters = false; break;
                     }
-                // Spezialbehandlung für Einfachauswahlfelder (Options/Select)
                 } else if (groupField === 'creatortype' || groupField === 'produktion' || groupField === 'anzeige') {
-                    // Item muss einen Wert haben und dieser muss im aktiven Filterset sein
                      if (itemFieldValue === undefined || itemFieldValue === null || !activeValuesInGroup.includes(itemFieldValue)) {
-                         matchesCheckboxFilters = false;
-                         break;
+                         matchesCheckboxFilters = false; break;
                      }
-                // Standardbehandlung für andere Felder (angenommen Text oder ähnliches)
                 } else {
-                    // Normalisiere Item-Wert und vergleiche mit normalisierten Filterwerten
-                    const itemValueLower = String(itemFieldValue || '').toLowerCase(); // Sicherstellen, dass es ein String ist
+                    const itemValueLower = String(itemFieldValue || '').toLowerCase();
                     const normalizedActiveValues = activeValuesInGroup.map(v => String(v || '').toLowerCase());
                     if (!itemValueLower || !normalizedActiveValues.includes(itemValueLower)) {
-                        matchesCheckboxFilters = false;
-                        break;
+                        matchesCheckboxFilters = false; break;
                     }
                 }
             }
         }
-        // Wenn Checkbox-Filter nicht passen, schließe das Item aus
         if (!matchesCheckboxFilters) return false;
 
-        // --- Suchbegriff-Prüfung ---
         let matchesSearchTerm = true;
-        if (searchTerm) { // Nur prüfen, wenn ein Suchbegriff eingegeben wurde
-            matchesSearchTerm = false; // Annahme: passt nicht, bis Übereinstimmung gefunden wird
+        if (searchTerm) {
+            matchesSearchTerm = false;
             for (const field of searchableFields) {
                 const fieldValue = item?.fieldData?.[field];
-                // Prüfe, ob das Feld existiert, ein String ist und den Suchbegriff enthält
                 if (fieldValue && typeof fieldValue === 'string' && fieldValue.toLowerCase().includes(searchTerm)) {
-                    matchesSearchTerm = true;
-                    break; // Übereinstimmung gefunden, keine weiteren Felder prüfen
+                    matchesSearchTerm = true; break;
                 }
-                 // Suche auch in Kundenamen (wenn Kundendaten geladen sind) - Korrigierte Logik
                  if (field === 'kunden' && Array.isArray(item?.fieldData?.kunden) && Object.keys(allCustomerData).length > 0) {
                      const customerNames = item.fieldData.kunden
-                         .map(id => allCustomerData[id]?.name) // Hole Namen aus geladenen Daten
-                         .filter(name => name) // Entferne undefinierte Namen
-                         .join(' ') // Füge Namen zu einem String zusammen
-                         .toLowerCase();
+                         .map(id => allCustomerData[id]?.name)
+                         .filter(name => name)
+                         .join(' ').toLowerCase();
                      if (customerNames.includes(searchTerm)) {
-                         matchesSearchTerm = true;
-                         break; // Übereinstimmung im Kundennamen gefunden
+                         matchesSearchTerm = true; break;
                      }
                  }
             }
         }
-        // Item passt nur, wenn es sowohl Checkbox-Filtern als auch dem Suchbegriff entspricht
         return matchesSearchTerm;
     });
 
-    // 4. Aktive Checkbox-Filter-Tags rendern (und Reset-Button steuern)
+    console.timeEnd("Filterung");
+    console.log(`📊 ${currentFilteredItems.length} Videos entsprechen den Filtern.`);
+
+    // 4. Filter-Tags rendern
     renderFilterTags(allActiveCheckboxFiltersFlat);
 
-    // 5. Gefilterte Videos rendern
-    renderVideos(filteredItems, videoContainerId);
-
-    console.timeEnd("Filterung und Rendering"); // Zeitmessung beenden
-    console.log(`📊 ${filteredItems.length} von ${allVideoItems.length} Videos angezeigt.`);
+    // 5. Erste Charge der gefilterten Videos rendern (leert Container, setzt Zähler)
+    renderInitialVideoBatch(); // Diese Funktion kümmert sich auch um den Load-More-Button
 }
 
 /**
- * Setzt alle Filter (Checkboxes und Suche) zurück und rendert neu.
+ * Setzt alle Filter zurück und rendert die erste Charge neu. (Unverändert)
  */
 function clearAllFilters() {
     console.log("🧹 Setze alle Filter zurück...");
+    let changed = false;
 
-    // 1. Alle Checkboxen deaktivieren
     filterConfig.forEach(group => {
         group.filters.forEach(filter => {
             const checkbox = document.getElementById(filter.id);
             if (checkbox) {
-                checkbox.checked = false;
-                 // *** NEU: Debugging Log ***
-                 console.log(`[Debug] Resetting Checkbox ${filter.id} checked state set to: ${checkbox.checked}`);
+                if (checkbox.checked) {
+                    checkbox.checked = false;
+                    changed = true;
+                    console.log(`[Debug] Resetting Checkbox ${filter.id} checked state set to: false`);
+                    const event = new Event('change', { bubbles: true });
+                    checkbox.dispatchEvent(event); // Löst applyFiltersAndRender aus
+                }
+            } else {
+                 console.warn(`[Debug] Checkbox ${filter.id} beim Reset nicht gefunden.`);
             }
         });
     });
 
-    // 2. Suchfeld leeren
     const searchInput = document.getElementById(searchInputId);
-    if (searchInput) {
+    if (searchInput && searchInput.value !== "") {
         searchInput.value = "";
+        changed = true;
+         const event = new Event('input', { bubbles: true });
+         searchInput.dispatchEvent(event); // Löst applyFiltersAndRender über Debounce aus
+         console.log(`[Debug] Search input cleared.`);
     }
 
-    // 3. Filter anwenden und neu rendern (dies aktualisiert auch die Tags und den Reset-Button)
-    applyFiltersAndRender();
+    // Wichtig: applyFiltersAndRender wird jetzt durch die 'change'/'input' Events ausgelöst.
+    // Ein direkter Aufruf hier ist nicht mehr nötig, es sei denn, KEIN Event wurde ausgelöst.
+    if (!changed) {
+         console.log("[Debug] Keine Änderungen an Filtern oder Suche, kein erneutes Rendern nötig.");
+    }
 }
 
 
@@ -574,122 +582,134 @@ async function displayVideoCollection() {
         allVideoItems = await fetchAllCollectionItems(VIDEO_COLLECTION_ID);
         console.log(`Schritt 2: Videos geladen? ${allVideoItems !== null ? 'Ja' : 'Nein'}. Anzahl: ${allVideoItems?.length ?? 0}`);
 
-        // Fehlerbehandlung: Abbruch, wenn Videos nicht geladen werden konnten
         if (allVideoItems === null) {
              console.error("Fehler beim Laden der Video-Items. Breche ab.");
              const container = document.getElementById(videoContainerId);
              if (container) container.innerHTML = "<p>Fehler beim Laden der Videos.</p>";
-             renderFilterTags([]); // Leere Filter-Tags anzeigen
-             return; // Funktion beenden
+             renderFilterTags([]);
+             updateLoadMoreButtonVisibility(); // Button ausblenden
+             return;
         }
-        // Fall: Keine Videos in der Collection gefunden
         if (allVideoItems.length === 0) {
              console.log("Keine Video-Items gefunden.");
-             renderVideos([], videoContainerId); // Leeren Container rendern
-             renderFilterTags([]); // Leere Filter-Tags
-             return; // Funktion beenden
+             const container = document.getElementById(videoContainerId);
+              if (container) container.innerHTML = "<p>Keine Videos in dieser Sammlung gefunden.</p>";
+             renderFilterTags([]);
+             updateLoadMoreButtonVisibility(); // Button ausblenden
+             return;
         }
         console.log(`📹 ${allVideoItems.length} Video(s) insgesamt erfolgreich geladen.`);
 
         // --- SCHRITT 2: Relevante Kunden-IDs sammeln ---
-        const relevantCustomerIds = new Set(); // Set vermeidet Duplikate automatisch
+        const relevantCustomerIds = new Set();
         allVideoItems.forEach(item => {
             const kunden = item?.fieldData?.kunden;
             if (Array.isArray(kunden)) {
                 kunden.forEach(id => relevantCustomerIds.add(id));
             }
         });
-        const uniqueCustomerIds = Array.from(relevantCustomerIds); // Umwandlung in Array für den Abruf
+        const uniqueCustomerIds = Array.from(relevantCustomerIds);
         console.log(`Schritt 3: ${uniqueCustomerIds.length} einzigartige Kunden-IDs in Videos gefunden.`);
 
         // --- SCHRITT 3: Relevante Kundendaten laden ---
         const customerDataLoaded = await fetchRelevantCustomerData(uniqueCustomerIds);
         console.log(`Schritt 4: Relevante Kundendaten Lade-Status: ${customerDataLoaded}`);
-
-        // Warnung, wenn Kundendaten nicht geladen werden konnten, aber fahre fort
         if (!customerDataLoaded) {
              console.warn("Fehler beim Laden der relevanten Kundendaten. Videos werden ohne vollständige Kundeninformationen angezeigt.");
-             allCustomerData = {}; // Stelle sicher, dass es ein leeres Objekt ist
+             allCustomerData = {};
         }
 
         // --- SCHRITT 4: Event Listener einrichten ---
         console.log("Schritt 5: Richte Event Listener ein.");
 
-        // Event Listener für Filter-Checkboxes
+        // Event Listener für Filter-Checkboxes (löst applyFiltersAndRender aus)
         filterConfig.forEach(group => {
             group.filters.forEach(filter => {
                 const checkbox = document.getElementById(filter.id);
                 if (checkbox) {
-                    checkbox.addEventListener('change', applyFiltersAndRender); // Bei Änderung Filter anwenden
+                    checkbox.addEventListener('change', applyFiltersAndRender);
                 } else {
                     console.warn(`⚠️ Filter-Checkbox mit ID '${filter.id}' nicht im DOM gefunden.`);
                 }
             });
         });
 
-        // Event Listener für das Suchfeld (mit Debouncing)
+        // Event Listener für das Suchfeld (löst applyFiltersAndRender über Debounce aus)
         const searchInput = document.getElementById(searchInputId);
         if (searchInput) {
             searchInput.addEventListener('input', () => {
-                clearTimeout(searchDebounceTimer); // Bestehenden Timer löschen
-                // Neuen Timer starten, der applyFiltersAndRender nach kurzer Pause aufruft
-                searchDebounceTimer = setTimeout(() => {
-                    applyFiltersAndRender();
-                }, DEBOUNCE_DELAY);
+                clearTimeout(searchDebounceTimer);
+                searchDebounceTimer = setTimeout(applyFiltersAndRender, DEBOUNCE_DELAY);
             });
             console.log(`✅ Event Listener (debounced) für Suchfeld '${searchInputId}' eingerichtet.`);
         } else {
             console.warn(`⚠️ Such-Eingabefeld mit ID '${searchInputId}' nicht im DOM gefunden.`);
         }
 
-        // Event Listener für den Reset-Button
+        // Event Listener für den Reset-Button (löst clearAllFilters aus)
         const resetButton = document.getElementById(filterResetButtonId);
         if (resetButton) {
-            resetButton.addEventListener('click', clearAllFilters); // Bei Klick alle Filter löschen
-            resetButton.style.display = 'none'; // Initial ausblenden
+            resetButton.addEventListener('click', clearAllFilters);
+            resetButton.style.display = 'none';
             console.log(`✅ Event Listener für Reset-Button '${filterResetButtonId}' eingerichtet.`);
         } else {
             console.warn(`⚠️ Reset-Button mit ID '${filterResetButtonId}' nicht im DOM gefunden.`);
         }
 
-        // --- SCHRITT 5: Initiales Rendern ---
+        // Event Listener für den "Mehr laden"-Button
+        const loadMoreButton = document.getElementById(loadMoreButtonId);
+        if (loadMoreButton) {
+            loadMoreButton.addEventListener('click', handleLoadMore);
+            loadMoreButton.style.display = 'none'; // Initial ausblenden
+            console.log(`✅ Event Listener für "Mehr laden"-Button '${loadMoreButtonId}' eingerichtet.`);
+        } else {
+             // Wichtige Warnung, da die Funktion sonst nicht geht!
+             console.error(`❌ "Mehr laden"-Button mit ID '${loadMoreButtonId}' NICHT im DOM gefunden. Die Funktion wird nicht verfügbar sein.`);
+        }
+
+        // --- SCHRITT 5: Initiales Rendern (erste Charge) ---
         console.log("Schritt 6: Rufe initial applyFiltersAndRender auf.");
-        applyFiltersAndRender(); // Zeige alle Videos initial an (oder gefiltert, falls Checkboxen voreingestellt sind)
+        applyFiltersAndRender(); // Wendet Filter an (falls welche voreingestellt sind) und rendert die erste Charge
 
     } catch (error) {
-        // Fängt unerwartete Fehler in der Hauptlogik ab
         console.error("❌ Schwerwiegender Fehler beim Anzeigen der Video-Collection:", error);
         const container = document.getElementById(videoContainerId);
         if (container) container.innerHTML = "<p>Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.</p>";
-        renderFilterTags([]); // Leere Filter-Tags
+        renderFilterTags([]);
+        updateLoadMoreButtonVisibility(); // Button sicherheitshalber ausblenden
     }
 }
 
 // --- Start der Anwendung ---
-// Warte, bis das gesamte HTML-Dokument geladen und geparst ist
 window.addEventListener("DOMContentLoaded", () => {
     console.log("🚀 DOM geladen. Starte Ladevorgänge...");
-
-    // Prüfe, ob die notwendigen Container-Elemente vorhanden sind
     const videoContainerExists = !!document.getElementById(videoContainerId);
     const tagWrapperExists = !!document.getElementById(filterTagWrapperId);
-    // Optional: Prüfe auch, ob Filter-Elemente und Suchfeld existieren, falls kritisch
 
     if (videoContainerExists && tagWrapperExists) {
-         displayVideoCollection(); // Starte die Hauptfunktion
+         displayVideoCollection();
     } else {
-        // Logge detaillierte Fehler, wenn Elemente fehlen
         if (!videoContainerExists) console.error(`FEHLER: Video-Container ('${videoContainerId}') nicht gefunden!`);
         if (!tagWrapperExists) console.error(`FEHLER: Filter-Tag-Wrapper ('${filterTagWrapperId}') nicht gefunden!`);
         console.error("Video-Feed kann nicht initialisiert werden, da wichtige HTML-Elemente fehlen.");
-        // Optional: Fehlermeldung im UI anzeigen
         const body = document.querySelector('body');
         if (body) {
             const errorMsg = document.createElement('p');
             errorMsg.textContent = "Fehler: Notwendige Elemente zum Anzeigen der Videos fehlen auf der Seite.";
             errorMsg.style.color = "red";
             errorMsg.style.fontWeight = "bold";
-            body.prepend(errorMsg); // Füge die Meldung am Anfang des Body ein
+            body.prepend(errorMsg);
         }
     }
 });
+
+/*
+ WICHTIG: Du musst einen Button wie den folgenden in dein HTML einfügen,
+ damit der "Mehr laden"-Mechanismus funktioniert:
+
+ <button id="load-more-button" style="display: none;">Mehr Videos laden</button>
+
+ Platziere ihn unterhalb des video-container Elements.
+ Das Styling (style="display: none;") ist wichtig, damit er initial versteckt ist.
+ Das Skript steuert dann die Sichtbarkeit.
+*/

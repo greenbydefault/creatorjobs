@@ -17,14 +17,12 @@
     const DATA_ATTR_GUIDE_CONTAINER = 'data-step-guide-container';
     const DATA_ATTR_GUIDE = 'data-step-guide';
     const DATA_ATTR_PREVIEW_FIELD = 'data-preview-field'; // On input fields
-    // *** NEW: Data attribute for preview placeholder elements ***
     const DATA_ATTR_PREVIEW_PLACEHOLDER = 'data-preview-placeholder'; // On display elements in preview step
     const CLASS_ACTIVE_STEP = 'active';
     const CLASS_ACTIVE_INDICATOR = 'active';
     const CLASS_HIDE = 'hide'; // For buttons
     const CLASS_INPUT_ERROR = 'input-error';
     const CLASS_INDICATOR_REACHABLE = 'reachable';
-    // const CLASS_PREVIEW_WRAPPER = 'form-campaign-preview-wrapper'; // No longer needed to target wrapper
 
     // Toggle Attributes
     const DATA_ATTR_TOGGLE_CONTROL = 'data-toggle-control';
@@ -107,8 +105,6 @@
             this.submitButton = find(`[${DATA_ATTR_SUBMIT_BTN}]`, this.form);
             this.guideContainer = find(`[${DATA_ATTR_GUIDE_CONTAINER}]`);
             this.guides = this.guideContainer ? Array.from(findAll(`[${DATA_ATTR_GUIDE}]`, this.guideContainer)) : [];
-            // this.previewWrapper = find(`.${CLASS_PREVIEW_WRAPPER}`, this.form); // No longer needed
-
 
             this.currentStepIndex = 0;
             this.totalSteps = this.steps.length;
@@ -346,83 +342,96 @@
             return isStepValid;
         }
 
-        // *** UPDATED: Preview function uses placeholders ***
+        // *** UPDATED: Preview function with adjusted logic for placeholders ***
         updatePreview() {
-            // Find the container of the last step
             const lastStepContainer = this.steps[this.totalSteps - 1];
-            if (!lastStepContainer) return; // Exit if last step container not found
+            if (!lastStepContainer) return;
 
-            // Helper to get field value
-            const getFieldValue = (fieldName, placeholder = '<i>-</i>') => {
+            // Default text for empty optional fields
+            const optionalPlaceholder = 'Keine Angabe';
+            const requiredPlaceholder = '<i>Keine Angabe</i>'; // Italic for required fields if empty
+
+            // Helper to get field value, returns null if not found or empty
+            const getFieldValue = (fieldName) => {
                 const field = find(`[${DATA_ATTR_PREVIEW_FIELD}="${fieldName}"]`, this.form);
-                if (!field) return placeholder;
+                if (!field) return null; // Field not found
+
                 let value = '';
                 if (field.type === 'checkbox' || field.type === 'radio') {
                     value = field.checked ? field.value || 'Ja' : '';
                 } else if (field.tagName === 'SELECT') {
                     value = field.options[field.selectedIndex]?.text || field.value;
                 } else {
-                    value = field.value;
+                    value = field.value.trim(); // Trim whitespace
                 }
-                return value ? value : placeholder;
+                return value ? value : null; // Return null if value is empty after trim
             };
 
-             // Helper to format value
-            const formatValue = (value, type = 'text', placeholder = '<i>-</i>') => {
-                if (value === placeholder) return placeholder;
+             // Helper to format value (handles null)
+            const formatValue = (value, type = 'text') => {
+                if (value === null) return null; // Keep null as null for further checks
+
                 switch (type) {
                     case 'currency': return `${value} €`;
                     case 'textarea': return value.replace(/\n/g, '<br>');
                     case 'period':
-                         if (value.start && value.end) return `${value.start} - ${value.end}`;
+                         if (value.start && value.end) return `${value.start} bis ${value.end}`; // Changed " - " to " bis "
                          if (value.start) return `Ab ${value.start}`;
                          if (value.end) return `Bis ${value.end}`;
-                         return placeholder;
+                         return null; // Return null if dates are incomplete
                     default: return value;
                 }
             };
 
             // Helper to update a specific placeholder element
-            const updatePlaceholder = (fieldName, formattedValue) => {
+            const updatePlaceholder = (fieldName, displayValue) => {
                  const placeholderElement = find(`[${DATA_ATTR_PREVIEW_PLACEHOLDER}="${fieldName}"]`, lastStepContainer);
                  if (placeholderElement) {
-                     placeholderElement.innerHTML = formattedValue; // Use innerHTML because formatted value might contain HTML (<i>, <br>)
-
-                     // Optional: Hide the parent wrapper if the value is the placeholder for optional fields
-                     // This requires a specific structure like <div data-preview-placeholder="fieldNameWrapper">...</div>
-                     // const wrapper = placeholderElement.closest(`[data-preview-placeholder="${fieldName}Wrapper"]`);
-                     // if (wrapper) {
-                     //    wrapper.style.display = formattedValue === '<i>-</i>' ? 'none' : '';
-                     // }
-
-                 } else {
-                    // console.warn(`Preview placeholder not found for: ${fieldName}`); // Optional warning
+                     placeholderElement.innerHTML = displayValue; // Use innerHTML for potential HTML tags
                  }
             };
 
             // --- Update placeholders for each field ---
-            const placeholder = '<i>-</i>'; // Default placeholder for optional fields
 
-            // Required Fields
-            updatePlaceholder('projectName', formatValue(getFieldValue('projectName', '<i>Keine Angabe</i>')));
-            updatePlaceholder('budget', formatValue(getFieldValue('budget', '<i>Keine Angabe</i>'), 'currency', '<i>Keine Angabe</i>'));
-            const startDate = getFieldValue('startDate', '');
-            const endDate = getFieldValue('endDate', '');
-            updatePlaceholder('productionPeriod', formatValue({ start: startDate, end: endDate }, 'period', '<i>Keine Angabe</i>'));
-            updatePlaceholder('lang', formatValue(getFieldValue('lang', '<i>Keine Angabe</i>')));
-            updatePlaceholder('aufgabe', formatValue(getFieldValue('aufgabe', '<i>Keine Angabe</i>'), 'textarea', '<i>Keine Angabe</i>'));
-            updatePlaceholder('steckbrief', formatValue(getFieldValue('steckbrief', '<i>Keine Angabe</i>'), 'textarea', '<i>Keine Angabe</i>'));
+            // projectName (Required)
+            let projectNameVal = getFieldValue('projectName');
+            updatePlaceholder('projectName', formatValue(projectNameVal) || requiredPlaceholder);
 
-            // Optional Fields - Update placeholders directly
-            updatePlaceholder('job-adress-optional', formatValue(getFieldValue('job-adress-optional', placeholder), 'textarea', placeholder));
-            updatePlaceholder('creatorCountOptional', formatValue(getFieldValue('creatorCountOptional', placeholder), 'text', placeholder));
-            updatePlaceholder('genderOptional', formatValue(getFieldValue('genderOptional', placeholder), 'text', placeholder));
-            updatePlaceholder('videoCountOptional', formatValue(getFieldValue('videoCountOptional', placeholder), 'text', placeholder));
-            updatePlaceholder('imgCountOptional', formatValue(getFieldValue('imgCountOptional', placeholder), 'text', placeholder));
-            updatePlaceholder('videoDurationOptional', formatValue(getFieldValue('videoDurationOptional', placeholder), 'text', placeholder));
-            updatePlaceholder('reviewsOptional', formatValue(getFieldValue('reviewsOptional', placeholder), 'text', placeholder));
-            updatePlaceholder('durationOptional', formatValue(getFieldValue('durationOptional', placeholder), 'text', placeholder));
-            updatePlaceholder('scriptOptional', formatValue(getFieldValue('scriptOptional', placeholder), 'text', placeholder));
+            // job-adress-optional (Optional -> Special Case: "Remote" if empty)
+            let jobAddressVal = getFieldValue('job-adress-optional');
+            updatePlaceholder('job-adress-optional', jobAddressVal === null ? 'Remote' : formatValue(jobAddressVal, 'textarea'));
+
+            // budget (Required)
+            let budgetVal = getFieldValue('budget');
+            updatePlaceholder('budget', formatValue(budgetVal, 'currency') || requiredPlaceholder);
+
+            // productionPeriod (Required, combination of two fields)
+            let startDateVal = getFieldValue('startDate');
+            let endDateVal = getFieldValue('endDate');
+            let periodFormattedVal = formatValue({ start: startDateVal, end: endDateVal }, 'period');
+            updatePlaceholder('productionPeriod', periodFormattedVal || requiredPlaceholder);
+
+            // lang (Required)
+            let langVal = getFieldValue('lang');
+            updatePlaceholder('lang', formatValue(langVal) || requiredPlaceholder);
+
+            // aufgabe (Required)
+            let aufgabeVal = getFieldValue('aufgabe');
+            updatePlaceholder('aufgabe', formatValue(aufgabeVal, 'textarea') || requiredPlaceholder);
+
+            // steckbrief (Required)
+            let steckbriefVal = getFieldValue('steckbrief');
+            updatePlaceholder('steckbrief', formatValue(steckbriefVal, 'textarea') || requiredPlaceholder);
+
+            // Optional Fields - Use optionalPlaceholder if null
+            updatePlaceholder('creatorCountOptional', formatValue(getFieldValue('creatorCountOptional')) || optionalPlaceholder);
+            updatePlaceholder('genderOptional', formatValue(getFieldValue('genderOptional')) || optionalPlaceholder);
+            updatePlaceholder('videoCountOptional', formatValue(getFieldValue('videoCountOptional')) || optionalPlaceholder);
+            updatePlaceholder('imgCountOptional', formatValue(getFieldValue('imgCountOptional')) || optionalPlaceholder);
+            updatePlaceholder('videoDurationOptional', formatValue(getFieldValue('videoDurationOptional')) || optionalPlaceholder);
+            updatePlaceholder('reviewsOptional', formatValue(getFieldValue('reviewsOptional')) || optionalPlaceholder);
+            updatePlaceholder('durationOptional', formatValue(getFieldValue('durationOptional')) || optionalPlaceholder);
+            updatePlaceholder('scriptOptional', formatValue(getFieldValue('scriptOptional')) || optionalPlaceholder);
 
             // --- End Placeholder Updates ---
         }

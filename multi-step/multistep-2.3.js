@@ -24,11 +24,17 @@
     const CLASS_INDICATOR_REACHABLE = 'reachable';
     const CLASS_PREVIEW_WRAPPER = 'form-campaign-preview-wrapper';
 
-    // *** NEW: Toggle Attributes ***
+    // Toggle Attributes
     const DATA_ATTR_TOGGLE_CONTROL = 'data-toggle-control';
     const DATA_ATTR_TOGGLE_TARGET = 'data-toggle-target';
+    // *** NEW: Toggle Disable Attributes ***
+    const DATA_ATTR_DISABLE_TARGET = 'data-disable-target'; // On the input field
+    const DATA_ATTR_DISABLE_VALUE = 'data-disable-value'; // On the control element
 
-    // Transition duration (should match CSS for steps/guides/toggles)
+    // CSS Class for visually styling disabled inputs (optional)
+    const CLASS_DISABLED_BY_TOGGLE = 'disabled-by-toggle';
+
+    // Transition duration
     const TRANSITION_DURATION = 400; // ms
 
     /**
@@ -74,7 +80,6 @@
     // Fade In Helper
     const fadeInElement = (element) => {
          if (!element || (element.style.opacity === '1' && element.style.display === 'block')) return;
-         // Use 'block' as default, adjust if specific display needed (e.g., 'flex')
          const defaultDisplay = 'block';
          element.style.display = defaultDisplay;
          requestAnimationFrame(() => {
@@ -91,9 +96,7 @@
      */
     class MultiStepForm {
         // --- Constructor and Methods for Multi-Step Logic ---
-        // (Constructor and methods like init, addEventListeners, goToStep,
-        // updateIndicators, updateButtonStates, validateStep, updatePreview
-        // remain the same as the previous version)
+        // (No changes needed in the MultiStepForm class itself for this feature)
         constructor(formElement) {
             this.form = formElement;
             const formId = this.form.id || 'form without id';
@@ -348,7 +351,6 @@
 
         updatePreview() {
             if (!this.previewWrapper) {
-                // console.warn('Preview wrapper not found.'); // Optional warning
                 return;
             }
             const getFieldValue = (fieldName) => {
@@ -363,8 +365,7 @@
                 }
             };
             let previewHTML = '';
-            // --- Preview HTML Generation (using getFieldValue) ---
-            // (Code from previous version to generate HTML based on field values)
+            // --- Preview HTML Generation ---
             const projectName = getFieldValue('projectName');
             previewHTML += `<div class="preview-item"><div class="preview-label">Wie heißt dein Projekt?</div><div class="preview-value">${projectName || '<i>Keine Angabe</i>'}</div></div>`;
             const budget = getFieldValue('budget');
@@ -395,56 +396,67 @@
 
     /**
      * ========================================================================
-     * NEW: Toggle Field Logic
+     * Toggle Field Logic (Show/Hide and Disable/Enable)
      * ========================================================================
      */
     const initializeToggles = () => {
         const toggleControls = findAll(`[${DATA_ATTR_TOGGLE_CONTROL}]`);
 
         toggleControls.forEach(control => {
-            const targetName = control.getAttribute(DATA_ATTR_TOGGLE_CONTROL);
-            if (!targetName) {
-                console.warn('Toggle control found without a target name:', control);
+            const controlName = control.getAttribute(DATA_ATTR_TOGGLE_CONTROL);
+            if (!controlName) {
+                console.warn('Toggle control found without a name:', control);
                 return;
             }
 
-            // Find the corresponding target element(s) within the whole document
-            // Adjust selector if targets are constrained (e.g., within the same parent)
-            const targetElement = find(`[${DATA_ATTR_TOGGLE_TARGET}="${targetName}"]`);
+            // Find corresponding targets (can be multiple types)
+            const showHideTarget = find(`[${DATA_ATTR_TOGGLE_TARGET}="${controlName}"]`);
+            const disableTargetInput = find(`[${DATA_ATTR_DISABLE_TARGET}="${controlName}"]`);
+            const disableValue = control.getAttribute(DATA_ATTR_DISABLE_VALUE); // Get value from control
 
-            if (!targetElement) {
-                console.warn(`No toggle target found for control value: ${targetName}`);
+            // Check if at least one target exists for this control
+            if (!showHideTarget && !disableTargetInput) {
+                console.warn(`No toggle target or disable target found for control name: ${controlName}`);
                 return;
             }
 
-            // Function to update visibility based on control state
-            const updateTargetVisibility = () => {
-                // Checkbox/Radio use 'checked', other inputs might need different checks
-                const isControlActive = control.checked;
+            // Function to update all targets based on control state
+            const updateTargetsState = () => {
+                const isControlActive = control.checked; // Assuming checkbox/radio
 
-                if (isControlActive) {
-                    fadeInElement(targetElement);
-                } else {
-                    fadeOutElement(targetElement);
-                    // Optional: Clear values of inputs within the target when hidden
-                    // const inputsInTarget = findAll('input, select, textarea', targetElement);
-                    // inputsInTarget.forEach(input => {
-                    //     if (input.type === 'checkbox' || input.type === 'radio') {
-                    //         input.checked = false;
-                    //     } else {
-                    //         input.value = '';
-                    //     }
-                    //     // Trigger change event if needed for other scripts
-                    //     input.dispatchEvent(new Event('change', { bubbles: true }));
-                    // });
+                // Handle Show/Hide Target
+                if (showHideTarget) {
+                    if (isControlActive) {
+                        fadeInElement(showHideTarget);
+                    } else {
+                        fadeOutElement(showHideTarget);
+                    }
+                }
+
+                // Handle Disable/Enable Target Input
+                if (disableTargetInput) {
+                    if (isControlActive) {
+                        disableTargetInput.disabled = true;
+                        addClass(disableTargetInput, CLASS_DISABLED_BY_TOGGLE); // Optional class
+                        // Set value only if data-disable-value attribute exists on control
+                        if (disableValue !== null) {
+                            disableTargetInput.value = disableValue;
+                            // Optional: Trigger change event if needed after setting value programmatically
+                            disableTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    } else {
+                        disableTargetInput.disabled = false;
+                        removeClass(disableTargetInput, CLASS_DISABLED_BY_TOGGLE); // Optional class
+                        // We don't automatically clear the value when enabling
+                    }
                 }
             };
 
-            // Set initial state when the page loads
-            updateTargetVisibility();
+            // Set initial state for all targets when the page loads
+            updateTargetsState();
 
-            // Add event listener for changes
-            control.addEventListener('change', updateTargetVisibility);
+            // Add event listener for changes on the control
+            control.addEventListener('change', updateTargetsState);
         });
     };
 

@@ -342,88 +342,76 @@
             return isStepValid;
         }
 
-        // *** UPDATED: Preview function with adjusted logic for placeholders ***
+        // *** UPDATED: Preview function with specific logic for budget ***
         updatePreview() {
             const lastStepContainer = this.steps[this.totalSteps - 1];
             if (!lastStepContainer) return;
 
-            // Default text for empty optional fields
             const optionalPlaceholder = 'Keine Angabe';
-            const requiredPlaceholder = '<i>Keine Angabe</i>'; // Italic for required fields if empty
+            const requiredPlaceholder = '<i>Keine Angabe</i>';
 
-            // Helper to get field value, returns null if not found or empty
             const getFieldValue = (fieldName) => {
                 const field = find(`[${DATA_ATTR_PREVIEW_FIELD}="${fieldName}"]`, this.form);
-                if (!field) return null; // Field not found
-
+                if (!field) return null;
                 let value = '';
                 if (field.type === 'checkbox' || field.type === 'radio') {
                     value = field.checked ? field.value || 'Ja' : '';
                 } else if (field.tagName === 'SELECT') {
                     value = field.options[field.selectedIndex]?.text || field.value;
                 } else {
-                    value = field.value.trim(); // Trim whitespace
+                    value = field.value.trim();
                 }
-                return value ? value : null; // Return null if value is empty after trim
+                return value ? value : null;
             };
 
-             // Helper to format value (handles null)
             const formatValue = (value, type = 'text') => {
-                if (value === null) return null; // Keep null as null for further checks
-
+                if (value === null) return null;
                 switch (type) {
                     case 'currency': return `${value} €`;
                     case 'textarea': return value.replace(/\n/g, '<br>');
                     case 'period':
-                         if (value.start && value.end) return `${value.start} bis ${value.end}`; // Changed " - " to " bis "
+                         if (value.start && value.end) return `${value.start} bis ${value.end}`;
                          if (value.start) return `Ab ${value.start}`;
                          if (value.end) return `Bis ${value.end}`;
-                         return null; // Return null if dates are incomplete
+                         return null;
                     default: return value;
                 }
             };
 
-            // Helper to update a specific placeholder element
             const updatePlaceholder = (fieldName, displayValue) => {
                  const placeholderElement = find(`[${DATA_ATTR_PREVIEW_PLACEHOLDER}="${fieldName}"]`, lastStepContainer);
                  if (placeholderElement) {
-                     placeholderElement.innerHTML = displayValue; // Use innerHTML for potential HTML tags
+                     placeholderElement.innerHTML = displayValue;
                  }
             };
 
-            // --- Update placeholders for each field ---
-
-            // projectName (Required)
+            // --- Update placeholders ---
             let projectNameVal = getFieldValue('projectName');
             updatePlaceholder('projectName', formatValue(projectNameVal) || requiredPlaceholder);
 
-            // job-adress-optional (Optional -> Special Case: "Remote" if empty)
             let jobAddressVal = getFieldValue('job-adress-optional');
             updatePlaceholder('job-adress-optional', jobAddressVal === null ? 'Remote' : formatValue(jobAddressVal, 'textarea'));
 
-            // budget (Required)
+            // *** Budget Logic Updated ***
             let budgetVal = getFieldValue('budget');
-            updatePlaceholder('budget', formatValue(budgetVal, 'currency') || requiredPlaceholder);
+            // Show "tba" if null, otherwise format as currency or show required placeholder if somehow still null after format
+            updatePlaceholder('budget', budgetVal === null ? 'tba' : (formatValue(budgetVal, 'currency') || requiredPlaceholder));
 
-            // productionPeriod (Required, combination of two fields)
             let startDateVal = getFieldValue('startDate');
             let endDateVal = getFieldValue('endDate');
             let periodFormattedVal = formatValue({ start: startDateVal, end: endDateVal }, 'period');
             updatePlaceholder('productionPeriod', periodFormattedVal || requiredPlaceholder);
 
-            // lang (Required)
             let langVal = getFieldValue('lang');
             updatePlaceholder('lang', formatValue(langVal) || requiredPlaceholder);
 
-            // aufgabe (Required)
             let aufgabeVal = getFieldValue('aufgabe');
             updatePlaceholder('aufgabe', formatValue(aufgabeVal, 'textarea') || requiredPlaceholder);
 
-            // steckbrief (Required)
             let steckbriefVal = getFieldValue('steckbrief');
             updatePlaceholder('steckbrief', formatValue(steckbriefVal, 'textarea') || requiredPlaceholder);
 
-            // Optional Fields - Use optionalPlaceholder if null
+            // Optional Fields
             updatePlaceholder('creatorCountOptional', formatValue(getFieldValue('creatorCountOptional')) || optionalPlaceholder);
             updatePlaceholder('genderOptional', formatValue(getFieldValue('genderOptional')) || optionalPlaceholder);
             updatePlaceholder('videoCountOptional', formatValue(getFieldValue('videoCountOptional')) || optionalPlaceholder);
@@ -432,7 +420,6 @@
             updatePlaceholder('reviewsOptional', formatValue(getFieldValue('reviewsOptional')) || optionalPlaceholder);
             updatePlaceholder('durationOptional', formatValue(getFieldValue('durationOptional')) || optionalPlaceholder);
             updatePlaceholder('scriptOptional', formatValue(getFieldValue('scriptOptional')) || optionalPlaceholder);
-
             // --- End Placeholder Updates ---
         }
 
@@ -480,6 +467,11 @@
                     } else {
                         disableTargetInput.disabled = false;
                         removeClass(disableTargetInput, CLASS_DISABLED_BY_TOGGLE);
+                        // Clear value if it was set by the toggle
+                        if (disableValue !== null && disableTargetInput.value === disableValue) {
+                             disableTargetInput.value = '';
+                             disableTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
                     }
                 }
             };

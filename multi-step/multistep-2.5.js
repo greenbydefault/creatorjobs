@@ -16,13 +16,15 @@
     const DATA_ATTR_SUBMIT_BTN = 'data-multistep-submit';
     const DATA_ATTR_GUIDE_CONTAINER = 'data-step-guide-container';
     const DATA_ATTR_GUIDE = 'data-step-guide';
-    const DATA_ATTR_PREVIEW_FIELD = 'data-preview-field'; // Attribute for preview fields
+    const DATA_ATTR_PREVIEW_FIELD = 'data-preview-field'; // On input fields
+    // *** NEW: Data attribute for preview placeholder elements ***
+    const DATA_ATTR_PREVIEW_PLACEHOLDER = 'data-preview-placeholder'; // On display elements in preview step
     const CLASS_ACTIVE_STEP = 'active';
     const CLASS_ACTIVE_INDICATOR = 'active';
     const CLASS_HIDE = 'hide'; // For buttons
     const CLASS_INPUT_ERROR = 'input-error';
     const CLASS_INDICATOR_REACHABLE = 'reachable';
-    const CLASS_PREVIEW_WRAPPER = 'form-campaign-preview-wrapper'; // Class for the preview container
+    // const CLASS_PREVIEW_WRAPPER = 'form-campaign-preview-wrapper'; // No longer needed to target wrapper
 
     // Toggle Attributes
     const DATA_ATTR_TOGGLE_CONTROL = 'data-toggle-control';
@@ -105,7 +107,7 @@
             this.submitButton = find(`[${DATA_ATTR_SUBMIT_BTN}]`, this.form);
             this.guideContainer = find(`[${DATA_ATTR_GUIDE_CONTAINER}]`);
             this.guides = this.guideContainer ? Array.from(findAll(`[${DATA_ATTR_GUIDE}]`, this.guideContainer)) : [];
-            this.previewWrapper = find(`.${CLASS_PREVIEW_WRAPPER}`, this.form);
+            // this.previewWrapper = find(`.${CLASS_PREVIEW_WRAPPER}`, this.form); // No longer needed
 
 
             this.currentStepIndex = 0;
@@ -336,7 +338,6 @@
 
             requiredInputs.forEach(input => {
                 removeClass(input, CLASS_INPUT_ERROR);
-                // Also check if the input is currently disabled by a toggle
                 if (!input.checkValidity() && !input.disabled) {
                     isStepValid = false;
                     addClass(input, CLASS_INPUT_ERROR);
@@ -345,121 +346,87 @@
             return isStepValid;
         }
 
-        // *** UPDATED: Preview function with specified fields ***
+        // *** UPDATED: Preview function uses placeholders ***
         updatePreview() {
-            if (!this.previewWrapper) {
-                return; // Exit if preview area not found
-            }
+            // Find the container of the last step
+            const lastStepContainer = this.steps[this.totalSteps - 1];
+            if (!lastStepContainer) return; // Exit if last step container not found
 
-            // Helper to get field value, returns placeholder if empty/not found
+            // Helper to get field value
             const getFieldValue = (fieldName, placeholder = '<i>-</i>') => {
                 const field = find(`[${DATA_ATTR_PREVIEW_FIELD}="${fieldName}"]`, this.form);
-                if (!field) return placeholder; // Return placeholder if field doesn't exist
-
+                if (!field) return placeholder;
                 let value = '';
                 if (field.type === 'checkbox' || field.type === 'radio') {
-                    // Needs refinement if multiple checkboxes/radios share the same name
-                    value = field.checked ? field.value || 'Ja' : ''; // Return empty if not checked
+                    value = field.checked ? field.value || 'Ja' : '';
                 } else if (field.tagName === 'SELECT') {
-                    value = field.options[field.selectedIndex]?.text || field.value; // Prefer selected text
+                    value = field.options[field.selectedIndex]?.text || field.value;
                 } else {
-                    value = field.value; // Get value for text, number, textarea etc.
+                    value = field.value;
                 }
-
-                // Return placeholder only if the retrieved value is truly empty
                 return value ? value : placeholder;
             };
 
-            // Helper to format value (e.g., add currency, handle newlines)
+             // Helper to format value
             const formatValue = (value, type = 'text', placeholder = '<i>-</i>') => {
-                if (value === placeholder) return placeholder; // Don't format the placeholder itself
-
+                if (value === placeholder) return placeholder;
                 switch (type) {
-                    case 'currency':
-                        return `${value} €`;
-                    case 'textarea':
-                        return value.replace(/\n/g, '<br>'); // Replace newlines
+                    case 'currency': return `${value} €`;
+                    case 'textarea': return value.replace(/\n/g, '<br>');
                     case 'period':
-                         // Assuming value is an object { start: '...', end: '...' }
                          if (value.start && value.end) return `${value.start} - ${value.end}`;
                          if (value.start) return `Ab ${value.start}`;
                          if (value.end) return `Bis ${value.end}`;
                          return placeholder;
-                    default:
-                        return value;
+                    default: return value;
                 }
             };
 
+            // Helper to update a specific placeholder element
+            const updatePlaceholder = (fieldName, formattedValue) => {
+                 const placeholderElement = find(`[${DATA_ATTR_PREVIEW_PLACEHOLDER}="${fieldName}"]`, lastStepContainer);
+                 if (placeholderElement) {
+                     placeholderElement.innerHTML = formattedValue; // Use innerHTML because formatted value might contain HTML (<i>, <br>)
 
-            let previewHTML = '';
+                     // Optional: Hide the parent wrapper if the value is the placeholder for optional fields
+                     // This requires a specific structure like <div data-preview-placeholder="fieldNameWrapper">...</div>
+                     // const wrapper = placeholderElement.closest(`[data-preview-placeholder="${fieldName}Wrapper"]`);
+                     // if (wrapper) {
+                     //    wrapper.style.display = formattedValue === '<i>-</i>' ? 'none' : '';
+                     // }
 
-            // --- Generate HTML for each field ---
+                 } else {
+                    // console.warn(`Preview placeholder not found for: ${fieldName}`); // Optional warning
+                 }
+            };
 
-            // projectName (Required)
-            const projectName = getFieldValue('projectName', '<i>Keine Angabe</i>');
-            previewHTML += `<div class="preview-item"><div class="preview-label">Projektname</div><div class="preview-value">${formatValue(projectName)}</div></div>`;
+            // --- Update placeholders for each field ---
+            const placeholder = '<i>-</i>'; // Default placeholder for optional fields
 
-            // job-adress-optional (Optional)
-            const jobAddress = getFieldValue('job-adress-optional');
-            if (jobAddress !== '<i>-</i>') { // Only show if value exists
-                 previewHTML += `<div class="preview-item"><div class="preview-label">Job Adresse (Optional)</div><div class="preview-value">${formatValue(jobAddress, 'textarea')}</div></div>`;
-            }
-
-            // budget (Required)
-            const budget = getFieldValue('budget', '<i>Keine Angabe</i>');
-            previewHTML += `<div class="preview-item"><div class="preview-label">Budget</div><div class="preview-value">${formatValue(budget, 'currency', '<i>Keine Angabe</i>')}</div></div>`;
-
-            // startDate & endDate (Required)
-            const startDate = getFieldValue('startDate', ''); // Get raw values or empty string
+            // Required Fields
+            updatePlaceholder('projectName', formatValue(getFieldValue('projectName', '<i>Keine Angabe</i>')));
+            updatePlaceholder('budget', formatValue(getFieldValue('budget', '<i>Keine Angabe</i>'), 'currency', '<i>Keine Angabe</i>'));
+            const startDate = getFieldValue('startDate', '');
             const endDate = getFieldValue('endDate', '');
-            const periodValue = { start: startDate, end: endDate };
-            previewHTML += `<div class="preview-item"><div class="preview-label">Produktionszeitraum</div><div class="preview-value">${formatValue(periodValue, 'period', '<i>Keine Angabe</i>')}</div></div>`;
+            updatePlaceholder('productionPeriod', formatValue({ start: startDate, end: endDate }, 'period', '<i>Keine Angabe</i>'));
+            updatePlaceholder('lang', formatValue(getFieldValue('lang', '<i>Keine Angabe</i>')));
+            updatePlaceholder('aufgabe', formatValue(getFieldValue('aufgabe', '<i>Keine Angabe</i>'), 'textarea', '<i>Keine Angabe</i>'));
+            updatePlaceholder('steckbrief', formatValue(getFieldValue('steckbrief', '<i>Keine Angabe</i>'), 'textarea', '<i>Keine Angabe</i>'));
 
-            // creatorCountOptional (Optional)
-            const creatorCount = getFieldValue('creatorCountOptional');
-             if (creatorCount !== '<i>-</i>') {
-                 previewHTML += `<div class="preview-item"><div class="preview-label">Anzahl Creator (Optional)</div><div class="preview-value">${formatValue(creatorCount)}</div></div>`;
-             }
+            // Optional Fields - Update placeholders directly
+            updatePlaceholder('job-adress-optional', formatValue(getFieldValue('job-adress-optional', placeholder), 'textarea', placeholder));
+            updatePlaceholder('creatorCountOptional', formatValue(getFieldValue('creatorCountOptional', placeholder), 'text', placeholder));
+            updatePlaceholder('genderOptional', formatValue(getFieldValue('genderOptional', placeholder), 'text', placeholder));
+            updatePlaceholder('videoCountOptional', formatValue(getFieldValue('videoCountOptional', placeholder), 'text', placeholder));
+            updatePlaceholder('imgCountOptional', formatValue(getFieldValue('imgCountOptional', placeholder), 'text', placeholder));
+            updatePlaceholder('videoDurationOptional', formatValue(getFieldValue('videoDurationOptional', placeholder), 'text', placeholder));
+            updatePlaceholder('reviewsOptional', formatValue(getFieldValue('reviewsOptional', placeholder), 'text', placeholder));
+            updatePlaceholder('durationOptional', formatValue(getFieldValue('durationOptional', placeholder), 'text', placeholder));
+            updatePlaceholder('scriptOptional', formatValue(getFieldValue('scriptOptional', placeholder), 'text', placeholder));
 
-            // lang (Required)
-            const lang = getFieldValue('lang', '<i>Keine Angabe</i>');
-            previewHTML += `<div class="preview-item"><div class="preview-label">Sprache</div><div class="preview-value">${formatValue(lang)}</div></div>`;
-
-            // aufgabe (Required)
-            const aufgabe = getFieldValue('aufgabe', '<i>Keine Angabe</i>');
-            previewHTML += `<div class="preview-item"><div class="preview-label">Aufgabenbeschreibung</div><div class="preview-value">${formatValue(aufgabe, 'textarea', '<i>Keine Angabe</i>')}</div></div>`;
-
-            // steckbrief (Required)
-            const steckbrief = getFieldValue('steckbrief', '<i>Keine Angabe</i>');
-            previewHTML += `<div class="preview-item"><div class="preview-label">Creator-Profil (Steckbrief)</div><div class="preview-value">${formatValue(steckbrief, 'textarea', '<i>Keine Angabe</i>')}</div></div>`;
-
-            // --- Optional Fields Section ---
-            let optionalHTML = '';
-            const gender = getFieldValue('genderOptional');
-            const videoCount = getFieldValue('videoCountOptional');
-            const imgCount = getFieldValue('imgCountOptional');
-            const videoDuration = getFieldValue('videoDurationOptional');
-            const reviews = getFieldValue('reviewsOptional');
-            const duration = getFieldValue('durationOptional');
-            const script = getFieldValue('scriptOptional');
-
-            if (gender !== '<i>-</i>') optionalHTML += `<div><div class="preview-label">Gender (Optional)</div><div class="preview-value">${formatValue(gender)}</div></div>`;
-            if (videoCount !== '<i>-</i>') optionalHTML += `<div><div class="preview-label">Anzahl Videos (Optional)</div><div class="preview-value">${formatValue(videoCount)}</div></div>`;
-            if (imgCount !== '<i>-</i>') optionalHTML += `<div><div class="preview-label">Anzahl Bilder (Optional)</div><div class="preview-value">${formatValue(imgCount)}</div></div>`;
-            if (videoDuration !== '<i>-</i>') optionalHTML += `<div><div class="preview-label">Videolänge (Optional)</div><div class="preview-value">${formatValue(videoDuration)}</div></div>`;
-            if (reviews !== '<i>-</i>') optionalHTML += `<div><div class="preview-label">Anzahl Korrekturschleifen (Optional)</div><div class="preview-value">${formatValue(reviews)}</div></div>`;
-            if (duration !== '<i>-</i>') optionalHTML += `<div><div class="preview-label">Kampagnendauer (Optional)</div><div class="preview-value">${formatValue(duration)}</div></div>`;
-            if (script !== '<i>-</i>') optionalHTML += `<div><div class="preview-label">Wer erstellt Script (Optional)</div><div class="preview-value">${formatValue(script)}</div></div>`;
-
-            // Add optional section only if it contains content
-            if (optionalHTML) {
-                 previewHTML += `<div class="preview-item optional-section"><div class="preview-label">Optionale Angaben</div><div class="preview-grid">${optionalHTML}</div></div>`;
-            }
-
-            // --- End Field Generation ---
-
-            this.previewWrapper.innerHTML = previewHTML;
+            // --- End Placeholder Updates ---
         }
+
 
     } // End MultiStepForm Class
 
@@ -483,7 +450,6 @@
             const disableValue = control.getAttribute(DATA_ATTR_DISABLE_VALUE);
 
             if (!showHideTarget && !disableTargetInput) {
-                // console.warn(`No target found for toggle control: ${controlName}`); // Less verbose
                 return;
             }
 

@@ -46,24 +46,26 @@
     const showElement = (element) => removeClass(element, CLASS_HIDE);
     const hideElement = (element) => addClass(element, CLASS_HIDE);
 
-    // Fade Out Helper
+    // Fade Out Helper - Sets display: none after transition
     const fadeOutElement = (element, callback) => {
         if (!element || element.style.opacity === '0' || element.style.display === 'none') {
              if (typeof callback === 'function') callback();
             return;
         }
-        element.style.opacity = '0';
+        element.style.opacity = '0'; // Start fade-out
         let transitionEnded = false;
         const onFadeOutComplete = (event) => {
+            // Make sure the event is for opacity and the element itself
             if (event.target === element && event.propertyName === 'opacity' && !transitionEnded) {
                  transitionEnded = true;
-                element.style.display = 'none';
+                element.style.display = 'none'; // Hide after fade
                 element.removeEventListener('transitionend', onFadeOutComplete);
                 if (typeof callback === 'function') callback();
             }
         };
         element.removeEventListener('transitionend', onFadeOutComplete);
         element.addEventListener('transitionend', onFadeOutComplete);
+        // Fallback timeout
         setTimeout(() => {
             if (!transitionEnded) {
                  transitionEnded = true;
@@ -74,14 +76,24 @@
         }, TRANSITION_DURATION + 50);
     };
 
-    // Fade In Helper
+    // *** UPDATED: Fade In Helper - Does NOT set display style ***
     const fadeInElement = (element) => {
-         if (!element || (element.style.opacity === '1' && element.style.display === 'block')) return;
-         const defaultDisplay = 'block';
-         element.style.display = defaultDisplay;
+         // Only proceed if element exists and is not already fully opaque
+         if (!element || element.style.opacity === '1') return;
+
+         // Ensure element is not display: none before starting transition
+         // If it is none, set it based on its default computed style or fallback to 'block'
+         if (getComputedStyle(element).display === 'none') {
+             // Temporarily set display to retrieve computed style if needed,
+             // but usually the CSS rule for the visible state handles this.
+             // For safety, let's ensure it's not 'none'. We'll rely on CSS for the actual type (block, flex etc.)
+             element.style.display = ''; // Revert to CSS default display
+         }
+
+         // Use rAF and setTimeout to ensure display change is rendered before opacity change
          requestAnimationFrame(() => {
              setTimeout(() => {
-                 element.style.opacity = '1';
+                 element.style.opacity = '1'; // Trigger fade-in transition
              }, 10);
          });
     };
@@ -139,11 +151,12 @@
              // Initial state for steps and guides
              this.steps.forEach((step, index) => {
                 if (index === 0) {
-                    step.style.display = 'block';
+                    // Set initial display based on CSS (remove inline style if any)
+                    step.style.display = '';
                     step.style.opacity = '1';
                     addClass(step, CLASS_ACTIVE_STEP);
                 } else {
-                    step.style.display = 'none';
+                    step.style.display = 'none'; // Start hidden
                     step.style.opacity = '0';
                     removeClass(step, CLASS_ACTIVE_STEP);
                 }
@@ -152,10 +165,11 @@
                  const guideStepNumber = parseInt(guide.getAttribute(DATA_ATTR_GUIDE), 10);
                  const targetStepNumber = 1;
                  if (!isNaN(guideStepNumber) && guideStepNumber === targetStepNumber || isNaN(guideStepNumber) && index === 0) {
-                     guide.style.display = 'block';
+                     // Set initial display based on CSS (remove inline style if any)
+                     guide.style.display = '';
                      guide.style.opacity = '1';
                  } else {
-                     guide.style.display = 'none';
+                     guide.style.display = 'none'; // Start hidden
                      guide.style.opacity = '0';
                  }
             });
@@ -272,15 +286,15 @@
             }
 
             if (isInitialLoad) {
-                 // Set initial styles...
+                 // Set initial styles - rely on CSS for display type
                  this.steps.forEach((s, i) => {
-                    s.style.display = i === this.currentStepIndex ? 'block' : 'none';
+                    s.style.display = i === this.currentStepIndex ? '' : 'none'; // Use '' for default display
                     s.style.opacity = i === this.currentStepIndex ? '1' : '0';
                     i === this.currentStepIndex ? addClass(s, CLASS_ACTIVE_STEP) : removeClass(s, CLASS_ACTIVE_STEP);
                 });
                  this.guides.forEach((g) => {
                      const guideStep = parseInt(g.getAttribute(DATA_ATTR_GUIDE), 10);
-                     g.style.display = guideStep === targetStepNumber ? 'block' : 'none';
+                     g.style.display = guideStep === targetStepNumber ? '' : 'none'; // Use '' for default display
                      g.style.opacity = guideStep === targetStepNumber ? '1' : '0';
                  });
                 this.isTransitioning = false;
@@ -289,11 +303,11 @@
 
             const fadeInNewElements = () => {
                 if (incomingStep) {
-                    fadeInElement(incomingStep);
+                    fadeInElement(incomingStep); // fadeInElement now relies on CSS for display type
                     addClass(incomingStep, CLASS_ACTIVE_STEP);
                 }
                 if (incomingGuide) {
-                    fadeInElement(incomingGuide);
+                    fadeInElement(incomingGuide); // fadeInElement now relies on CSS for display type
                 }
                  setTimeout(() => {
                      this.isTransitioning = false;
@@ -357,7 +371,6 @@
             return isStepValid;
         }
 
-        // *** UPDATED: Preview function includes creatorCategorie and creatorCount ***
         updatePreview() {
             const lastStepContainer = this.steps[this.totalSteps - 1];
             if (!lastStepContainer) return;
@@ -419,11 +432,9 @@
             let periodFormattedVal = formatValue({ start: startDateVal, end: endDateVal }, 'period');
             updatePlaceholder('productionPeriod', periodFormattedVal || requiredPlaceholder);
 
-            // *** ADDED: creatorCategorie (Assuming required) ***
             let creatorCategorieVal = getFieldValue('creatorCategorie');
             updatePlaceholder('creatorCategorie', formatValue(creatorCategorieVal) || requiredPlaceholder);
 
-             // *** ADDED: creatorCount (Assuming required) ***
              let creatorCountVal = getFieldValue('creatorCount');
              updatePlaceholder('creatorCount', formatValue(creatorCountVal) || requiredPlaceholder);
 

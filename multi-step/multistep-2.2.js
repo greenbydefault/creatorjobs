@@ -2,10 +2,11 @@
     'use strict';
 
     /**
-     * ------------------------------------------------------------------------
+     * ========================================================================
      * Constants
-     * ------------------------------------------------------------------------
+     * ========================================================================
      */
+    // Multi-Step Form Attributes & Classes
     const DATA_ATTR_FORM = 'data-multistep-form';
     const DATA_ATTR_STEP = 'data-step';
     const DATA_ATTR_INDICATOR_CONTAINER = 'data-step-indicator-container';
@@ -15,25 +16,25 @@
     const DATA_ATTR_SUBMIT_BTN = 'data-multistep-submit';
     const DATA_ATTR_GUIDE_CONTAINER = 'data-step-guide-container';
     const DATA_ATTR_GUIDE = 'data-step-guide';
-    // *** NEU: Data attribute for preview fields ***
     const DATA_ATTR_PREVIEW_FIELD = 'data-preview-field';
-
-
-    // CSS classes
     const CLASS_ACTIVE_STEP = 'active';
     const CLASS_ACTIVE_INDICATOR = 'active';
-    const CLASS_HIDE = 'hide'; // Use existing .hide class
+    const CLASS_HIDE = 'hide'; // For buttons
     const CLASS_INPUT_ERROR = 'input-error';
-    const CLASS_INDICATOR_REACHABLE = 'reachable'; // For clickable indicators
-    const CLASS_PREVIEW_WRAPPER = 'form-campaign-preview-wrapper'; // Class for the preview container
+    const CLASS_INDICATOR_REACHABLE = 'reachable';
+    const CLASS_PREVIEW_WRAPPER = 'form-campaign-preview-wrapper';
 
-    // Transition duration (should match CSS)
+    // *** NEW: Toggle Attributes ***
+    const DATA_ATTR_TOGGLE_CONTROL = 'data-toggle-control';
+    const DATA_ATTR_TOGGLE_TARGET = 'data-toggle-target';
+
+    // Transition duration (should match CSS for steps/guides/toggles)
     const TRANSITION_DURATION = 400; // ms
 
     /**
-     * ------------------------------------------------------------------------
+     * ========================================================================
      * Helper Functions
-     * ------------------------------------------------------------------------
+     * ========================================================================
      */
     const find = (selector, element = document) => element.querySelector(selector);
     const findAll = (selector, element = document) => element.querySelectorAll(selector);
@@ -42,6 +43,7 @@
     const showElement = (element) => removeClass(element, CLASS_HIDE);
     const hideElement = (element) => addClass(element, CLASS_HIDE);
 
+    // Fade Out Helper
     const fadeOutElement = (element, callback) => {
         if (!element || element.style.opacity === '0' || element.style.display === 'none') {
              if (typeof callback === 'function') callback();
@@ -69,9 +71,12 @@
         }, TRANSITION_DURATION + 50);
     };
 
+    // Fade In Helper
     const fadeInElement = (element) => {
          if (!element || (element.style.opacity === '1' && element.style.display === 'block')) return;
-         element.style.display = 'block';
+         // Use 'block' as default, adjust if specific display needed (e.g., 'flex')
+         const defaultDisplay = 'block';
+         element.style.display = defaultDisplay;
          requestAnimationFrame(() => {
              setTimeout(() => {
                  element.style.opacity = '1';
@@ -80,11 +85,15 @@
     };
 
     /**
-     * ------------------------------------------------------------------------
+     * ========================================================================
      * Core Logic: MultiStepForm Class
-     * ------------------------------------------------------------------------
+     * ========================================================================
      */
     class MultiStepForm {
+        // --- Constructor and Methods for Multi-Step Logic ---
+        // (Constructor and methods like init, addEventListeners, goToStep,
+        // updateIndicators, updateButtonStates, validateStep, updatePreview
+        // remain the same as the previous version)
         constructor(formElement) {
             this.form = formElement;
             const formId = this.form.id || 'form without id';
@@ -337,135 +346,132 @@
             return isStepValid;
         }
 
-        // *** UPDATED: Function to update the preview area using data attributes ***
         updatePreview() {
             if (!this.previewWrapper) {
-                console.warn('Preview wrapper not found. Cannot update preview.');
+                // console.warn('Preview wrapper not found.'); // Optional warning
                 return;
             }
-
-            // Helper function to get value from field using data-preview-field
             const getFieldValue = (fieldName) => {
                 const field = find(`[${DATA_ATTR_PREVIEW_FIELD}="${fieldName}"]`, this.form);
-                if (!field) return 'N/A'; // Field not found
-
-                // Handle different field types
+                if (!field) return 'N/A';
                 if (field.type === 'checkbox' || field.type === 'radio') {
-                    // For multiple checkboxes/radios with the same name, you might need different logic
-                    return field.checked ? field.value || 'Ja' : 'Nein'; // Or return the value if set
+                    return field.checked ? field.value || 'Ja' : 'Nein';
                 } else if (field.tagName === 'SELECT') {
-                    return field.options[field.selectedIndex]?.text || field.value || 'N/A'; // Prefer selected text
+                    return field.options[field.selectedIndex]?.text || field.value || 'N/A';
                 } else {
-                    return field.value || ''; // Return value for text, number, textarea etc.
+                    return field.value || '';
                 }
             };
-
             let previewHTML = '';
-
-            // --- Data Gathering using getFieldValue ---
+            // --- Preview HTML Generation (using getFieldValue) ---
+            // (Code from previous version to generate HTML based on field values)
             const projectName = getFieldValue('projectName');
-            previewHTML += `
-                <div class="preview-item">
-                    <div class="preview-label">Wie heißt dein Projekt?</div>
-                    <div class="preview-value">${projectName || '<i>Keine Angabe</i>'}</div>
-                </div>`;
-
+            previewHTML += `<div class="preview-item"><div class="preview-label">Wie heißt dein Projekt?</div><div class="preview-value">${projectName || '<i>Keine Angabe</i>'}</div></div>`;
             const budget = getFieldValue('budget');
-             previewHTML += `
-                <div class="preview-item">
-                    <div class="preview-label">Budget</div>
-                    <div class="preview-value">${budget ? budget + ' €' : '<i>Keine Angabe</i>'}</div>
-                </div>`;
-
+             previewHTML += `<div class="preview-item"><div class="preview-label">Budget</div><div class="preview-value">${budget ? budget + ' €' : '<i>Keine Angabe</i>'}</div></div>`;
              const startDate = getFieldValue('startDate');
              const endDate = getFieldValue('endDate');
              let productionPeriod = '<i>Keine Angabe</i>';
-             if (startDate && endDate) {
-                 productionPeriod = `${startDate} - ${endDate}`;
-             } else if (startDate) {
-                 productionPeriod = `Ab ${startDate}`;
-             } else if (endDate) {
-                 productionPeriod = `Bis ${endDate}`;
-             }
-             previewHTML += `
-                <div class="preview-item">
-                    <div class="preview-label">Produktionszeitraum</div>
-                    <div class="preview-value">${productionPeriod}</div>
-                </div>`;
-
+             if (startDate && endDate) productionPeriod = `${startDate} - ${endDate}`;
+             else if (startDate) productionPeriod = `Ab ${startDate}`;
+             else if (endDate) productionPeriod = `Bis ${endDate}`;
+             previewHTML += `<div class="preview-item"><div class="preview-label">Produktionszeitraum</div><div class="preview-value">${productionPeriod}</div></div>`;
              const creatorCount = getFieldValue('creatorCount');
              const targetGroup = getFieldValue('targetGroup');
              const followerRange = getFieldValue('followerRange');
-             previewHTML += `
-                <div class="preview-grid"> <div>
-                         <div class="preview-label">Anzahl der Creator:</div>
-                         <div class="preview-value">${creatorCount || '<i>-</i>'}</div>
-                     </div>
-                     <div>
-                         <div class="preview-label">Zielgruppe:</div>
-                         <div class="preview-value">${targetGroup || '<i>-</i>'}</div>
-                     </div>
-                     <div>
-                         <div class="preview-label">Followerbereich:</div>
-                         <div class="preview-value">${followerRange || '<i>-</i>'}</div>
-                     </div>
-                </div>`;
-
+             previewHTML += `<div class="preview-grid"><div><div class="preview-label">Anzahl der Creator:</div><div class="preview-value">${creatorCount || '<i>-</i>'}</div></div><div><div class="preview-label">Zielgruppe:</div><div class="preview-value">${targetGroup || '<i>-</i>'}</div></div><div><div class="preview-label">Followerbereich:</div><div class="preview-value">${followerRange || '<i>-</i>'}</div></div></div>`;
             const profile = getFieldValue('creatorProfile').replace(/\n/g, '<br>');
-             previewHTML += `
-                <div class="preview-item">
-                    <div class="preview-label">Creator-Profil (Steckbrief)</div>
-                    <div class="preview-value">${profile || '<i>Keine Angabe</i>'}</div>
-                </div>`;
-
+             previewHTML += `<div class="preview-item"><div class="preview-label">Creator-Profil (Steckbrief)</div><div class="preview-value">${profile || '<i>Keine Angabe</i>'}</div></div>`;
              const taskDesc = getFieldValue('taskDescription').replace(/\n/g, '<br>');
-             previewHTML += `
-                <div class="preview-item">
-                    <div class="preview-label">Aufgabenbeschreibung</div>
-                    <div class="preview-value">${taskDesc || '<i>Keine Angabe</i>'}</div>
-                </div>`;
-
+             previewHTML += `<div class="preview-item"><div class="preview-label">Aufgabenbeschreibung</div><div class="preview-value">${taskDesc || '<i>Keine Angabe</i>'}</div></div>`;
              const scriptCreator = getFieldValue('scriptCreator');
              const videoCount = getFieldValue('videoCount');
-             previewHTML += `
-                 <div class="preview-item optional-section">
-                     <div class="preview-label">Optionale Angaben</div>
-                     <div class="preview-grid">
-                          <div>
-                              <div class="preview-label">Wer erstellt das Script:</div>
-                              <div class="preview-value">${scriptCreator || '<i>-</i>'}</div>
-                          </div>
-                          <div>
-                              <div class="preview-label">Anzahl der Videos:</div>
-                              <div class="preview-value">${videoCount || '<i>-</i>'}</div>
-                          </div>
-                     </div>
-                 </div>`;
-
-            // --- End Data Gathering ---
-
+             previewHTML += `<div class="preview-item optional-section"><div class="preview-label">Optionale Angaben</div><div class="preview-grid"><div><div class="preview-label">Wer erstellt das Script:</div><div class="preview-value">${scriptCreator || '<i>-</i>'}</div></div><div><div class="preview-label">Anzahl der Videos:</div><div class="preview-value">${videoCount || '<i>-</i>'}</div></div></div></div>`;
+            // --- End Preview HTML Generation ---
             this.previewWrapper.innerHTML = previewHTML;
         }
-    }
+
+    } // End MultiStepForm Class
 
     /**
-     * ------------------------------------------------------------------------
+     * ========================================================================
+     * NEW: Toggle Field Logic
+     * ========================================================================
+     */
+    const initializeToggles = () => {
+        const toggleControls = findAll(`[${DATA_ATTR_TOGGLE_CONTROL}]`);
+
+        toggleControls.forEach(control => {
+            const targetName = control.getAttribute(DATA_ATTR_TOGGLE_CONTROL);
+            if (!targetName) {
+                console.warn('Toggle control found without a target name:', control);
+                return;
+            }
+
+            // Find the corresponding target element(s) within the whole document
+            // Adjust selector if targets are constrained (e.g., within the same parent)
+            const targetElement = find(`[${DATA_ATTR_TOGGLE_TARGET}="${targetName}"]`);
+
+            if (!targetElement) {
+                console.warn(`No toggle target found for control value: ${targetName}`);
+                return;
+            }
+
+            // Function to update visibility based on control state
+            const updateTargetVisibility = () => {
+                // Checkbox/Radio use 'checked', other inputs might need different checks
+                const isControlActive = control.checked;
+
+                if (isControlActive) {
+                    fadeInElement(targetElement);
+                } else {
+                    fadeOutElement(targetElement);
+                    // Optional: Clear values of inputs within the target when hidden
+                    // const inputsInTarget = findAll('input, select, textarea', targetElement);
+                    // inputsInTarget.forEach(input => {
+                    //     if (input.type === 'checkbox' || input.type === 'radio') {
+                    //         input.checked = false;
+                    //     } else {
+                    //         input.value = '';
+                    //     }
+                    //     // Trigger change event if needed for other scripts
+                    //     input.dispatchEvent(new Event('change', { bubbles: true }));
+                    // });
+                }
+            };
+
+            // Set initial state when the page loads
+            updateTargetVisibility();
+
+            // Add event listener for changes
+            control.addEventListener('change', updateTargetVisibility);
+        });
+    };
+
+
+    /**
+     * ========================================================================
      * Initialization
-     * ------------------------------------------------------------------------
+     * ========================================================================
      */
     document.addEventListener('DOMContentLoaded', () => {
+        // Initialize Multi-Step Forms
         const multiStepForms = findAll(`[${DATA_ATTR_FORM}]`);
-        if (multiStepForms.length === 0) {
-            console.info('MultiStepForm: No forms with attribute ' + DATA_ATTR_FORM + ' found.');
-            return;
+        if (multiStepForms.length > 0) {
+            multiStepForms.forEach(formElement => {
+                try {
+                    new MultiStepForm(formElement).init();
+                } catch (error) {
+                     console.error(`Failed to initialize MultiStepForm for: #${formElement.id || 'form without id'}`, error);
+                }
+            });
+        } else {
+             console.info('MultiStepForm: No forms with attribute ' + DATA_ATTR_FORM + ' found.');
         }
-        multiStepForms.forEach(formElement => {
-            try {
-                new MultiStepForm(formElement).init();
-            } catch (error) {
-                 console.error(`Failed to initialize MultiStepForm for: #${formElement.id || 'form without id'}`, error);
-            }
-        });
-    });
+
+        // Initialize Toggle Fields (runs independently)
+        initializeToggles();
+
+    }); // End DOMContentLoaded
 
 })(); // Ende der IIFE

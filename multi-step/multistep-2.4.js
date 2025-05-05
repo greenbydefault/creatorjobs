@@ -16,23 +16,20 @@
     const DATA_ATTR_SUBMIT_BTN = 'data-multistep-submit';
     const DATA_ATTR_GUIDE_CONTAINER = 'data-step-guide-container';
     const DATA_ATTR_GUIDE = 'data-step-guide';
-    const DATA_ATTR_PREVIEW_FIELD = 'data-preview-field';
+    const DATA_ATTR_PREVIEW_FIELD = 'data-preview-field'; // Attribute for preview fields
     const CLASS_ACTIVE_STEP = 'active';
     const CLASS_ACTIVE_INDICATOR = 'active';
     const CLASS_HIDE = 'hide'; // For buttons
     const CLASS_INPUT_ERROR = 'input-error';
     const CLASS_INDICATOR_REACHABLE = 'reachable';
-    const CLASS_PREVIEW_WRAPPER = 'form-campaign-preview-wrapper';
+    const CLASS_PREVIEW_WRAPPER = 'form-campaign-preview-wrapper'; // Class for the preview container
 
     // Toggle Attributes
     const DATA_ATTR_TOGGLE_CONTROL = 'data-toggle-control';
     const DATA_ATTR_TOGGLE_TARGET = 'data-toggle-target';
-    // *** NEW: Toggle Disable Attributes ***
     const DATA_ATTR_DISABLE_TARGET = 'data-disable-target'; // On the input field
     const DATA_ATTR_DISABLE_VALUE = 'data-disable-value'; // On the control element
-
-    // CSS Class for visually styling disabled inputs (optional)
-    const CLASS_DISABLED_BY_TOGGLE = 'disabled-by-toggle';
+    const CLASS_DISABLED_BY_TOGGLE = 'disabled-by-toggle'; // Optional CSS class
 
     // Transition duration
     const TRANSITION_DURATION = 400; // ms
@@ -95,8 +92,6 @@
      * ========================================================================
      */
     class MultiStepForm {
-        // --- Constructor and Methods for Multi-Step Logic ---
-        // (No changes needed in the MultiStepForm class itself for this feature)
         constructor(formElement) {
             this.form = formElement;
             const formId = this.form.id || 'form without id';
@@ -341,7 +336,8 @@
 
             requiredInputs.forEach(input => {
                 removeClass(input, CLASS_INPUT_ERROR);
-                if (!input.checkValidity()) {
+                // Also check if the input is currently disabled by a toggle
+                if (!input.checkValidity() && !input.disabled) {
                     isStepValid = false;
                     addClass(input, CLASS_INPUT_ERROR);
                 }
@@ -349,46 +345,119 @@
             return isStepValid;
         }
 
+        // *** UPDATED: Preview function with specified fields ***
         updatePreview() {
             if (!this.previewWrapper) {
-                return;
+                return; // Exit if preview area not found
             }
-            const getFieldValue = (fieldName) => {
+
+            // Helper to get field value, returns placeholder if empty/not found
+            const getFieldValue = (fieldName, placeholder = '<i>-</i>') => {
                 const field = find(`[${DATA_ATTR_PREVIEW_FIELD}="${fieldName}"]`, this.form);
-                if (!field) return 'N/A';
+                if (!field) return placeholder; // Return placeholder if field doesn't exist
+
+                let value = '';
                 if (field.type === 'checkbox' || field.type === 'radio') {
-                    return field.checked ? field.value || 'Ja' : 'Nein';
+                    // Needs refinement if multiple checkboxes/radios share the same name
+                    value = field.checked ? field.value || 'Ja' : ''; // Return empty if not checked
                 } else if (field.tagName === 'SELECT') {
-                    return field.options[field.selectedIndex]?.text || field.value || 'N/A';
+                    value = field.options[field.selectedIndex]?.text || field.value; // Prefer selected text
                 } else {
-                    return field.value || '';
+                    value = field.value; // Get value for text, number, textarea etc.
+                }
+
+                // Return placeholder only if the retrieved value is truly empty
+                return value ? value : placeholder;
+            };
+
+            // Helper to format value (e.g., add currency, handle newlines)
+            const formatValue = (value, type = 'text', placeholder = '<i>-</i>') => {
+                if (value === placeholder) return placeholder; // Don't format the placeholder itself
+
+                switch (type) {
+                    case 'currency':
+                        return `${value} €`;
+                    case 'textarea':
+                        return value.replace(/\n/g, '<br>'); // Replace newlines
+                    case 'period':
+                         // Assuming value is an object { start: '...', end: '...' }
+                         if (value.start && value.end) return `${value.start} - ${value.end}`;
+                         if (value.start) return `Ab ${value.start}`;
+                         if (value.end) return `Bis ${value.end}`;
+                         return placeholder;
+                    default:
+                        return value;
                 }
             };
+
+
             let previewHTML = '';
-            // --- Preview HTML Generation ---
-            const projectName = getFieldValue('projectName');
-            previewHTML += `<div class="preview-item"><div class="preview-label">Wie heißt dein Projekt?</div><div class="preview-value">${projectName || '<i>Keine Angabe</i>'}</div></div>`;
-            const budget = getFieldValue('budget');
-             previewHTML += `<div class="preview-item"><div class="preview-label">Budget</div><div class="preview-value">${budget ? budget + ' €' : '<i>Keine Angabe</i>'}</div></div>`;
-             const startDate = getFieldValue('startDate');
-             const endDate = getFieldValue('endDate');
-             let productionPeriod = '<i>Keine Angabe</i>';
-             if (startDate && endDate) productionPeriod = `${startDate} - ${endDate}`;
-             else if (startDate) productionPeriod = `Ab ${startDate}`;
-             else if (endDate) productionPeriod = `Bis ${endDate}`;
-             previewHTML += `<div class="preview-item"><div class="preview-label">Produktionszeitraum</div><div class="preview-value">${productionPeriod}</div></div>`;
-             const creatorCount = getFieldValue('creatorCount');
-             const targetGroup = getFieldValue('targetGroup');
-             const followerRange = getFieldValue('followerRange');
-             previewHTML += `<div class="preview-grid"><div><div class="preview-label">Anzahl der Creator:</div><div class="preview-value">${creatorCount || '<i>-</i>'}</div></div><div><div class="preview-label">Zielgruppe:</div><div class="preview-value">${targetGroup || '<i>-</i>'}</div></div><div><div class="preview-label">Followerbereich:</div><div class="preview-value">${followerRange || '<i>-</i>'}</div></div></div>`;
-            const profile = getFieldValue('creatorProfile').replace(/\n/g, '<br>');
-             previewHTML += `<div class="preview-item"><div class="preview-label">Creator-Profil (Steckbrief)</div><div class="preview-value">${profile || '<i>Keine Angabe</i>'}</div></div>`;
-             const taskDesc = getFieldValue('taskDescription').replace(/\n/g, '<br>');
-             previewHTML += `<div class="preview-item"><div class="preview-label">Aufgabenbeschreibung</div><div class="preview-value">${taskDesc || '<i>Keine Angabe</i>'}</div></div>`;
-             const scriptCreator = getFieldValue('scriptCreator');
-             const videoCount = getFieldValue('videoCount');
-             previewHTML += `<div class="preview-item optional-section"><div class="preview-label">Optionale Angaben</div><div class="preview-grid"><div><div class="preview-label">Wer erstellt das Script:</div><div class="preview-value">${scriptCreator || '<i>-</i>'}</div></div><div><div class="preview-label">Anzahl der Videos:</div><div class="preview-value">${videoCount || '<i>-</i>'}</div></div></div></div>`;
-            // --- End Preview HTML Generation ---
+
+            // --- Generate HTML for each field ---
+
+            // projectName (Required)
+            const projectName = getFieldValue('projectName', '<i>Keine Angabe</i>');
+            previewHTML += `<div class="preview-item"><div class="preview-label">Projektname</div><div class="preview-value">${formatValue(projectName)}</div></div>`;
+
+            // job-adress-optional (Optional)
+            const jobAddress = getFieldValue('job-adress-optional');
+            if (jobAddress !== '<i>-</i>') { // Only show if value exists
+                 previewHTML += `<div class="preview-item"><div class="preview-label">Job Adresse (Optional)</div><div class="preview-value">${formatValue(jobAddress, 'textarea')}</div></div>`;
+            }
+
+            // budget (Required)
+            const budget = getFieldValue('budget', '<i>Keine Angabe</i>');
+            previewHTML += `<div class="preview-item"><div class="preview-label">Budget</div><div class="preview-value">${formatValue(budget, 'currency', '<i>Keine Angabe</i>')}</div></div>`;
+
+            // startDate & endDate (Required)
+            const startDate = getFieldValue('startDate', ''); // Get raw values or empty string
+            const endDate = getFieldValue('endDate', '');
+            const periodValue = { start: startDate, end: endDate };
+            previewHTML += `<div class="preview-item"><div class="preview-label">Produktionszeitraum</div><div class="preview-value">${formatValue(periodValue, 'period', '<i>Keine Angabe</i>')}</div></div>`;
+
+            // creatorCountOptional (Optional)
+            const creatorCount = getFieldValue('creatorCountOptional');
+             if (creatorCount !== '<i>-</i>') {
+                 previewHTML += `<div class="preview-item"><div class="preview-label">Anzahl Creator (Optional)</div><div class="preview-value">${formatValue(creatorCount)}</div></div>`;
+             }
+
+            // lang (Required)
+            const lang = getFieldValue('lang', '<i>Keine Angabe</i>');
+            previewHTML += `<div class="preview-item"><div class="preview-label">Sprache</div><div class="preview-value">${formatValue(lang)}</div></div>`;
+
+            // aufgabe (Required)
+            const aufgabe = getFieldValue('aufgabe', '<i>Keine Angabe</i>');
+            previewHTML += `<div class="preview-item"><div class="preview-label">Aufgabenbeschreibung</div><div class="preview-value">${formatValue(aufgabe, 'textarea', '<i>Keine Angabe</i>')}</div></div>`;
+
+            // steckbrief (Required)
+            const steckbrief = getFieldValue('steckbrief', '<i>Keine Angabe</i>');
+            previewHTML += `<div class="preview-item"><div class="preview-label">Creator-Profil (Steckbrief)</div><div class="preview-value">${formatValue(steckbrief, 'textarea', '<i>Keine Angabe</i>')}</div></div>`;
+
+            // --- Optional Fields Section ---
+            let optionalHTML = '';
+            const gender = getFieldValue('genderOptional');
+            const videoCount = getFieldValue('videoCountOptional');
+            const imgCount = getFieldValue('imgCountOptional');
+            const videoDuration = getFieldValue('videoDurationOptional');
+            const reviews = getFieldValue('reviewsOptional');
+            const duration = getFieldValue('durationOptional');
+            const script = getFieldValue('scriptOptional');
+
+            if (gender !== '<i>-</i>') optionalHTML += `<div><div class="preview-label">Gender (Optional)</div><div class="preview-value">${formatValue(gender)}</div></div>`;
+            if (videoCount !== '<i>-</i>') optionalHTML += `<div><div class="preview-label">Anzahl Videos (Optional)</div><div class="preview-value">${formatValue(videoCount)}</div></div>`;
+            if (imgCount !== '<i>-</i>') optionalHTML += `<div><div class="preview-label">Anzahl Bilder (Optional)</div><div class="preview-value">${formatValue(imgCount)}</div></div>`;
+            if (videoDuration !== '<i>-</i>') optionalHTML += `<div><div class="preview-label">Videolänge (Optional)</div><div class="preview-value">${formatValue(videoDuration)}</div></div>`;
+            if (reviews !== '<i>-</i>') optionalHTML += `<div><div class="preview-label">Anzahl Korrekturschleifen (Optional)</div><div class="preview-value">${formatValue(reviews)}</div></div>`;
+            if (duration !== '<i>-</i>') optionalHTML += `<div><div class="preview-label">Kampagnendauer (Optional)</div><div class="preview-value">${formatValue(duration)}</div></div>`;
+            if (script !== '<i>-</i>') optionalHTML += `<div><div class="preview-label">Wer erstellt Script (Optional)</div><div class="preview-value">${formatValue(script)}</div></div>`;
+
+            // Add optional section only if it contains content
+            if (optionalHTML) {
+                 previewHTML += `<div class="preview-item optional-section"><div class="preview-label">Optionale Angaben</div><div class="preview-grid">${optionalHTML}</div></div>`;
+            }
+
+            // --- End Field Generation ---
+
             this.previewWrapper.innerHTML = previewHTML;
         }
 
@@ -409,53 +478,37 @@
                 return;
             }
 
-            // Find corresponding targets (can be multiple types)
             const showHideTarget = find(`[${DATA_ATTR_TOGGLE_TARGET}="${controlName}"]`);
             const disableTargetInput = find(`[${DATA_ATTR_DISABLE_TARGET}="${controlName}"]`);
-            const disableValue = control.getAttribute(DATA_ATTR_DISABLE_VALUE); // Get value from control
+            const disableValue = control.getAttribute(DATA_ATTR_DISABLE_VALUE);
 
-            // Check if at least one target exists for this control
             if (!showHideTarget && !disableTargetInput) {
-                console.warn(`No toggle target or disable target found for control name: ${controlName}`);
+                // console.warn(`No target found for toggle control: ${controlName}`); // Less verbose
                 return;
             }
 
-            // Function to update all targets based on control state
             const updateTargetsState = () => {
-                const isControlActive = control.checked; // Assuming checkbox/radio
+                const isControlActive = control.checked;
 
-                // Handle Show/Hide Target
                 if (showHideTarget) {
-                    if (isControlActive) {
-                        fadeInElement(showHideTarget);
-                    } else {
-                        fadeOutElement(showHideTarget);
-                    }
+                    isControlActive ? fadeInElement(showHideTarget) : fadeOutElement(showHideTarget);
                 }
 
-                // Handle Disable/Enable Target Input
                 if (disableTargetInput) {
                     if (isControlActive) {
                         disableTargetInput.disabled = true;
-                        addClass(disableTargetInput, CLASS_DISABLED_BY_TOGGLE); // Optional class
-                        // Set value only if data-disable-value attribute exists on control
+                        addClass(disableTargetInput, CLASS_DISABLED_BY_TOGGLE);
                         if (disableValue !== null) {
                             disableTargetInput.value = disableValue;
-                            // Optional: Trigger change event if needed after setting value programmatically
                             disableTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
                         }
                     } else {
                         disableTargetInput.disabled = false;
-                        removeClass(disableTargetInput, CLASS_DISABLED_BY_TOGGLE); // Optional class
-                        // We don't automatically clear the value when enabling
+                        removeClass(disableTargetInput, CLASS_DISABLED_BY_TOGGLE);
                     }
                 }
             };
-
-            // Set initial state for all targets when the page loads
-            updateTargetsState();
-
-            // Add event listener for changes on the control
+            updateTargetsState(); // Initial state
             control.addEventListener('change', updateTargetsState);
         });
     };
@@ -481,7 +534,7 @@
              console.info('MultiStepForm: No forms with attribute ' + DATA_ATTR_FORM + ' found.');
         }
 
-        // Initialize Toggle Fields (runs independently)
+        // Initialize Toggle Fields
         initializeToggles();
 
     }); // End DOMContentLoaded

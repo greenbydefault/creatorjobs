@@ -86,6 +86,21 @@
          });
     };
 
+    // Date Formatting Helper
+    const formatDateDDMMYYYY = (dateString) => {
+        if (!dateString || typeof dateString !== 'string') return null;
+        const parts = dateString.split('-');
+        if (parts.length === 3) {
+            const [year, month, day] = parts;
+            if (year.length === 4 && month.length === 2 && day.length === 2) {
+                return `${day}.${month}.${year}`;
+            }
+        }
+        console.warn(`Unexpected date format for formatting: ${dateString}`);
+        return dateString;
+    };
+
+
     /**
      * ========================================================================
      * Core Logic: MultiStepForm Class
@@ -342,7 +357,7 @@
             return isStepValid;
         }
 
-        // *** UPDATED: Preview function with specific logic for budget ***
+        // *** UPDATED: Preview function includes creatorCategorie and creatorCount ***
         updatePreview() {
             const lastStepContainer = this.steps[this.totalSteps - 1];
             if (!lastStepContainer) return;
@@ -370,10 +385,14 @@
                     case 'currency': return `${value} €`;
                     case 'textarea': return value.replace(/\n/g, '<br>');
                     case 'period':
-                         if (value.start && value.end) return `${value.start} bis ${value.end}`;
-                         if (value.start) return `Ab ${value.start}`;
-                         if (value.end) return `Bis ${value.end}`;
-                         return null;
+                        const formattedStart = formatDateDDMMYYYY(value.start);
+                        const formattedEnd = formatDateDDMMYYYY(value.end);
+                        if (formattedStart && formattedEnd) return `${formattedStart} bis ${formattedEnd}`;
+                        if (formattedStart) return `Ab ${formattedStart}`;
+                        if (formattedEnd) return `Bis ${formattedEnd}`;
+                        return null;
+                    case 'date':
+                        return formatDateDDMMYYYY(value);
                     default: return value;
                 }
             };
@@ -392,15 +411,21 @@
             let jobAddressVal = getFieldValue('job-adress-optional');
             updatePlaceholder('job-adress-optional', jobAddressVal === null ? 'Remote' : formatValue(jobAddressVal, 'textarea'));
 
-            // *** Budget Logic Updated ***
             let budgetVal = getFieldValue('budget');
-            // Show "tba" if null, otherwise format as currency or show required placeholder if somehow still null after format
             updatePlaceholder('budget', budgetVal === null ? 'tba' : (formatValue(budgetVal, 'currency') || requiredPlaceholder));
 
             let startDateVal = getFieldValue('startDate');
             let endDateVal = getFieldValue('endDate');
             let periodFormattedVal = formatValue({ start: startDateVal, end: endDateVal }, 'period');
             updatePlaceholder('productionPeriod', periodFormattedVal || requiredPlaceholder);
+
+            // *** ADDED: creatorCategorie (Assuming required) ***
+            let creatorCategorieVal = getFieldValue('creatorCategorie');
+            updatePlaceholder('creatorCategorie', formatValue(creatorCategorieVal) || requiredPlaceholder);
+
+             // *** ADDED: creatorCount (Assuming required) ***
+             let creatorCountVal = getFieldValue('creatorCount');
+             updatePlaceholder('creatorCount', formatValue(creatorCountVal) || requiredPlaceholder);
 
             let langVal = getFieldValue('lang');
             updatePlaceholder('lang', formatValue(langVal) || requiredPlaceholder);

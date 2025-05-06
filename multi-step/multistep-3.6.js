@@ -26,9 +26,11 @@
 
     // Toggle Attributes
     const DATA_ATTR_TOGGLE_CONTROL = 'data-toggle-control';
-    const DATA_ATTR_TOGGLE_TARGET = 'data-toggle-target';
-    const DATA_ATTR_DISABLE_TARGET = 'data-disable-target'; // On the input field
-    const DATA_ATTR_DISABLE_VALUE = 'data-disable-value'; // On the control element
+    const DATA_ATTR_TOGGLE_TARGET = 'data-toggle-target'; // Target element to show/hide
+    const DATA_ATTR_DISABLE_TARGET = 'data-disable-target'; // Target input to disable/enable
+    const DATA_ATTR_DISABLE_VALUE = 'data-disable-value'; // Value to set when disabled (on control)
+    // *** NEW: Attribute for fields to clear when toggle is OFF ***
+    const DATA_ATTR_TOGGLE_CLEAR = 'data-toggle-clear'; // Target inputs/textareas to clear
     const CLASS_DISABLED_BY_TOGGLE = 'disabled-by-toggle'; // Optional CSS class
 
     // Character Counter Attributes
@@ -116,6 +118,8 @@
      * ========================================================================
      */
     class MultiStepForm {
+        // --- Constructor and Methods for Multi-Step Logic ---
+        // (No changes needed in the MultiStepForm class itself for this feature)
         constructor(formElement) {
             this.form = formElement;
             const formId = this.form.id || 'form without id';
@@ -425,7 +429,7 @@
                      if (typeof displayValue === 'string' && (displayValue.includes('<') || displayValue.includes('&'))) {
                          placeholderElement.innerHTML = displayValue;
                      } else {
-                         placeholderElement.textContent = displayValue;
+                         placeholderElement.textContent = displayValue ?? ''; // Ensure textContent gets a string
                      }
                  }
             };
@@ -486,7 +490,7 @@
 
     /**
      * ========================================================================
-     * Toggle Field Logic (Show/Hide and Disable/Enable)
+     * Toggle Field Logic (Show/Hide, Disable/Enable, Clear)
      * ========================================================================
      */
     const initializeToggles = () => {
@@ -499,8 +503,14 @@
             const showHideTarget = find(`[${DATA_ATTR_TOGGLE_TARGET}="${controlName}"]`);
             const disableTargetInput = find(`[${DATA_ATTR_DISABLE_TARGET}="${controlName}"]`);
             const disableValue = control.getAttribute(DATA_ATTR_DISABLE_VALUE);
+            // *** NEW: Find all elements to clear for this control ***
+            const clearTargetInputs = findAll(`[${DATA_ATTR_TOGGLE_CLEAR}="${controlName}"]`);
 
-            if (!showHideTarget && !disableTargetInput) { return; }
+
+            if (!showHideTarget && !disableTargetInput && clearTargetInputs.length === 0) {
+                 // Only return if NO targets are found for this control
+                 return;
+            }
 
             const updateTargetsState = () => {
                 const isControlActive = control.checked;
@@ -522,24 +532,25 @@
                     } else {
                         disableTargetInput.disabled = false;
                         removeClass(disableTargetInput, CLASS_DISABLED_BY_TOGGLE);
-                        // Clear value if it was set by the toggle OR if it's the specific address toggle
-                        // *** UPDATED: Clear address field content if toggle is off ***
-                        if ((disableValue !== null && disableTargetInput.value === disableValue) || controlName === 'adress') { // Assuming 'adress' is the controlName for the address toggle
-                             // Find all inputs/textareas within the associated show/hide target if it exists
-                             if (showHideTarget && controlName === 'adress') {
-                                 const inputsToClear = findAll('input, textarea', showHideTarget);
-                                 inputsToClear.forEach(input => {
-                                     input.value = '';
-                                     // Optionally trigger change event for each cleared input
-                                     input.dispatchEvent(new Event('change', { bubbles: true }));
-                                 });
-                             } else if (disableValue !== null && disableTargetInput.value === disableValue) {
-                                 // Original logic for other disable toggles
-                                 disableTargetInput.value = '';
-                                 disableTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
-                             }
+                        // Clear value ONLY if it was set by the toggle
+                        if (disableValue !== null && disableTargetInput.value === disableValue) {
+                             disableTargetInput.value = '';
+                             disableTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
                         }
                     }
+                }
+
+                // *** NEW: Handle Clearing Target Inputs ***
+                // Clear inputs only when the toggle is turned OFF (isControlActive is false)
+                if (!isControlActive && clearTargetInputs.length > 0) {
+                    clearTargetInputs.forEach(inputToClear => {
+                        // Check if the input is not disabled by another mechanism before clearing
+                        if (!inputToClear.disabled) {
+                            inputToClear.value = '';
+                            // Optional: Trigger change event for each cleared input
+                            inputToClear.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    });
                 }
             };
             updateTargetsState(); // Initial state

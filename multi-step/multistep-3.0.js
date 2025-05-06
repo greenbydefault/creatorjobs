@@ -31,6 +31,11 @@
     const DATA_ATTR_DISABLE_VALUE = 'data-disable-value'; // On the control element
     const CLASS_DISABLED_BY_TOGGLE = 'disabled-by-toggle'; // Optional CSS class
 
+    // *** NEW: Character Counter Attributes ***
+    const DATA_ATTR_CHAR_COUNT_INPUT = 'data-char-count-input';
+    const DATA_ATTR_CHAR_COUNT_MAX = 'data-char-count-max';
+    const DATA_ATTR_CHAR_COUNT_DISPLAY = 'data-char-count-display';
+
     // Transition duration
     const TRANSITION_DURATION = 400; // ms
 
@@ -46,26 +51,24 @@
     const showElement = (element) => removeClass(element, CLASS_HIDE);
     const hideElement = (element) => addClass(element, CLASS_HIDE);
 
-    // Fade Out Helper - Sets display: none after transition
+    // Fade Out Helper
     const fadeOutElement = (element, callback) => {
         if (!element || element.style.opacity === '0' || element.style.display === 'none') {
              if (typeof callback === 'function') callback();
             return;
         }
-        element.style.opacity = '0'; // Start fade-out
+        element.style.opacity = '0';
         let transitionEnded = false;
         const onFadeOutComplete = (event) => {
-            // Make sure the event is for opacity and the element itself
             if (event.target === element && event.propertyName === 'opacity' && !transitionEnded) {
                  transitionEnded = true;
-                element.style.display = 'none'; // Hide after fade
+                element.style.display = 'none';
                 element.removeEventListener('transitionend', onFadeOutComplete);
                 if (typeof callback === 'function') callback();
             }
         };
         element.removeEventListener('transitionend', onFadeOutComplete);
         element.addEventListener('transitionend', onFadeOutComplete);
-        // Fallback timeout
         setTimeout(() => {
             if (!transitionEnded) {
                  transitionEnded = true;
@@ -76,24 +79,15 @@
         }, TRANSITION_DURATION + 50);
     };
 
-    // *** UPDATED: Fade In Helper - Does NOT set display style ***
+    // Fade In Helper
     const fadeInElement = (element) => {
-         // Only proceed if element exists and is not already fully opaque
          if (!element || element.style.opacity === '1') return;
-
-         // Ensure element is not display: none before starting transition
-         // If it is none, set it based on its default computed style or fallback to 'block'
          if (getComputedStyle(element).display === 'none') {
-             // Temporarily set display to retrieve computed style if needed,
-             // but usually the CSS rule for the visible state handles this.
-             // For safety, let's ensure it's not 'none'. We'll rely on CSS for the actual type (block, flex etc.)
              element.style.display = ''; // Revert to CSS default display
          }
-
-         // Use rAF and setTimeout to ensure display change is rendered before opacity change
          requestAnimationFrame(() => {
              setTimeout(() => {
-                 element.style.opacity = '1'; // Trigger fade-in transition
+                 element.style.opacity = '1';
              }, 10);
          });
     };
@@ -108,8 +102,8 @@
                 return `${day}.${month}.${year}`;
             }
         }
-        console.warn(`Unexpected date format for formatting: ${dateString}`);
-        return dateString;
+        // console.warn(`Unexpected date format for formatting: ${dateString}`); // Less verbose
+        return dateString; // Return original if format is wrong
     };
 
 
@@ -119,6 +113,8 @@
      * ========================================================================
      */
     class MultiStepForm {
+        // --- Constructor and Methods for Multi-Step Logic ---
+        // (No changes needed in the MultiStepForm class itself for this feature)
         constructor(formElement) {
             this.form = formElement;
             const formId = this.form.id || 'form without id';
@@ -151,12 +147,11 @@
              // Initial state for steps and guides
              this.steps.forEach((step, index) => {
                 if (index === 0) {
-                    // Set initial display based on CSS (remove inline style if any)
                     step.style.display = '';
                     step.style.opacity = '1';
                     addClass(step, CLASS_ACTIVE_STEP);
                 } else {
-                    step.style.display = 'none'; // Start hidden
+                    step.style.display = 'none';
                     step.style.opacity = '0';
                     removeClass(step, CLASS_ACTIVE_STEP);
                 }
@@ -165,11 +160,10 @@
                  const guideStepNumber = parseInt(guide.getAttribute(DATA_ATTR_GUIDE), 10);
                  const targetStepNumber = 1;
                  if (!isNaN(guideStepNumber) && guideStepNumber === targetStepNumber || isNaN(guideStepNumber) && index === 0) {
-                     // Set initial display based on CSS (remove inline style if any)
                      guide.style.display = '';
                      guide.style.opacity = '1';
                  } else {
-                     guide.style.display = 'none'; // Start hidden
+                     guide.style.display = 'none';
                      guide.style.opacity = '0';
                  }
             });
@@ -288,13 +282,13 @@
             if (isInitialLoad) {
                  // Set initial styles - rely on CSS for display type
                  this.steps.forEach((s, i) => {
-                    s.style.display = i === this.currentStepIndex ? '' : 'none'; // Use '' for default display
+                    s.style.display = i === this.currentStepIndex ? '' : 'none';
                     s.style.opacity = i === this.currentStepIndex ? '1' : '0';
                     i === this.currentStepIndex ? addClass(s, CLASS_ACTIVE_STEP) : removeClass(s, CLASS_ACTIVE_STEP);
                 });
                  this.guides.forEach((g) => {
                      const guideStep = parseInt(g.getAttribute(DATA_ATTR_GUIDE), 10);
-                     g.style.display = guideStep === targetStepNumber ? '' : 'none'; // Use '' for default display
+                     g.style.display = guideStep === targetStepNumber ? '' : 'none';
                      g.style.opacity = guideStep === targetStepNumber ? '1' : '0';
                  });
                 this.isTransitioning = false;
@@ -303,11 +297,11 @@
 
             const fadeInNewElements = () => {
                 if (incomingStep) {
-                    fadeInElement(incomingStep); // fadeInElement now relies on CSS for display type
+                    fadeInElement(incomingStep);
                     addClass(incomingStep, CLASS_ACTIVE_STEP);
                 }
                 if (incomingGuide) {
-                    fadeInElement(incomingGuide); // fadeInElement now relies on CSS for display type
+                    fadeInElement(incomingGuide);
                 }
                  setTimeout(() => {
                      this.isTransitioning = false;
@@ -516,6 +510,61 @@
         });
     };
 
+    /**
+     * ========================================================================
+     * NEW: Character Counter Logic
+     * ========================================================================
+     */
+     const initializeCharCounters = () => {
+        const counterInputs = findAll(`[${DATA_ATTR_CHAR_COUNT_INPUT}]`);
+
+        counterInputs.forEach(inputField => {
+            const counterId = inputField.getAttribute(DATA_ATTR_CHAR_COUNT_INPUT);
+            const maxLengthAttr = inputField.getAttribute(DATA_ATTR_CHAR_COUNT_MAX);
+
+            if (!counterId || maxLengthAttr === null) {
+                console.warn('Character counter input is missing ID or max length attribute:', inputField);
+                return;
+            }
+
+            const maxLength = parseInt(maxLengthAttr, 10);
+            if (isNaN(maxLength)) {
+                 console.warn(`Invalid max length value "${maxLengthAttr}" for counter ID "${counterId}":`, inputField);
+                 return;
+            }
+
+            // Find display element using the counterId
+            const displayElement = find(`[${DATA_ATTR_CHAR_COUNT_DISPLAY}="${counterId}"]`);
+            if (!displayElement) {
+                 console.warn(`No display element found for counter ID "${counterId}":`, inputField);
+                 return;
+            }
+
+            // Function to update the counter display
+            const updateCounter = () => {
+                const currentLength = inputField.value.length;
+                // Optional: Enforce max length visually or by truncating
+                if (currentLength > maxLength) {
+                    // Example: Truncate input (can be annoying for users)
+                    // inputField.value = inputField.value.substring(0, maxLength);
+                    // currentLength = maxLength; // Update length after truncating
+
+                    // Example: Visual feedback (e.g., change color)
+                    displayElement.style.color = 'red'; // Or add a CSS class
+                } else {
+                    displayElement.style.color = ''; // Revert color or remove class
+                }
+                displayElement.textContent = `${currentLength}/${maxLength}`;
+            };
+
+            // Add event listener to the input field
+            inputField.addEventListener('input', updateCounter);
+
+            // Initial update on page load
+            updateCounter();
+        });
+     };
+
 
     /**
      * ========================================================================
@@ -539,6 +588,9 @@
 
         // Initialize Toggle Fields
         initializeToggles();
+
+        // *** NEW: Initialize Character Counters ***
+        initializeCharCounters();
 
     }); // End DOMContentLoaded
 

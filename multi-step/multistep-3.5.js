@@ -366,7 +366,6 @@
             return isStepValid;
         }
 
-        // *** UPDATED: Preview function checks if address field is disabled ***
         updatePreview() {
             const lastStepContainer = this.steps[this.totalSteps - 1];
             if (!lastStepContainer) return;
@@ -374,11 +373,9 @@
             const optionalPlaceholder = 'Keine Angabe';
             const requiredPlaceholder = '<i>Keine Angabe</i>';
 
-            // Find the address field element once
             const addressFieldElement = find(`[${DATA_ATTR_PREVIEW_FIELD}="job-adress-optional"]`, this.form);
 
             const getFieldValue = (fieldName, isCheckboxGroup = false) => {
-                // If asking for the address field, use the pre-found element
                 const field = (fieldName === 'job-adress-optional' && addressFieldElement)
                                 ? addressFieldElement
                                 : find(`[${DATA_ATTR_PREVIEW_FIELD}="${fieldName}"]`, this.form);
@@ -437,24 +434,8 @@
             let projectNameVal = getFieldValue('projectName');
             updatePlaceholder('projectName', formatValue(projectNameVal) || requiredPlaceholder);
 
-            // *** Job Address Logic Updated ***
-            let jobAddressDisplayVal = 'Remote'; // Default to Remote
-            // Check if the address field exists AND is NOT disabled
-            if (addressFieldElement && !addressFieldElement.disabled) {
-                let jobAddressContent = getFieldValue('job-adress-optional'); // Get content if not disabled
-                // If content exists, format it, otherwise keep 'Remote'
-                if (jobAddressContent !== null) {
-                    jobAddressDisplayVal = formatValue(jobAddressContent, 'textarea');
-                }
-                // If content is null (empty field) AND field is enabled, it should show 'Remote' anyway based on previous logic
-                // Let's refine: If field is enabled AND empty, show placeholder? Or still Remote? Assuming Remote if empty.
-                // Sticking to: If disabled -> Remote. If enabled -> Content or Remote (if content empty).
-                // The previous logic `jobAddressVal === null ? 'Remote' : formatValue(...)` handles the empty case when enabled.
-                // So, we only need to override if it's explicitly disabled.
-            }
-             if (addressFieldElement && addressFieldElement.disabled) {
-                 jobAddressDisplayVal = 'Remote';
-             } else {
+            let jobAddressDisplayVal = 'Remote';
+             if (addressFieldElement && !addressFieldElement.disabled) {
                  let jobAddressContent = getFieldValue('job-adress-optional');
                  jobAddressDisplayVal = jobAddressContent === null ? 'Remote' : formatValue(jobAddressContent, 'textarea');
              }
@@ -523,9 +504,13 @@
 
             const updateTargetsState = () => {
                 const isControlActive = control.checked;
+
+                // Handle Show/Hide Target
                 if (showHideTarget) {
                     isControlActive ? fadeInElement(showHideTarget) : fadeOutElement(showHideTarget);
                 }
+
+                // Handle Disable/Enable Target Input
                 if (disableTargetInput) {
                     if (isControlActive) {
                         disableTargetInput.disabled = true;
@@ -537,14 +522,27 @@
                     } else {
                         disableTargetInput.disabled = false;
                         removeClass(disableTargetInput, CLASS_DISABLED_BY_TOGGLE);
-                        if (disableValue !== null && disableTargetInput.value === disableValue) {
-                             disableTargetInput.value = '';
-                             disableTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
+                        // Clear value if it was set by the toggle OR if it's the specific address toggle
+                        // *** UPDATED: Clear address field content if toggle is off ***
+                        if ((disableValue !== null && disableTargetInput.value === disableValue) || controlName === 'adress') { // Assuming 'adress' is the controlName for the address toggle
+                             // Find all inputs/textareas within the associated show/hide target if it exists
+                             if (showHideTarget && controlName === 'adress') {
+                                 const inputsToClear = findAll('input, textarea', showHideTarget);
+                                 inputsToClear.forEach(input => {
+                                     input.value = '';
+                                     // Optionally trigger change event for each cleared input
+                                     input.dispatchEvent(new Event('change', { bubbles: true }));
+                                 });
+                             } else if (disableValue !== null && disableTargetInput.value === disableValue) {
+                                 // Original logic for other disable toggles
+                                 disableTargetInput.value = '';
+                                 disableTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
+                             }
                         }
                     }
                 }
             };
-            updateTargetsState();
+            updateTargetsState(); // Initial state
             control.addEventListener('change', updateTargetsState);
         });
     };

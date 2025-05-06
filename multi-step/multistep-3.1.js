@@ -16,8 +16,8 @@
     const DATA_ATTR_SUBMIT_BTN = 'data-multistep-submit';
     const DATA_ATTR_GUIDE_CONTAINER = 'data-step-guide-container';
     const DATA_ATTR_GUIDE = 'data-step-guide';
-    const DATA_ATTR_PREVIEW_FIELD = 'data-preview-field'; // On input fields
-    const DATA_ATTR_PREVIEW_PLACEHOLDER = 'data-preview-placeholder'; // On display elements in preview step
+    const DATA_ATTR_PREVIEW_FIELD = 'data-preview-field'; // On input fields for final preview
+    const DATA_ATTR_PREVIEW_PLACEHOLDER = 'data-preview-placeholder'; // On display elements in final preview step
     const CLASS_ACTIVE_STEP = 'active';
     const CLASS_ACTIVE_INDICATOR = 'active';
     const CLASS_HIDE = 'hide'; // For buttons
@@ -31,10 +31,14 @@
     const DATA_ATTR_DISABLE_VALUE = 'data-disable-value'; // On the control element
     const CLASS_DISABLED_BY_TOGGLE = 'disabled-by-toggle'; // Optional CSS class
 
-    // *** NEW: Character Counter Attributes ***
+    // Character Counter Attributes
     const DATA_ATTR_CHAR_COUNT_INPUT = 'data-char-count-input';
     const DATA_ATTR_CHAR_COUNT_MAX = 'data-char-count-max';
     const DATA_ATTR_CHAR_COUNT_DISPLAY = 'data-char-count-display';
+
+    // *** NEW: Selection Display Attributes ***
+    const DATA_ATTR_SELECTION_INPUT = 'data-selection-input'; // On checkboxes for real-time display
+    const DATA_ATTR_SELECTION_DISPLAY = 'data-selection-display'; // On the text block showing selection
 
     // Transition duration
     const TRANSITION_DURATION = 400; // ms
@@ -102,7 +106,6 @@
                 return `${day}.${month}.${year}`;
             }
         }
-        // console.warn(`Unexpected date format for formatting: ${dateString}`); // Less verbose
         return dateString; // Return original if format is wrong
     };
 
@@ -372,22 +375,30 @@
             const optionalPlaceholder = 'Keine Angabe';
             const requiredPlaceholder = '<i>Keine Angabe</i>';
 
-            const getFieldValue = (fieldName) => {
-                const field = find(`[${DATA_ATTR_PREVIEW_FIELD}="${fieldName}"]`, this.form);
-                if (!field) return null;
-                let value = '';
-                if (field.type === 'checkbox' || field.type === 'radio') {
-                    value = field.checked ? field.value || 'Ja' : '';
-                } else if (field.tagName === 'SELECT') {
-                    value = field.options[field.selectedIndex]?.text || field.value;
+            const getFieldValue = (fieldName, isCheckboxGroup = false) => {
+                if (isCheckboxGroup) {
+                    const fields = findAll(`[${DATA_ATTR_PREVIEW_FIELD}="${fieldName}"]:checked`, this.form);
+                    if (!fields || fields.length === 0) return null;
+                    return Array.from(fields).map(field => field.value || field.nextElementSibling?.textContent || '');
                 } else {
-                    value = field.value.trim();
+                    const field = find(`[${DATA_ATTR_PREVIEW_FIELD}="${fieldName}"]`, this.form);
+                    if (!field) return null;
+                    let value = '';
+                    if (field.tagName === 'SELECT') {
+                        value = field.options[field.selectedIndex]?.text || field.value;
+                    } else {
+                        value = field.value.trim();
+                    }
+                    return value ? value : null;
                 }
-                return value ? value : null;
             };
 
             const formatValue = (value, type = 'text') => {
                 if (value === null) return null;
+                if (Array.isArray(value)) {
+                    if (value.length === 0) return null;
+                    return value.map(tagValue => `<span class="preview-tag">${tagValue}</span>`).join('');
+                }
                 switch (type) {
                     case 'currency': return `${value} €`;
                     case 'textarea': return value.replace(/\n/g, '<br>');
@@ -432,8 +443,12 @@
              let creatorCountVal = getFieldValue('creatorCount');
              updatePlaceholder('creatorCount', formatValue(creatorCountVal) || requiredPlaceholder);
 
-            let langVal = getFieldValue('lang');
-            updatePlaceholder('lang', formatValue(langVal) || requiredPlaceholder);
+            let langVal = getFieldValue('creatorLang', true);
+            updatePlaceholder('creatorLang', formatValue(langVal) || requiredPlaceholder);
+
+            let landVal = getFieldValue('creatorLand', true);
+            updatePlaceholder('creatorLand', formatValue(landVal) || requiredPlaceholder);
+
 
             let aufgabeVal = getFieldValue('aufgabe');
             updatePlaceholder('aufgabe', formatValue(aufgabeVal, 'textarea') || requiredPlaceholder);
@@ -466,26 +481,19 @@
 
         toggleControls.forEach(control => {
             const controlName = control.getAttribute(DATA_ATTR_TOGGLE_CONTROL);
-            if (!controlName) {
-                console.warn('Toggle control found without a name:', control);
-                return;
-            }
+            if (!controlName) { return; }
 
             const showHideTarget = find(`[${DATA_ATTR_TOGGLE_TARGET}="${controlName}"]`);
             const disableTargetInput = find(`[${DATA_ATTR_DISABLE_TARGET}="${controlName}"]`);
             const disableValue = control.getAttribute(DATA_ATTR_DISABLE_VALUE);
 
-            if (!showHideTarget && !disableTargetInput) {
-                return;
-            }
+            if (!showHideTarget && !disableTargetInput) { return; }
 
             const updateTargetsState = () => {
                 const isControlActive = control.checked;
-
                 if (showHideTarget) {
                     isControlActive ? fadeInElement(showHideTarget) : fadeOutElement(showHideTarget);
                 }
-
                 if (disableTargetInput) {
                     if (isControlActive) {
                         disableTargetInput.disabled = true;
@@ -497,7 +505,6 @@
                     } else {
                         disableTargetInput.disabled = false;
                         removeClass(disableTargetInput, CLASS_DISABLED_BY_TOGGLE);
-                        // Clear value if it was set by the toggle
                         if (disableValue !== null && disableTargetInput.value === disableValue) {
                              disableTargetInput.value = '';
                              disableTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
@@ -505,14 +512,14 @@
                     }
                 }
             };
-            updateTargetsState(); // Initial state
+            updateTargetsState();
             control.addEventListener('change', updateTargetsState);
         });
     };
 
     /**
      * ========================================================================
-     * NEW: Character Counter Logic
+     * Character Counter Logic
      * ========================================================================
      */
      const initializeCharCounters = () => {
@@ -521,47 +528,67 @@
         counterInputs.forEach(inputField => {
             const counterId = inputField.getAttribute(DATA_ATTR_CHAR_COUNT_INPUT);
             const maxLengthAttr = inputField.getAttribute(DATA_ATTR_CHAR_COUNT_MAX);
+            if (!counterId || maxLengthAttr === null) { return; }
+            const maxLength = parseInt(maxLengthAttr, 10);
+            if (isNaN(maxLength)) { return; }
+            const displayElement = find(`[${DATA_ATTR_CHAR_COUNT_DISPLAY}="${counterId}"]`);
+            if (!displayElement) { return; }
 
-            if (!counterId || maxLengthAttr === null) {
-                console.warn('Character counter input is missing ID or max length attribute:', inputField);
+            const updateCounter = () => {
+                const currentLength = inputField.value.length;
+                displayElement.style.color = currentLength > maxLength ? 'red' : '';
+                displayElement.textContent = `${currentLength}/${maxLength}`;
+            };
+            inputField.addEventListener('input', updateCounter);
+            updateCounter();
+        });
+     };
+
+     /**
+      * ========================================================================
+      * NEW: Real-time Selection Display Logic
+      * ========================================================================
+      */
+     const initializeSelectionDisplays = () => {
+        const displayElements = findAll(`[${DATA_ATTR_SELECTION_DISPLAY}]`);
+        const defaultText = "Bitte auswählen"; // Default text if nothing selected
+
+        displayElements.forEach(displayElement => {
+            const groupName = displayElement.getAttribute(DATA_ATTR_SELECTION_DISPLAY);
+            if (!groupName) {
+                console.warn('Selection display element missing group name:', displayElement);
                 return;
             }
 
-            const maxLength = parseInt(maxLengthAttr, 10);
-            if (isNaN(maxLength)) {
-                 console.warn(`Invalid max length value "${maxLengthAttr}" for counter ID "${counterId}":`, inputField);
-                 return;
+            // Find all input checkboxes for this specific group
+            // Important: Search within the whole document or a relevant container if forms are isolated
+            const inputCheckboxes = findAll(`input[type="checkbox"][${DATA_ATTR_SELECTION_INPUT}="${groupName}"]`);
+
+            if (inputCheckboxes.length === 0) {
+                console.warn(`No input checkboxes found for selection group "${groupName}"`);
+                return;
             }
 
-            // Find display element using the counterId
-            const displayElement = find(`[${DATA_ATTR_CHAR_COUNT_DISPLAY}="${counterId}"]`);
-            if (!displayElement) {
-                 console.warn(`No display element found for counter ID "${counterId}":`, inputField);
-                 return;
-            }
+            // Function to update the display text
+            const updateDisplay = () => {
+                const selectedValues = Array.from(inputCheckboxes)
+                                          .filter(checkbox => checkbox.checked) // Filter only checked boxes
+                                          .map(checkbox => checkbox.value || checkbox.nextElementSibling?.textContent || ''); // Get value or label
 
-            // Function to update the counter display
-            const updateCounter = () => {
-                const currentLength = inputField.value.length;
-                // Optional: Enforce max length visually or by truncating
-                if (currentLength > maxLength) {
-                    // Example: Truncate input (can be annoying for users)
-                    // inputField.value = inputField.value.substring(0, maxLength);
-                    // currentLength = maxLength; // Update length after truncating
-
-                    // Example: Visual feedback (e.g., change color)
-                    displayElement.style.color = 'red'; // Or add a CSS class
+                if (selectedValues.length > 0) {
+                    displayElement.textContent = selectedValues.join(', '); // Join values with comma and space
                 } else {
-                    displayElement.style.color = ''; // Revert color or remove class
+                    displayElement.textContent = defaultText; // Show default text if none selected
                 }
-                displayElement.textContent = `${currentLength}/${maxLength}`;
             };
 
-            // Add event listener to the input field
-            inputField.addEventListener('input', updateCounter);
+            // Add event listener to each checkbox in the group
+            inputCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', updateDisplay);
+            });
 
             // Initial update on page load
-            updateCounter();
+            updateDisplay();
         });
      };
 
@@ -589,8 +616,11 @@
         // Initialize Toggle Fields
         initializeToggles();
 
-        // *** NEW: Initialize Character Counters ***
+        // Initialize Character Counters
         initializeCharCounters();
+
+        // *** NEW: Initialize Real-time Selection Displays ***
+        initializeSelectionDisplays();
 
     }); // End DOMContentLoaded
 

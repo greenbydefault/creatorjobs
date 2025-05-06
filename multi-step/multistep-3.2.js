@@ -36,7 +36,7 @@
     const DATA_ATTR_CHAR_COUNT_MAX = 'data-char-count-max';
     const DATA_ATTR_CHAR_COUNT_DISPLAY = 'data-char-count-display';
 
-    // *** NEW: Selection Display Attributes ***
+    // Selection Display Attributes
     const DATA_ATTR_SELECTION_INPUT = 'data-selection-input'; // On checkboxes for real-time display
     const DATA_ATTR_SELECTION_DISPLAY = 'data-selection-display'; // On the text block showing selection
 
@@ -116,8 +116,6 @@
      * ========================================================================
      */
     class MultiStepForm {
-        // --- Constructor and Methods for Multi-Step Logic ---
-        // (No changes needed in the MultiStepForm class itself for this feature)
         constructor(formElement) {
             this.form = formElement;
             const formId = this.form.id || 'form without id';
@@ -393,12 +391,18 @@
                 }
             };
 
+            // *** UPDATED: formatValue handles arrays with join(', ') ***
             const formatValue = (value, type = 'text') => {
                 if (value === null) return null;
+
+                // Handle array for comma-separated list
                 if (Array.isArray(value)) {
-                    if (value.length === 0) return null;
-                    return value.map(tagValue => `<span class="preview-tag">${tagValue}</span>`).join('');
+                    if (value.length === 0) return null; // Return null if array is empty
+                    // Join values with comma and space
+                    return value.join(', ');
                 }
+
+                // Handle single values
                 switch (type) {
                     case 'currency': return `${value} €`;
                     case 'textarea': return value.replace(/\n/g, '<br>');
@@ -418,7 +422,12 @@
             const updatePlaceholder = (fieldName, displayValue) => {
                  const placeholderElement = find(`[${DATA_ATTR_PREVIEW_PLACEHOLDER}="${fieldName}"]`, lastStepContainer);
                  if (placeholderElement) {
-                     placeholderElement.innerHTML = displayValue;
+                     // Use textContent for simple text, innerHTML if formatting includes HTML tags (like placeholders)
+                     if (typeof displayValue === 'string' && (displayValue.includes('<') || displayValue.includes('&'))) {
+                         placeholderElement.innerHTML = displayValue;
+                     } else {
+                         placeholderElement.textContent = displayValue; // Safer for plain text
+                     }
                  }
             };
 
@@ -443,11 +452,11 @@
              let creatorCountVal = getFieldValue('creatorCount');
              updatePlaceholder('creatorCount', formatValue(creatorCountVal) || requiredPlaceholder);
 
-            let langVal = getFieldValue('creatorLang', true);
-            updatePlaceholder('creatorLang', formatValue(langVal) || requiredPlaceholder);
+            let langVal = getFieldValue('creatorLang', true); // Get array
+            updatePlaceholder('creatorLang', formatValue(langVal) || requiredPlaceholder); // formatValue joins array
 
-            let landVal = getFieldValue('creatorLand', true);
-            updatePlaceholder('creatorLand', formatValue(landVal) || requiredPlaceholder);
+            let landVal = getFieldValue('creatorLand', true); // Get array
+            updatePlaceholder('creatorLand', formatValue(landVal) || requiredPlaceholder); // formatValue joins array
 
 
             let aufgabeVal = getFieldValue('aufgabe');
@@ -519,7 +528,7 @@
 
     /**
      * ========================================================================
-     * Character Counter Logic
+     * Character Counter Logic (with Max Length Enforcement)
      * ========================================================================
      */
      const initializeCharCounters = () => {
@@ -535,8 +544,14 @@
             if (!displayElement) { return; }
 
             const updateCounter = () => {
-                const currentLength = inputField.value.length;
-                displayElement.style.color = currentLength > maxLength ? 'red' : '';
+                let currentLength = inputField.value.length;
+                if (currentLength > maxLength) {
+                    inputField.value = inputField.value.substring(0, maxLength);
+                    currentLength = maxLength;
+                    displayElement.style.color = 'red';
+                } else {
+                    displayElement.style.color = '';
+                }
                 displayElement.textContent = `${currentLength}/${maxLength}`;
             };
             inputField.addEventListener('input', updateCounter);
@@ -546,49 +561,30 @@
 
      /**
       * ========================================================================
-      * NEW: Real-time Selection Display Logic
+      * Real-time Selection Display Logic
       * ========================================================================
       */
      const initializeSelectionDisplays = () => {
         const displayElements = findAll(`[${DATA_ATTR_SELECTION_DISPLAY}]`);
-        const defaultText = "Bitte auswählen"; // Default text if nothing selected
+        const defaultText = "Bitte auswählen";
 
         displayElements.forEach(displayElement => {
             const groupName = displayElement.getAttribute(DATA_ATTR_SELECTION_DISPLAY);
-            if (!groupName) {
-                console.warn('Selection display element missing group name:', displayElement);
-                return;
-            }
-
-            // Find all input checkboxes for this specific group
-            // Important: Search within the whole document or a relevant container if forms are isolated
+            if (!groupName) { return; }
             const inputCheckboxes = findAll(`input[type="checkbox"][${DATA_ATTR_SELECTION_INPUT}="${groupName}"]`);
+            if (inputCheckboxes.length === 0) { return; }
 
-            if (inputCheckboxes.length === 0) {
-                console.warn(`No input checkboxes found for selection group "${groupName}"`);
-                return;
-            }
-
-            // Function to update the display text
             const updateDisplay = () => {
                 const selectedValues = Array.from(inputCheckboxes)
-                                          .filter(checkbox => checkbox.checked) // Filter only checked boxes
-                                          .map(checkbox => checkbox.value || checkbox.nextElementSibling?.textContent || ''); // Get value or label
-
-                if (selectedValues.length > 0) {
-                    displayElement.textContent = selectedValues.join(', '); // Join values with comma and space
-                } else {
-                    displayElement.textContent = defaultText; // Show default text if none selected
-                }
+                                          .filter(checkbox => checkbox.checked)
+                                          .map(checkbox => checkbox.value || checkbox.nextElementSibling?.textContent || '');
+                displayElement.textContent = selectedValues.length > 0 ? selectedValues.join(', ') : defaultText; // Use join with comma and space
             };
 
-            // Add event listener to each checkbox in the group
             inputCheckboxes.forEach(checkbox => {
                 checkbox.addEventListener('change', updateDisplay);
             });
-
-            // Initial update on page load
-            updateDisplay();
+            updateDisplay(); // Initial update
         });
      };
 
@@ -619,7 +615,7 @@
         // Initialize Character Counters
         initializeCharCounters();
 
-        // *** NEW: Initialize Real-time Selection Displays ***
+        // Initialize Real-time Selection Displays
         initializeSelectionDisplays();
 
     }); // End DOMContentLoaded

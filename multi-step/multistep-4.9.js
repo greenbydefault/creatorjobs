@@ -959,7 +959,7 @@
             try {
                 const exists = await checkJobTitleExists(jobTitle);
                 if (exists) {
-                    jobTitleInput.style.border = '2px solid #D92415';
+                    jobTitleInput.style.border = '1px solid #FF7983';
                     addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
                     if (messageElement) {
                         messageElement.textContent = 'Dieser Jobtitel existiert bereits.';
@@ -967,7 +967,7 @@
                     }
                      console.log('[DEBUG JobTitle] Title exists.'); // DEBUG
                 } else {
-                    jobTitleInput.style.border = '2px solid #3DB927';
+                    jobTitleInput.style.border = '1px solid #3DB927';
                     addClass(jobTitleInput, CLASS_JOB_TITLE_SUCCESS);
                     if (messageElement) {
                         messageElement.textContent = 'Dieser Jobtitel ist verfügbar.';

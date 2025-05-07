@@ -143,7 +143,7 @@
         return `${day}.${month}.${year}`;
     };
 
-    // *** NEW: Date Formatting Helper (Output: YYYY-MM-DD for input type="date") ***
+    // Date Formatting Helper (Output: YYYY-MM-DD for input type="date")
     const formatDateYYYYMMDD = (date) => {
         if (!date) return null;
         let d = (date instanceof Date) ? date : new Date(date);
@@ -430,6 +430,7 @@
             return isStepValid;
         }
 
+        // *** UPDATED: Preview function with logic for jobOnline ***
         updatePreview() {
             const lastStepContainer = this.steps[this.totalSteps - 1];
             if (!lastStepContainer) return;
@@ -455,7 +456,6 @@
                     if (field.tagName === 'SELECT') {
                         value = field.options[field.selectedIndex]?.text || field.value;
                     } else {
-                        // For date fields, the value is already YYYY-MM-DD if type="date"
                         value = field.value.trim();
                     }
                     return value ? value : null;
@@ -472,14 +472,13 @@
                     case 'currency': return `${value} €`;
                     case 'textarea': return value.replace(/\n/g, '<br>');
                     case 'period':
-                        // Dates for period are expected to be YYYY-MM-DD from input, then formatted
                         const formattedStart = formatDateDDMMYYYY(value.start);
                         const formattedEnd = formatDateDDMMYYYY(value.end);
                         if (formattedStart && formattedEnd) return `${formattedStart} bis ${formattedEnd}`;
                         if (formattedStart) return `Ab ${formattedStart}`;
                         if (formattedEnd) return `Bis ${formattedEnd}`;
                         return null;
-                    case 'date': // For single dates, value is expected as YYYY-MM-DD from input
+                    case 'date':
                         return formatDateDDMMYYYY(value);
                     default: return value;
                 }
@@ -511,8 +510,8 @@
             let budgetVal = getFieldValue('budget');
             updatePlaceholder('budget', budgetVal === null ? 'tba' : (formatValue(budgetVal, 'currency') || requiredPlaceholder));
 
-            let startDateVal = getFieldValue('startDate'); // Expected as YYYY-MM-DD if type="date"
-            let endDateVal = getFieldValue('endDate');   // Expected as YYYY-MM-DD if type="date"
+            let startDateVal = getFieldValue('startDate');
+            let endDateVal = getFieldValue('endDate');
             let periodFormattedVal = formatValue({ start: startDateVal, end: endDateVal }, 'period');
             updatePlaceholder('productionPeriod', periodFormattedVal || requiredPlaceholder);
 
@@ -534,6 +533,19 @@
 
             let steckbriefVal = getFieldValue('steckbrief');
             updatePlaceholder('steckbrief', formatValue(steckbriefVal, 'textarea') || requiredPlaceholder);
+
+            // *** NEW: jobOnline logic ***
+            let jobOnlineVal = getFieldValue('jobOnline');
+            let jobOnlineDisplay = '3 Tage'; // Default
+            if (jobOnlineVal !== null) {
+                const formattedDate = formatValue(jobOnlineVal, 'date');
+                if (formattedDate) { // Check if formatting was successful
+                    jobOnlineDisplay = formattedDate;
+                }
+                // If formatting fails (e.g., invalid date string), it will remain "3 Tage"
+            }
+            updatePlaceholder('jobOnline', jobOnlineDisplay);
+
 
             // Optional Fields
             updatePlaceholder('creatorCountOptional', formatValue(getFieldValue('creatorCountOptional')) || optionalPlaceholder);
@@ -737,7 +749,6 @@
         todayButton.addEventListener('click', () => {
             const today = new Date();
             if (currentDatePickerInput) {
-                // *** Set value in YYYY-MM-DD for input type="date", DD.MM.YYYY for type="text" ***
                 currentDatePickerInput.value = (currentDatePickerInput.type === 'date')
                                               ? formatDateYYYYMMDD(today)
                                               : formatDateDDMMYYYY(today);
@@ -800,7 +811,6 @@
         today.setHours(0,0,0,0);
         let selectedDate = null;
         if (currentDatePickerInput && currentDatePickerInput.value) {
-            // Try parsing DD.MM.YYYY first (from custom picker), then YYYY-MM-DD (if type="date")
             selectedDate = parseDateDDMMYYYY(currentDatePickerInput.value) || new Date(currentDatePickerInput.value);
             if (selectedDate && !isNaN(selectedDate.getTime())) {
                 selectedDate.setHours(0,0,0,0);
@@ -825,7 +835,6 @@
             }
             dayEl.addEventListener('click', () => {
                 if (currentDatePickerInput) {
-                    // *** UPDATED: Set value based on input type ***
                     if (currentDatePickerInput.type === 'date') {
                         currentDatePickerInput.value = formatDateYYYYMMDD(currentDate);
                     } else {
@@ -844,7 +853,6 @@
         currentDatePickerInput = inputElement;
         const initialDateStr = inputElement.value;
         let parsedDate = null;
-        // If input is type="date", value is YYYY-MM-DD. Otherwise, expect DD.MM.YYYY
         if (inputElement.type === 'date' && initialDateStr) {
             const parts = initialDateStr.split('-');
             if (parts.length === 3) {

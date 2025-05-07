@@ -30,6 +30,7 @@
     const DATA_ATTR_DISABLE_TARGET = 'data-disable-target'; // On the input field
     const DATA_ATTR_DISABLE_VALUE = 'data-disable-value'; // On the control element
     const CLASS_DISABLED_BY_TOGGLE = 'disabled-by-toggle'; // Optional CSS class
+    const DATA_ATTR_TOGGLE_CLEAR = 'data-toggle-clear'; // *** ADDED CONSTANT HERE ***
 
     // Character Counter Attributes
     const DATA_ATTR_CHAR_COUNT_INPUT = 'data-char-count-input';
@@ -40,7 +41,7 @@
     const DATA_ATTR_SELECTION_INPUT = 'data-selection-input'; // On checkboxes for real-time display
     const DATA_ATTR_SELECTION_DISPLAY = 'data-selection-display'; // On the text block showing selection
 
-    // *** NEW: Datepicker Attribute ***
+    // Datepicker Attribute
     const DATA_ATTR_DATEPICKER = 'data-datepicker';
 
     // Transition duration
@@ -623,7 +624,7 @@
 
     /**
      * ========================================================================
-     * NEW: Datepicker Initialization Logic
+     * Datepicker Initialization Logic
      * ========================================================================
      */
     const initializeDatepickers = () => {
@@ -639,8 +640,6 @@
                 autohide: true,
                 language: 'de', // German language
                 todayHighlight: true,
-                // You can add more options here as needed
-                // e.g., minDate, maxDate, daysOfWeekDisabled, etc.
             });
         });
     };
@@ -675,7 +674,7 @@
         // Initialize Real-time Selection Displays
         initializeSelectionDisplays();
 
-        // *** NEW: Initialize Datepickers ***
+        // Initialize Datepickers
         initializeDatepickers();
 
     }); // End DOMContentLoaded

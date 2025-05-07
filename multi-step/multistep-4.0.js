@@ -674,10 +674,22 @@
         // Initialize Real-time Selection Displays
         initializeSelectionDisplays();
 
-        // *** UPDATED: Datepicker initialization is now delayed ***
-        setTimeout(() => {
-            initializeDatepickers();
-        }, 100); // Delay initialization by 100ms
+        // *** UPDATED: Datepicker initialization with polling ***
+        let datepickerInitAttempts = 0;
+        const maxDatepickerInitAttempts = 50; // Try for 5 seconds (50 * 100ms)
+        const tryInitializeDatepickers = () => {
+            if (typeof window.Datepicker !== 'undefined') {
+                initializeDatepickers();
+            } else {
+                datepickerInitAttempts++;
+                if (datepickerInitAttempts < maxDatepickerInitAttempts) {
+                    setTimeout(tryInitializeDatepickers, 100); // Check again after 100ms
+                } else {
+                    console.warn('Datepicker library failed to load after several attempts.');
+                }
+            }
+        };
+        tryInitializeDatepickers(); // Start polling
 
     }); // End DOMContentLoaded
 

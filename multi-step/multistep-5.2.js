@@ -1,6 +1,6 @@
 (function() {
     'use strict';
-
+    import config from './config/config.js';
     /**
      * ========================================================================
      * Constants

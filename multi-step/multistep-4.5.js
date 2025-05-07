@@ -112,17 +112,50 @@
          });
     };
 
-    // Date Formatting Helper (Output: DD.MM.YYYY)
-    const formatDateDDMMYYYY = (date) => { // Expects a Date object or a string parsable by Date
-        if (!date) return null;
-        let d = (date instanceof Date) ? date : new Date(date);
-        if (isNaN(d.getTime())) return null; // Invalid date
+    // Date Formatting Helper (Output: DD.MM.YYYY for display)
+    const formatDateDDMMYYYY = (dateStringOrDate) => {
+        if (!dateStringOrDate) return null;
+        let d;
+        if (dateStringOrDate instanceof Date) {
+            d = dateStringOrDate;
+        } else if (typeof dateStringOrDate === 'string') {
+            // Check if already in DD.MM.YYYY format
+            if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateStringOrDate)) {
+                return dateStringOrDate;
+            }
+            // Try parsing YYYY-MM-DD
+            const parts = dateStringOrDate.split('-');
+            if (parts.length === 3) {
+                d = new Date(parts[0], parseInt(parts[1], 10) - 1, parts[2]);
+            } else {
+                // Try parsing a more general date string (less reliable)
+                d = new Date(dateStringOrDate);
+            }
+        } else {
+            return null;
+        }
+
+        if (isNaN(d.getTime())) return null;
 
         const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
+        const month = String(d.getMonth() + 1).padStart(2, '0');
         const year = d.getFullYear();
         return `${day}.${month}.${year}`;
     };
+
+    // *** NEW: Date Formatting Helper (Output: YYYY-MM-DD for input type="date") ***
+    const formatDateYYYYMMDD = (date) => {
+        if (!date) return null;
+        let d = (date instanceof Date) ? date : new Date(date);
+        if (isNaN(d.getTime())) return null;
+
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+
     // Parse DD.MM.YYYY string to Date object
     const parseDateDDMMYYYY = (dateString) => {
         if (!dateString || typeof dateString !== 'string') return null;
@@ -132,7 +165,6 @@
             const month = parseInt(parts[2], 10) - 1; // Month is 0-indexed
             const year = parseInt(parts[3], 10);
             const date = new Date(year, month, day);
-            // Check if date is valid (e.g. 31.02.2023 is invalid)
             if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
                 return date;
             }
@@ -423,6 +455,7 @@
                     if (field.tagName === 'SELECT') {
                         value = field.options[field.selectedIndex]?.text || field.value;
                     } else {
+                        // For date fields, the value is already YYYY-MM-DD if type="date"
                         value = field.value.trim();
                     }
                     return value ? value : null;
@@ -439,13 +472,14 @@
                     case 'currency': return `${value} €`;
                     case 'textarea': return value.replace(/\n/g, '<br>');
                     case 'period':
+                        // Dates for period are expected to be YYYY-MM-DD from input, then formatted
                         const formattedStart = formatDateDDMMYYYY(value.start);
                         const formattedEnd = formatDateDDMMYYYY(value.end);
                         if (formattedStart && formattedEnd) return `${formattedStart} bis ${formattedEnd}`;
                         if (formattedStart) return `Ab ${formattedStart}`;
                         if (formattedEnd) return `Bis ${formattedEnd}`;
                         return null;
-                    case 'date':
+                    case 'date': // For single dates, value is expected as YYYY-MM-DD from input
                         return formatDateDDMMYYYY(value);
                     default: return value;
                 }
@@ -477,8 +511,8 @@
             let budgetVal = getFieldValue('budget');
             updatePlaceholder('budget', budgetVal === null ? 'tba' : (formatValue(budgetVal, 'currency') || requiredPlaceholder));
 
-            let startDateVal = getFieldValue('startDate');
-            let endDateVal = getFieldValue('endDate');
+            let startDateVal = getFieldValue('startDate'); // Expected as YYYY-MM-DD if type="date"
+            let endDateVal = getFieldValue('endDate');   // Expected as YYYY-MM-DD if type="date"
             let periodFormattedVal = formatValue({ start: startDateVal, end: endDateVal }, 'period');
             updatePlaceholder('productionPeriod', periodFormattedVal || requiredPlaceholder);
 
@@ -648,20 +682,19 @@
      * Custom Datepicker Logic
      * ========================================================================
      */
-    let currentDatePickerInput = null; // Track which input opened the datepicker
-    let datePickerWrapper = null; // The main datepicker element
-    let currentDisplayDate = new Date(); // Date object for the currently displayed month/year
+    let currentDatePickerInput = null;
+    let datePickerWrapper = null;
+    let currentDisplayDate = new Date();
 
     const createDatePickerUI = () => {
-        if (datePickerWrapper) return datePickerWrapper; // Already created
+        if (datePickerWrapper) return datePickerWrapper;
 
         datePickerWrapper = document.createElement('div');
         datePickerWrapper.className = DATEPICKER_WRAPPER_CLASS;
-        datePickerWrapper.style.display = 'none'; // Initially hidden
-        datePickerWrapper.style.position = 'absolute'; // Position near input
-        datePickerWrapper.style.zIndex = '1000'; // Ensure it's on top
+        datePickerWrapper.style.display = 'none';
+        datePickerWrapper.style.position = 'absolute';
+        datePickerWrapper.style.zIndex = '1000';
 
-        // Header: Prev Month, Month/Year, Next Month, Today Button
         const header = document.createElement('div');
         header.className = DATEPICKER_HEADER_CLASS;
 
@@ -704,7 +737,10 @@
         todayButton.addEventListener('click', () => {
             const today = new Date();
             if (currentDatePickerInput) {
-                currentDatePickerInput.value = formatDateDDMMYYYY(today);
+                // *** Set value in YYYY-MM-DD for input type="date", DD.MM.YYYY for type="text" ***
+                currentDatePickerInput.value = (currentDatePickerInput.type === 'date')
+                                              ? formatDateYYYYMMDD(today)
+                                              : formatDateDDMMYYYY(today);
                 currentDatePickerInput.dispatchEvent(new Event('change', { bubbles: true }));
             }
             hideCustomDatePicker();
@@ -716,192 +752,86 @@
 
         document.body.appendChild(datePickerWrapper);
 
-        // *** CSS for Datepicker is now included here again ***
         const style = document.createElement('style');
         style.textContent = `
-            .${DATEPICKER_WRAPPER_CLASS} {
-                background: white;
-                border: 1px solid #e0e0e0;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                padding: 15px;
-                width: 300px;
-                border-radius: 8px;
-                box-sizing: border-box;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                color: #333;
-            }
-            .${DATEPICKER_HEADER_CLASS} {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 15px;
-            }
-            .${DATEPICKER_CONTROLS_CLASS} {
-                display: flex;
-                align-items: center;
-                font-weight: 600;
-                font-size: 1.05em;
-            }
-            .${DATEPICKER_CONTROLS_CLASS} button {
-                background: transparent;
-                border: none;
-                padding: 8px;
-                cursor: pointer;
-                font-size: 1.4em;
-                color: #555;
-                line-height: 1;
-                transition: color 0.2s ease-in-out;
-            }
-            .${DATEPICKER_CONTROLS_CLASS} button:hover {
-                color: ${DATEPICKER_PRIMARY_COLOR};
-            }
-            .${DATEPICKER_CONTROLS_CLASS} span {
-                margin: 0 12px;
-                color: #333;
-                min-width: 120px;
-                text-align: center;
-            }
-            .${DATEPICKER_TODAY_BTN_CLASS} {
-                background: #f5f5f5;
-                border: 1px solid #ddd;
-                padding: 6px 12px;
-                cursor: pointer;
-                border-radius: 6px;
-                font-size: 0.9em;
-                color: #333;
-                font-weight: 500;
-                transition: background-color 0.2s ease-in-out;
-            }
-            .${DATEPICKER_TODAY_BTN_CLASS}:hover {
-                background-color: #e9e9e9;
-            }
-            .${DATEPICKER_GRID_CLASS} {
-                display: grid;
-                grid-template-columns: repeat(7, 1fr);
-                gap: 5px;
-                text-align: center;
-            }
-            .${DATEPICKER_DAY_HEADER_CLASS} {
-                font-weight: 600;
-                font-size: 0.8em;
-                color: #888;
-                padding: 8px 0;
-                text-transform: uppercase;
-            }
-            .${DATEPICKER_DAY_CLASS} {
-                padding: 0;
-                cursor: pointer;
-                border-radius: 50%;
-                font-size: 0.9em;
-                width: 36px;
-                height: 36px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                box-sizing: border-box;
-                transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out;
-                border: 1px solid transparent;
-            }
-            .${DATEPICKER_DAY_CLASS}:hover {
-                background-color: #f0f0f0;
-                border-color: #e0e0e0;
-            }
-            .${DATEPICKER_DAY_OTHER_MONTH_CLASS} {
-                color: #ccc;
-                cursor: default;
-            }
-            .${DATEPICKER_DAY_OTHER_MONTH_CLASS}:hover {
-                background-color: transparent;
-                border-color: transparent;
-            }
-            .${DATEPICKER_DAY_TODAY_CLASS} {
-                font-weight: 700;
-                border: 1px solid ${DATEPICKER_PRIMARY_COLOR};
-                color: ${DATEPICKER_PRIMARY_COLOR};
-            }
-            .${DATEPICKER_DAY_TODAY_CLASS}:hover {
-                background-color: #fce4ec;
-            }
-            .${DATEPICKER_DAY_SELECTED_CLASS} {
-                background-color: ${DATEPICKER_PRIMARY_COLOR};
-                color: white !important;
-                border-color: ${DATEPICKER_PRIMARY_COLOR};
-                font-weight: 700;
-            }
-            .${DATEPICKER_DAY_SELECTED_CLASS}:hover {
-                background-color: #e64a83;
-                border-color: #e64a83;
-            }
+            .${DATEPICKER_WRAPPER_CLASS} { background: white; border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 15px; width: 300px; border-radius: 8px; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #333; }
+            .${DATEPICKER_HEADER_CLASS} { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+            .${DATEPICKER_CONTROLS_CLASS} { display: flex; align-items: center; font-weight: 600; font-size: 1.05em; }
+            .${DATEPICKER_CONTROLS_CLASS} button { background: transparent; border: none; padding: 8px; cursor: pointer; font-size: 1.4em; color: #555; line-height: 1; transition: color 0.2s ease-in-out; }
+            .${DATEPICKER_CONTROLS_CLASS} button:hover { color: ${DATEPICKER_PRIMARY_COLOR}; }
+            .${DATEPICKER_CONTROLS_CLASS} span { margin: 0 12px; color: #333; min-width: 120px; text-align: center; }
+            .${DATEPICKER_TODAY_BTN_CLASS} { background: #f5f5f5; border: 1px solid #ddd; padding: 6px 12px; cursor: pointer; border-radius: 6px; font-size: 0.9em; color: #333; font-weight: 500; transition: background-color 0.2s ease-in-out; }
+            .${DATEPICKER_TODAY_BTN_CLASS}:hover { background-color: #e9e9e9; }
+            .${DATEPICKER_GRID_CLASS} { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; text-align: center; }
+            .${DATEPICKER_DAY_HEADER_CLASS} { font-weight: 600; font-size: 0.8em; color: #888; padding: 8px 0; text-transform: uppercase; }
+            .${DATEPICKER_DAY_CLASS} { padding: 0; cursor: pointer; border-radius: 50%; font-size: 0.9em; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; box-sizing: border-box; transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out; border: 1px solid transparent; }
+            .${DATEPICKER_DAY_CLASS}:hover { background-color: #f0f0f0; border-color: #e0e0e0; }
+            .${DATEPICKER_DAY_OTHER_MONTH_CLASS} { color: #ccc; cursor: default; }
+            .${DATEPICKER_DAY_OTHER_MONTH_CLASS}:hover { background-color: transparent; border-color: transparent; }
+            .${DATEPICKER_DAY_TODAY_CLASS} { font-weight: 700; border: 1px solid ${DATEPICKER_PRIMARY_COLOR}; color: ${DATEPICKER_PRIMARY_COLOR}; }
+            .${DATEPICKER_DAY_TODAY_CLASS}:hover { background-color: #fce4ec; }
+            .${DATEPICKER_DAY_SELECTED_CLASS} { background-color: ${DATEPICKER_PRIMARY_COLOR}; color: white !important; border-color: ${DATEPICKER_PRIMARY_COLOR}; font-weight: 700; }
+            .${DATEPICKER_DAY_SELECTED_CLASS}:hover { background-color: #e64a83; border-color: #e64a83; }
         `;
         document.head.appendChild(style);
-
-
         return datePickerWrapper;
     };
 
     const renderCalendarDays = (date) => {
         if (!datePickerWrapper) createDatePickerUI();
-
         const monthYearDisplay = datePickerWrapper.querySelector(`.${DATEPICKER_CONTROLS_CLASS} span`);
         const daysGrid = datePickerWrapper.querySelector(`.${DATEPICKER_GRID_CLASS}`);
-        daysGrid.innerHTML = ''; // Clear previous days
-
+        daysGrid.innerHTML = '';
         const month = date.getMonth();
         const year = date.getFullYear();
-
         const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
-        const dayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]; // Start with Monday
-
+        const dayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
         monthYearDisplay.textContent = `${monthNames[month]} ${year}`;
-
         dayNames.forEach(dayName => {
             const dayHeaderEl = document.createElement('div');
             dayHeaderEl.className = DATEPICKER_DAY_HEADER_CLASS;
             dayHeaderEl.textContent = dayName;
             daysGrid.appendChild(dayHeaderEl);
         });
-
-        let firstDayOfMonth = new Date(year, month, 1).getDay(); // 0=Sunday, 1=Monday...
-        firstDayOfMonth = (firstDayOfMonth === 0) ? 6 : firstDayOfMonth - 1; // Adjust to Monday=0, Sunday=6
-
+        let firstDayOfMonth = new Date(year, month, 1).getDay();
+        firstDayOfMonth = (firstDayOfMonth === 0) ? 6 : firstDayOfMonth - 1;
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const today = new Date();
         today.setHours(0,0,0,0);
-
         let selectedDate = null;
         if (currentDatePickerInput && currentDatePickerInput.value) {
-            selectedDate = parseDateDDMMYYYY(currentDatePickerInput.value);
-            if (selectedDate) selectedDate.setHours(0,0,0,0);
+            // Try parsing DD.MM.YYYY first (from custom picker), then YYYY-MM-DD (if type="date")
+            selectedDate = parseDateDDMMYYYY(currentDatePickerInput.value) || new Date(currentDatePickerInput.value);
+            if (selectedDate && !isNaN(selectedDate.getTime())) {
+                selectedDate.setHours(0,0,0,0);
+            } else {
+                selectedDate = null;
+            }
         }
-
         for (let i = 0; i < firstDayOfMonth; i++) {
             daysGrid.appendChild(document.createElement('div'));
         }
-
         for (let day = 1; day <= daysInMonth; day++) {
             const dayEl = document.createElement('div');
             dayEl.className = DATEPICKER_DAY_CLASS;
             dayEl.textContent = day;
             const currentDate = new Date(year, month, day);
             currentDate.setHours(0,0,0,0);
-
             if (currentDate.getTime() === today.getTime()) {
                 addClass(dayEl, DATEPICKER_DAY_TODAY_CLASS);
             }
             if (selectedDate && currentDate.getTime() === selectedDate.getTime()) {
                 addClass(dayEl, DATEPICKER_DAY_SELECTED_CLASS);
             }
-
             dayEl.addEventListener('click', () => {
-                console.log('Day clicked:', day); // DEBUG
                 if (currentDatePickerInput) {
-                    const formattedDate = formatDateDDMMYYYY(currentDate);
-                    console.log('Formatted Date:', formattedDate); // DEBUG
-                    currentDatePickerInput.value = formattedDate;
-                    console.log('Input value after set:', currentDatePickerInput.value); // DEBUG
+                    // *** UPDATED: Set value based on input type ***
+                    if (currentDatePickerInput.type === 'date') {
+                        currentDatePickerInput.value = formatDateYYYYMMDD(currentDate);
+                    } else {
+                        currentDatePickerInput.value = formatDateDDMMYYYY(currentDate);
+                    }
                     currentDatePickerInput.dispatchEvent(new Event('change', { bubbles: true }));
-                } else {
-                    console.log('currentDatePickerInput is null'); // DEBUG
                 }
                 hideCustomDatePicker();
             });
@@ -910,12 +840,21 @@
     };
 
     const showCustomDatePicker = (inputElement) => {
-        console.log('Showing datepicker for:', inputElement); // DEBUG
         if (!datePickerWrapper) createDatePickerUI();
-        currentDatePickerInput = inputElement; // Set the reference HERE
+        currentDatePickerInput = inputElement;
         const initialDateStr = inputElement.value;
-        const parsedDate = parseDateDDMMYYYY(initialDateStr);
-        currentDisplayDate = parsedDate || new Date();
+        let parsedDate = null;
+        // If input is type="date", value is YYYY-MM-DD. Otherwise, expect DD.MM.YYYY
+        if (inputElement.type === 'date' && initialDateStr) {
+            const parts = initialDateStr.split('-');
+            if (parts.length === 3) {
+                parsedDate = new Date(parts[0], parseInt(parts[1],10) - 1, parts[2]);
+            }
+        } else {
+            parsedDate = parseDateDDMMYYYY(initialDateStr);
+        }
+        currentDisplayDate = (parsedDate && !isNaN(parsedDate.getTime())) ? parsedDate : new Date();
+
         renderCalendarDays(currentDisplayDate);
         const inputRect = inputElement.getBoundingClientRect();
         datePickerWrapper.style.top = `${inputRect.bottom + window.scrollY + 5}px`;
@@ -927,15 +866,12 @@
         if (datePickerWrapper) {
             datePickerWrapper.style.display = 'none';
         }
-        currentDatePickerInput = null; // Clear reference when hiding
-        console.log('Datepicker hidden, current input cleared'); // DEBUG
+        currentDatePickerInput = null;
     };
 
     document.addEventListener('click', (event) => {
         if (datePickerWrapper && datePickerWrapper.style.display === 'block') {
-            // Check if the click target is the input itself OR inside the datepicker wrapper
             if (currentDatePickerInput && !currentDatePickerInput.contains(event.target) && !datePickerWrapper.contains(event.target)) {
-                 console.log('Clicked outside datepicker'); // DEBUG
                 hideCustomDatePicker();
             }
         }
@@ -944,15 +880,11 @@
     const initializeCustomDatepickers = () => {
         const datepickerInputs = findAll(`[${DATA_ATTR_DATEPICKER}]`);
         datepickerInputs.forEach(input => {
-             // Use 'mousedown' or 'touchstart' to potentially open before focus fully registers?
-             // Or stick to click/focus but ensure reference is set correctly.
             input.addEventListener('focus', (event) => {
-                event.preventDefault(); // Prevent potential native pickers
-                // Delay showing slightly to ensure focus is established? Might not be needed.
-                // setTimeout(() => showCustomDatePicker(input), 0);
+                event.preventDefault();
                  showCustomDatePicker(input);
             });
-            input.addEventListener('click', (event) => { // Also open on click
+            input.addEventListener('click', (event) => {
                 event.preventDefault();
                  showCustomDatePicker(input);
             });

@@ -1,6 +1,6 @@
 (function() {
     'use strict';
-    import config from './config/config.js';
+
     /**
      * ========================================================================
      * Constants
@@ -59,6 +59,10 @@
     // Transition duration
     const TRANSITION_DURATION = 400; // ms
     const DATEPICKER_PRIMARY_COLOR = '#fd5392';
+
+    // *** NEW: Cloudflare Worker URL for Job Title Check ***
+    const JOB_TITLE_CHECK_WORKER_URL = 'https://airtable-name-check.oliver-258.workers.dev/';
+
 
     /**
      * ========================================================================
@@ -167,6 +171,7 @@
      * ========================================================================
      */
     class MultiStepForm {
+        // ... (Constructor and other methods remain largely the same) ...
         constructor(formElement) {
             this.form = formElement;
             const formId = this.form.id || 'form without id';
@@ -398,15 +403,13 @@
             if (jobTitleInput) {
                 console.log('[DEBUG MultiStepForm] Found jobTitleInput in step', stepIndex + 1);
                 const jobTitle = jobTitleInput.value.trim();
-                // Reset styles specific to job title validation
                 jobTitleInput.style.border = '';
                 removeClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
                 removeClass(jobTitleInput, CLASS_JOB_TITLE_SUCCESS);
                 if (messageElement) {
                     messageElement.textContent = '';
-                    messageElement.style.color = ''; // Explicitly reset color
+                    messageElement.style.color = '';
                 }
-
 
                 if (jobTitle) {
                     if (!isValidJobTitle(jobTitle)) {
@@ -421,9 +424,9 @@
                     }
 
                     try {
-                        console.log('[DEBUG MultiStepForm] Checking if job title exists:', jobTitle);
-                        const exists = await checkJobTitleExists(jobTitle); // Can throw
-                        console.log('[DEBUG MultiStepForm] Job title exists result:', exists);
+                        console.log('[DEBUG MultiStepForm] Checking if job title exists via Worker:', jobTitle);
+                        const exists = await checkJobTitleExists(jobTitle); // Uses Worker now
+                        console.log('[DEBUG MultiStepForm] Job title exists result from Worker:', exists);
                         if (exists) {
                             jobTitleInput.style.border = '2px solid #D92415';
                             addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
@@ -442,16 +445,16 @@
                             }
                             console.log('[DEBUG MultiStepForm] Job title available');
                         }
-                    } catch (error) { // Catches errors from checkJobTitleExists
+                    } catch (error) {
                         if (messageElement) {
                             messageElement.textContent = 'Fehler bei der Überprüfung des Jobtitels.';
                             messageElement.style.color = 'red';
                         }
-                        console.error('[DEBUG MultiStepForm] Error in checkJobTitleExists during step validation:', error);
-                        return false; // Treat API error as validation failure
+                        console.error('[DEBUG MultiStepForm] Error in checkJobTitleExists (Worker) during step validation:', error);
+                        return false;
                     }
                 } else if (jobTitleInput.hasAttribute('required')) {
-                    addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR); // Or general input error
+                    addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
                     if (messageElement) {
                         messageElement.textContent = 'Jobtitel ist ein Pflichtfeld.';
                         messageElement.style.color = 'red';
@@ -895,35 +898,35 @@
         return regex.test(title);
     }
 
-    // *** UPDATED: checkJobTitleExists throws error on API failure ***
+    // *** UPDATED: checkJobTitleExists uses Cloudflare Worker URL ***
     async function checkJobTitleExists(title) {
-        console.log('[DEBUG JobTitle] Checking existence for:', title);
-        if (typeof window.config === 'undefined' || typeof window.config.apiKey === 'undefined') {
-            console.error('[DEBUG JobTitle] Airtable API Key (window.config.apiKey) not found.');
-            throw new Error('API Key not configured'); // Throw error if key is missing
-        }
-        const apiKey = window.config.apiKey;
-        const baseId = 'appVQBmxIpYuapHVR';
-        const tableName = 'Jobs';
-        const dynamicFieldName = 'Name';
-
-        const query = encodeURIComponent(`LOWER({${dynamicFieldName}})="${title.toLowerCase()}"`);
-        const url = `https://api.airtable.com/v0/${baseId}/${tableName}?filterByFormula=${query}`;
-        console.log('[DEBUG JobTitle] Airtable URL:', url);
+        console.log('[DEBUG JobTitle] Checking existence via Worker for:', title);
 
         try {
-            const response = await fetch(url, {
-                headers: { Authorization: `Bearer ${apiKey}` }
+            const response = await fetch(JOB_TITLE_CHECK_WORKER_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ jobTitle: title.trim() }),
             });
-            if (!response.ok) { // Check for HTTP errors like 4xx, 5xx
-                console.error(`[DEBUG JobTitle] API error: ${response.status} ${response.statusText}`);
-                throw new Error(`API error: ${response.status}`);
+
+            if (!response.ok) {
+                // Log more details from the worker response if available
+                let errorDetails = `Worker responded with status: ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    errorDetails += ` - ${JSON.stringify(errorData)}`;
+                } catch (e) { /* Ignore if response is not JSON */ }
+                console.error('[DEBUG JobTitle] Error from Worker:', errorDetails);
+                throw new Error(errorDetails);
             }
+
             const data = await response.json();
-            console.log('[DEBUG JobTitle] Airtable response data:', data);
-            return data.records && data.records.length > 0; // True if exists, false if not
+            console.log('[DEBUG JobTitle] Worker response data:', data);
+            return data.exists === true; // Explicitly check for true
         } catch (error) {
-            console.error('[DEBUG JobTitle] Error checking job title (fetch or JSON parse):', error);
+            console.error('[DEBUG JobTitle] Error fetching from Worker or parsing JSON:', error);
             throw error; // Re-throw the error to be caught by the caller
         }
     }
@@ -933,32 +936,26 @@
         const messageElement = document.getElementById('message');
 
         if (!jobTitleInput) {
-            console.log('[DEBUG JobTitle] jobTitleInput (#jobname) not found.');
+            // console.log('[DEBUG JobTitle] jobTitleInput (#jobname) not found.');
             return;
         }
-        // Message element is optional for the live validation part
-        // if (!messageElement) {
-        //     console.warn('[DEBUG JobTitle] messageElement (#message) not found.');
-        // }
 
-        console.log('[DEBUG JobTitle] Initializing validation for:', jobTitleInput);
+        // console.log('[DEBUG JobTitle] Initializing validation for:', jobTitleInput);
 
         jobTitleInput.addEventListener('input', debounce(async function (e) {
             const jobTitle = e.target.value;
-            console.log('[DEBUG JobTitle] Input event, title:', jobTitle);
+            // console.log('[DEBUG JobTitle] Input event, title:', jobTitle);
 
-            // Reset UI feedback FIRST
             jobTitleInput.style.border = '';
             removeClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
             removeClass(jobTitleInput, CLASS_JOB_TITLE_SUCCESS);
             if (messageElement) {
                 messageElement.textContent = '';
-                messageElement.style.color = ''; // Explicitly reset color
+                messageElement.style.color = '';
             }
 
-
             if (!jobTitle.trim()) {
-                console.log('[DEBUG JobTitle] Title is empty, skipping validation.');
+                // console.log('[DEBUG JobTitle] Title is empty, skipping validation.');
                 return;
             }
 
@@ -969,12 +966,12 @@
                     messageElement.textContent = 'Der Jobtitel enthält ungültige Zeichen.';
                     messageElement.style.color = 'red';
                 }
-                console.log('[DEBUG JobTitle] Invalid characters.');
+                // console.log('[DEBUG JobTitle] Invalid characters.');
                 return;
             }
 
             try {
-                const exists = await checkJobTitleExists(jobTitle); // Can throw
+                const exists = await checkJobTitleExists(jobTitle);
                 if (exists) {
                     jobTitleInput.style.border = '2px solid #D92415';
                     addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
@@ -982,7 +979,7 @@
                         messageElement.textContent = 'Dieser Jobtitel existiert bereits.';
                         messageElement.style.color = 'red';
                     }
-                     console.log('[DEBUG JobTitle] Title exists.');
+                     // console.log('[DEBUG JobTitle] Title exists.');
                 } else {
                     jobTitleInput.style.border = '2px solid #3DB927';
                     addClass(jobTitleInput, CLASS_JOB_TITLE_SUCCESS);
@@ -990,16 +987,16 @@
                         messageElement.textContent = 'Dieser Jobtitel ist verfügbar.';
                         messageElement.style.color = 'green';
                     }
-                    console.log('[DEBUG JobTitle] Title available.');
+                    // console.log('[DEBUG JobTitle] Title available.');
                 }
-            } catch (error) { // Catches errors from checkJobTitleExists
-                jobTitleInput.style.border = '2px solid #D92415'; // Indicate error
+            } catch (error) {
+                jobTitleInput.style.border = '2px solid #D92415';
                 addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
                 if (messageElement) {
                     messageElement.textContent = 'Fehler bei der Überprüfung des Jobtitels.';
                     messageElement.style.color = 'red';
                 }
-                 console.error('[DEBUG JobTitle] Error during existence check in event listener:', error);
+                 // console.error('[DEBUG JobTitle] Error during existence check in event listener:', error);
             }
         }, 500));
     };

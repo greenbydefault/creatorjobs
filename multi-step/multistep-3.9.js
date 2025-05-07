@@ -30,7 +30,7 @@
     const DATA_ATTR_DISABLE_TARGET = 'data-disable-target'; // On the input field
     const DATA_ATTR_DISABLE_VALUE = 'data-disable-value'; // On the control element
     const CLASS_DISABLED_BY_TOGGLE = 'disabled-by-toggle'; // Optional CSS class
-    const DATA_ATTR_TOGGLE_CLEAR = 'data-toggle-clear'; // *** ADDED CONSTANT HERE ***
+    const DATA_ATTR_TOGGLE_CLEAR = 'data-toggle-clear';
 
     // Character Counter Attributes
     const DATA_ATTR_CHAR_COUNT_INPUT = 'data-char-count-input';
@@ -115,7 +115,7 @@
                 return `${day}.${month}.${year}`;
             }
         }
-        console.warn(`Unexpected date format for formatting: ${dateString}`);
+        // console.warn(`Unexpected date format for formatting: ${dateString}`); // Be less verbose
         return dateString; // Return original if format is wrong
     };
 
@@ -417,14 +417,13 @@
                     case 'currency': return `${value} €`;
                     case 'textarea': return value.replace(/\n/g, '<br>');
                     case 'period':
-                        // Ensure dates are formatted to DD.MM.YYYY before combining
                         const formattedStart = formatDateDDMMYYYY(value.start);
                         const formattedEnd = formatDateDDMMYYYY(value.end);
                         if (formattedStart && formattedEnd) return `${formattedStart} bis ${formattedEnd}`;
                         if (formattedStart) return `Ab ${formattedStart}`;
                         if (formattedEnd) return `Bis ${formattedEnd}`;
                         return null;
-                    case 'date': // For single dates
+                    case 'date':
                         return formatDateDDMMYYYY(value);
                     default: return value;
                 }
@@ -629,13 +628,14 @@
      */
     const initializeDatepickers = () => {
         const datepickerInputs = findAll(`[${DATA_ATTR_DATEPICKER}]`);
-        if (typeof Datepicker === 'undefined') {
-            console.warn('Datepicker library not found. Make sure it is loaded.');
+        // Check for Datepicker on window object
+        if (typeof window.Datepicker === 'undefined') {
+            console.warn('Datepicker library (window.Datepicker) not found. Make sure it is loaded before this script.');
             return;
         }
 
         datepickerInputs.forEach(input => {
-            new Datepicker(input, {
+            new window.Datepicker(input, { // Use window.Datepicker
                 format: 'dd.mm.yyyy', // European format
                 autohide: true,
                 language: 'de', // German language
@@ -674,8 +674,10 @@
         // Initialize Real-time Selection Displays
         initializeSelectionDisplays();
 
-        // Initialize Datepickers
-        initializeDatepickers();
+        // *** UPDATED: Datepicker initialization is now delayed ***
+        setTimeout(() => {
+            initializeDatepickers();
+        }, 100); // Delay initialization by 100ms
 
     }); // End DOMContentLoaded
 

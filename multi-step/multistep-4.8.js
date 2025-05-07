@@ -221,9 +221,9 @@
         }
 
         addEventListeners() {
-            const handleNext = async () => { // Make async to await goToNextStep
+            const handleNext = async () => {
                  if (this.isTransitioning) return;
-                 await this.goToNextStep(); // Await the async operation
+                 await this.goToNextStep();
             };
             const handlePrev = () => {
                  if (this.isTransitioning) return;
@@ -232,7 +232,7 @@
             this.nextButton?.addEventListener('click', handleNext);
             this.prevButton?.addEventListener('click', handlePrev);
             this.indicators.forEach(indicator => {
-                indicator.addEventListener('click', async (event) => { // Make async
+                indicator.addEventListener('click', async (event) => {
                     event.preventDefault();
                     if (this.isTransitioning) return;
                     const targetStepNumber = parseInt(indicator.getAttribute(DATA_ATTR_INDICATOR), 10);
@@ -242,7 +242,6 @@
                          if (targetIndex > this.currentStepIndex) {
                             let canProceed = true;
                             for (let i = this.currentStepIndex; i < targetIndex; i++) {
-                                // validateStep is now async
                                 if (!await this.validateStep(i)) {
                                     console.log(`Validation failed for intermediate step ${i + 1}, cannot jump.`);
                                     const firstInvalidInStep = find(':invalid, .input-error, .job-title-error-border', this.steps[i]);
@@ -257,26 +256,24 @@
                     }
                 });
             });
-            this.form.addEventListener('keydown', async (event) => { // Make async
+            this.form.addEventListener('keydown', async (event) => {
                 if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
                     const isSubmitVisible = this.submitButton && !this.submitButton.classList.contains(CLASS_HIDE);
                     if (document.activeElement !== this.submitButton || !isSubmitVisible) {
                         event.preventDefault();
                         if (this.nextButton && !this.nextButton.classList.contains(CLASS_HIDE)) {
-                           await handleNext(); // Await the async operation
+                           await handleNext();
                         }
                     }
                 }
             });
         }
 
-        // *** UPDATED: goToNextStep is now async ***
         async goToNextStep() {
-             if (!await this.validateStep(this.currentStepIndex)) { // Await validateStep
+             if (!await this.validateStep(this.currentStepIndex)) {
                  console.log("Validation failed for step", this.currentStepIndex + 1);
-                 // Focus logic is now part of validateStep or handled after its call
                  const firstInvalid = find(':invalid, .input-error, .job-title-error-border', this.steps[this.currentStepIndex]);
-                 firstInvalid?.reportValidity(); // Show browser validation bubble
+                 firstInvalid?.reportValidity();
                  firstInvalid?.focus();
                  return;
              }
@@ -374,88 +371,91 @@
             }
         }
 
-        // *** UPDATED: validateStep is now async and includes job title validation ***
         async validateStep(stepIndex) {
             const currentStepElement = this.steps[stepIndex];
             if (!currentStepElement) return false;
 
-            let isStepValid = true; // Assume valid initially
+            let isStepValid = true;
 
-            // 1. Standard required field validation
             const requiredInputs = findAll('input[required], select[required], textarea[required]', currentStepElement);
             requiredInputs.forEach(input => {
-                removeClass(input, CLASS_INPUT_ERROR); // Reset general error class
+                removeClass(input, CLASS_INPUT_ERROR);
                 if (!input.checkValidity() && !input.disabled) {
                     isStepValid = false;
                     addClass(input, CLASS_INPUT_ERROR);
                 }
             });
 
-            if (!isStepValid) return false; // If standard validation fails, stop here
+            if (!isStepValid) {
+                console.log('[DEBUG MultiStepForm] Standard validation failed for step', stepIndex + 1);
+                return false;
+            }
 
-            // 2. Specific Job Title Validation (if jobname input is in this step)
-            const jobTitleInput = find('#jobname', currentStepElement); // Search within the current step
-            const messageElement = find('#message', currentStepElement.closest('form') || document); // Message element related to job title
+            const jobTitleInput = find('#jobname', currentStepElement);
+            const messageElement = find('#message', currentStepElement.closest('form') || document);
 
-            if (jobTitleInput) { // If job title input exists in this step
+            if (jobTitleInput) {
+                console.log('[DEBUG MultiStepForm] Found jobTitleInput in step', stepIndex + 1);
                 const jobTitle = jobTitleInput.value.trim();
-                // Reset job title specific styles
                 jobTitleInput.style.border = '';
                 removeClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
                 removeClass(jobTitleInput, CLASS_JOB_TITLE_SUCCESS);
                 if (messageElement) messageElement.textContent = '';
 
-
-                if (jobTitle) { // Only validate if not empty
+                if (jobTitle) {
                     if (!isValidJobTitle(jobTitle)) {
-                        jobTitleInput.style.border = '2px solid #D92415'; // Use direct style or class
+                        jobTitleInput.style.border = '2px solid #D92415';
                         addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
                         if (messageElement) {
-                            messageElement.textContent = 'Der Jobtitel enthält ungültige Zeichen. Erlaubt sind nur Buchstaben und Zahlen.';
+                            messageElement.textContent = 'Der Jobtitel enthält ungültige Zeichen.';
                             messageElement.style.color = 'red';
                         }
-                        return false; // Invalid characters
+                        console.log('[DEBUG MultiStepForm] Job title invalid characters');
+                        return false;
                     }
 
                     try {
-                        const exists = await checkJobTitleExists(jobTitle); // Await the async check
+                        console.log('[DEBUG MultiStepForm] Checking if job title exists:', jobTitle);
+                        const exists = await checkJobTitleExists(jobTitle);
+                        console.log('[DEBUG MultiStepForm] Job title exists result:', exists);
                         if (exists) {
                             jobTitleInput.style.border = '2px solid #D92415';
                             addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
                             if (messageElement) {
-                                messageElement.textContent = 'Dieser Jobtitel existiert bereits. Bitte verwende einen eindeutigen Namen.';
+                                messageElement.textContent = 'Dieser Jobtitel existiert bereits.';
                                 messageElement.style.color = 'red';
                             }
-                            return false; // Title exists
+                            console.log('[DEBUG MultiStepForm] Job title already exists');
+                            return false;
                         } else {
-                            // Title is valid and available
                             jobTitleInput.style.border = '2px solid #3DB927';
                             addClass(jobTitleInput, CLASS_JOB_TITLE_SUCCESS);
                             if (messageElement) {
                                 messageElement.textContent = 'Dieser Jobtitel ist verfügbar.';
                                 messageElement.style.color = 'green';
                             }
-                            // No need to return true here, let it fall through
+                            console.log('[DEBUG MultiStepForm] Job title available');
                         }
                     } catch (error) {
-                        // Error during check, treat as validation failure for safety
                         if (messageElement) {
                             messageElement.textContent = 'Fehler bei der Überprüfung des Jobtitels.';
                             messageElement.style.color = 'red';
                         }
+                        console.error('[DEBUG MultiStepForm] Error in checkJobTitleExists:', error);
                         return false;
                     }
                 } else if (jobTitleInput.hasAttribute('required')) {
-                    // If job title is empty but required (standard HTML5 validation should catch this too)
-                    addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR); // Or general input error
+                    addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
                     if (messageElement) {
                         messageElement.textContent = 'Jobtitel ist ein Pflichtfeld.';
                         messageElement.style.color = 'red';
                     }
+                     console.log('[DEBUG MultiStepForm] Job title is required but empty');
                     return false;
                 }
             }
-            return true; // All validations for this step passed
+            console.log('[DEBUG MultiStepForm] Step validation passed for step', stepIndex + 1);
+            return true;
         }
 
         updatePreview() {
@@ -890,10 +890,10 @@
     }
 
     async function checkJobTitleExists(title) {
-        // Ensure config and apiKey are available (globally or via a loaded script)
+        console.log('[DEBUG JobTitle] Checking existence for:', title); // DEBUG
         if (typeof window.config === 'undefined' || typeof window.config.apiKey === 'undefined') {
-            console.error('Airtable API Key (window.config.apiKey) not found.');
-            return true; // Assume exists to prevent accidental overwrites if config fails
+            console.error('[DEBUG JobTitle] Airtable API Key (window.config.apiKey) not found.');
+            return true;
         }
         const apiKey = window.config.apiKey;
         const baseId = 'appVQBmxIpYuapHVR';
@@ -902,41 +902,48 @@
 
         const query = encodeURIComponent(`LOWER({${dynamicFieldName}})="${title.toLowerCase()}"`);
         const url = `https://api.airtable.com/v0/${baseId}/${tableName}?filterByFormula=${query}`;
+        console.log('[DEBUG JobTitle] Airtable URL:', url); // DEBUG
 
         try {
             const response = await fetch(url, {
                 headers: { Authorization: `Bearer ${apiKey}` }
             });
             const data = await response.json();
+            console.log('[DEBUG JobTitle] Airtable response data:', data); // DEBUG
             return data.records && data.records.length > 0;
         } catch (error) {
-            console.error('Error checking job title:', error);
-            return true; // Assume exists on error
+            console.error('[DEBUG JobTitle] Error checking job title:', error);
+            return true;
         }
     }
 
     const initializeJobTitleValidation = () => {
         const jobTitleInput = document.getElementById('jobname');
         const messageElement = document.getElementById('message');
-        // This submitButton is specific to the job title validation context,
-        // not necessarily the main multi-step form's submit button.
-        const validationContextSubmitButton = document.getElementById('submitButton');
 
+        if (!jobTitleInput) {
+            console.log('[DEBUG JobTitle] jobTitleInput not found.'); // DEBUG
+            return;
+        }
+        if (!messageElement) {
+            console.warn('[DEBUG JobTitle] messageElement not found.'); // DEBUG
+        }
 
-        if (!jobTitleInput) return; // Silently exit if job title input not found
+        console.log('[DEBUG JobTitle] Initializing validation for:', jobTitleInput); // DEBUG
 
         jobTitleInput.addEventListener('input', debounce(async function (e) {
             const jobTitle = e.target.value;
+            console.log('[DEBUG JobTitle] Input event, title:', jobTitle); // DEBUG
 
-            // Reset UI feedback
             jobTitleInput.style.border = '';
             removeClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
             removeClass(jobTitleInput, CLASS_JOB_TITLE_SUCCESS);
             if (messageElement) messageElement.textContent = '';
-            // Note: We are not directly controlling the main form's next/submit button here.
-            // That is handled by MultiStepForm.validateStep()
 
-            if (!jobTitle.trim()) return; // Do nothing if empty
+            if (!jobTitle.trim()) {
+                console.log('[DEBUG JobTitle] Title is empty, skipping validation.'); // DEBUG
+                return;
+            }
 
             if (!isValidJobTitle(jobTitle)) {
                 jobTitleInput.style.border = '2px solid #D92415';
@@ -945,7 +952,7 @@
                     messageElement.textContent = 'Der Jobtitel enthält ungültige Zeichen.';
                     messageElement.style.color = 'red';
                 }
-                // Do not hide a general submit button here, validateStep will handle progression
+                console.log('[DEBUG JobTitle] Invalid characters.'); // DEBUG
                 return;
             }
 
@@ -958,6 +965,7 @@
                         messageElement.textContent = 'Dieser Jobtitel existiert bereits.';
                         messageElement.style.color = 'red';
                     }
+                     console.log('[DEBUG JobTitle] Title exists.'); // DEBUG
                 } else {
                     jobTitleInput.style.border = '2px solid #3DB927';
                     addClass(jobTitleInput, CLASS_JOB_TITLE_SUCCESS);
@@ -965,12 +973,14 @@
                         messageElement.textContent = 'Dieser Jobtitel ist verfügbar.';
                         messageElement.style.color = 'green';
                     }
+                    console.log('[DEBUG JobTitle] Title available.'); // DEBUG
                 }
             } catch (error) {
                 if (messageElement) {
                     messageElement.textContent = 'Fehler bei der Überprüfung des Jobtitels.';
                     messageElement.style.color = 'red';
                 }
+                 console.error('[DEBUG JobTitle] Error during existence check in event listener:', error); // DEBUG
             }
         }, 500));
     };

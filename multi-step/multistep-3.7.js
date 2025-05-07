@@ -26,11 +26,9 @@
 
     // Toggle Attributes
     const DATA_ATTR_TOGGLE_CONTROL = 'data-toggle-control';
-    const DATA_ATTR_TOGGLE_TARGET = 'data-toggle-target'; // Target element to show/hide
-    const DATA_ATTR_DISABLE_TARGET = 'data-disable-target'; // Target input to disable/enable
-    const DATA_ATTR_DISABLE_VALUE = 'data-disable-value'; // Value to set when disabled (on control)
-    // *** NEW: Attribute for fields to clear when toggle is OFF ***
-    const DATA_ATTR_TOGGLE_CLEAR = 'data-toggle-clear'; // Target inputs/textareas to clear
+    const DATA_ATTR_TOGGLE_TARGET = 'data-toggle-target';
+    const DATA_ATTR_DISABLE_TARGET = 'data-disable-target'; // On the input field
+    const DATA_ATTR_DISABLE_VALUE = 'data-disable-value'; // On the control element
     const CLASS_DISABLED_BY_TOGGLE = 'disabled-by-toggle'; // Optional CSS class
 
     // Character Counter Attributes
@@ -41,6 +39,9 @@
     // Selection Display Attributes
     const DATA_ATTR_SELECTION_INPUT = 'data-selection-input'; // On checkboxes for real-time display
     const DATA_ATTR_SELECTION_DISPLAY = 'data-selection-display'; // On the text block showing selection
+
+    // *** NEW: Datepicker Attribute ***
+    const DATA_ATTR_DATEPICKER = 'data-datepicker';
 
     // Transition duration
     const TRANSITION_DURATION = 400; // ms
@@ -98,9 +99,14 @@
          });
     };
 
-    // Date Formatting Helper
+    // Date Formatting Helper (Output: DD.MM.YYYY)
     const formatDateDDMMYYYY = (dateString) => {
         if (!dateString || typeof dateString !== 'string') return null;
+        // Check if already in DD.MM.YYYY format (e.g., from datepicker)
+        if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateString)) {
+            return dateString;
+        }
+        // Assuming input might be YYYY-MM-DD from native date pickers or other sources
         const parts = dateString.split('-');
         if (parts.length === 3) {
             const [year, month, day] = parts;
@@ -108,6 +114,7 @@
                 return `${day}.${month}.${year}`;
             }
         }
+        console.warn(`Unexpected date format for formatting: ${dateString}`);
         return dateString; // Return original if format is wrong
     };
 
@@ -118,8 +125,6 @@
      * ========================================================================
      */
     class MultiStepForm {
-        // --- Constructor and Methods for Multi-Step Logic ---
-        // (No changes needed in the MultiStepForm class itself for this feature)
         constructor(formElement) {
             this.form = formElement;
             const formId = this.form.id || 'form without id';
@@ -411,13 +416,14 @@
                     case 'currency': return `${value} €`;
                     case 'textarea': return value.replace(/\n/g, '<br>');
                     case 'period':
+                        // Ensure dates are formatted to DD.MM.YYYY before combining
                         const formattedStart = formatDateDDMMYYYY(value.start);
                         const formattedEnd = formatDateDDMMYYYY(value.end);
                         if (formattedStart && formattedEnd) return `${formattedStart} bis ${formattedEnd}`;
                         if (formattedStart) return `Ab ${formattedStart}`;
                         if (formattedEnd) return `Bis ${formattedEnd}`;
                         return null;
-                    case 'date':
+                    case 'date': // For single dates
                         return formatDateDDMMYYYY(value);
                     default: return value;
                 }
@@ -429,7 +435,7 @@
                      if (typeof displayValue === 'string' && (displayValue.includes('<') || displayValue.includes('&'))) {
                          placeholderElement.innerHTML = displayValue;
                      } else {
-                         placeholderElement.textContent = displayValue ?? ''; // Ensure textContent gets a string
+                         placeholderElement.textContent = displayValue;
                      }
                  }
             };
@@ -490,7 +496,7 @@
 
     /**
      * ========================================================================
-     * Toggle Field Logic (Show/Hide, Disable/Enable, Clear)
+     * Toggle Field Logic (Show/Hide, Disable/Enable, Clear Specific Fields)
      * ========================================================================
      */
     const initializeToggles = () => {
@@ -503,24 +509,20 @@
             const showHideTarget = find(`[${DATA_ATTR_TOGGLE_TARGET}="${controlName}"]`);
             const disableTargetInput = find(`[${DATA_ATTR_DISABLE_TARGET}="${controlName}"]`);
             const disableValue = control.getAttribute(DATA_ATTR_DISABLE_VALUE);
-            // *** NEW: Find all elements to clear for this control ***
-            const clearTargetInputs = findAll(`[${DATA_ATTR_TOGGLE_CLEAR}="${controlName}"]`);
+            const clearTargets = findAll(`[${DATA_ATTR_TOGGLE_CLEAR}="${controlName}"]`);
 
 
-            if (!showHideTarget && !disableTargetInput && clearTargetInputs.length === 0) {
-                 // Only return if NO targets are found for this control
+            if (!showHideTarget && !disableTargetInput && clearTargets.length === 0) {
                  return;
             }
 
             const updateTargetsState = () => {
                 const isControlActive = control.checked;
 
-                // Handle Show/Hide Target
                 if (showHideTarget) {
                     isControlActive ? fadeInElement(showHideTarget) : fadeOutElement(showHideTarget);
                 }
 
-                // Handle Disable/Enable Target Input
                 if (disableTargetInput) {
                     if (isControlActive) {
                         disableTargetInput.disabled = true;
@@ -532,7 +534,6 @@
                     } else {
                         disableTargetInput.disabled = false;
                         removeClass(disableTargetInput, CLASS_DISABLED_BY_TOGGLE);
-                        // Clear value ONLY if it was set by the toggle
                         if (disableValue !== null && disableTargetInput.value === disableValue) {
                              disableTargetInput.value = '';
                              disableTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
@@ -540,20 +541,20 @@
                     }
                 }
 
-                // *** NEW: Handle Clearing Target Inputs ***
-                // Clear inputs only when the toggle is turned OFF (isControlActive is false)
-                if (!isControlActive && clearTargetInputs.length > 0) {
-                    clearTargetInputs.forEach(inputToClear => {
-                        // Check if the input is not disabled by another mechanism before clearing
-                        if (!inputToClear.disabled) {
-                            inputToClear.value = '';
-                            // Optional: Trigger change event for each cleared input
-                            inputToClear.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-                    });
+                if (!isControlActive && clearTargets.length > 0) {
+                     clearTargets.forEach(fieldToClear => {
+                         if (fieldToClear.type === 'checkbox' || fieldToClear.type === 'radio') {
+                             fieldToClear.checked = false;
+                         } else if (fieldToClear.tagName === 'SELECT') {
+                             fieldToClear.selectedIndex = 0;
+                         } else {
+                             fieldToClear.value = '';
+                         }
+                         fieldToClear.dispatchEvent(new Event('change', { bubbles: true }));
+                     });
                 }
             };
-            updateTargetsState(); // Initial state
+            updateTargetsState();
             control.addEventListener('change', updateTargetsState);
         });
     };
@@ -610,15 +611,39 @@
                 const selectedValues = Array.from(inputCheckboxes)
                                           .filter(checkbox => checkbox.checked)
                                           .map(checkbox => checkbox.value || checkbox.nextElementSibling?.textContent || '');
-                displayElement.textContent = selectedValues.length > 0 ? selectedValues.join(', ') : defaultText; // Use join with comma and space
+                displayElement.textContent = selectedValues.length > 0 ? selectedValues.join(', ') : defaultText;
             };
 
             inputCheckboxes.forEach(checkbox => {
                 checkbox.addEventListener('change', updateDisplay);
             });
-            updateDisplay(); // Initial update
+            updateDisplay();
         });
      };
+
+    /**
+     * ========================================================================
+     * NEW: Datepicker Initialization Logic
+     * ========================================================================
+     */
+    const initializeDatepickers = () => {
+        const datepickerInputs = findAll(`[${DATA_ATTR_DATEPICKER}]`);
+        if (typeof Datepicker === 'undefined') {
+            console.warn('Datepicker library not found. Make sure it is loaded.');
+            return;
+        }
+
+        datepickerInputs.forEach(input => {
+            new Datepicker(input, {
+                format: 'dd.mm.yyyy', // European format
+                autohide: true,
+                language: 'de', // German language
+                todayHighlight: true,
+                // You can add more options here as needed
+                // e.g., minDate, maxDate, daysOfWeekDisabled, etc.
+            });
+        });
+    };
 
 
     /**
@@ -649,6 +674,9 @@
 
         // Initialize Real-time Selection Displays
         initializeSelectionDisplays();
+
+        // *** NEW: Initialize Datepickers ***
+        initializeDatepickers();
 
     }); // End DOMContentLoaded
 

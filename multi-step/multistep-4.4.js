@@ -660,7 +660,6 @@
         datePickerWrapper.style.display = 'none'; // Initially hidden
         datePickerWrapper.style.position = 'absolute'; // Position near input
         datePickerWrapper.style.zIndex = '1000'; // Ensure it's on top
-        // Removed font-family, should be handled by external CSS or page default
 
         // Header: Prev Month, Month/Year, Next Month, Today Button
         const header = document.createElement('div');
@@ -717,8 +716,125 @@
 
         document.body.appendChild(datePickerWrapper);
 
-        // *** CSS for Datepicker is now expected to be in an external file ***
-        // The <style> tag and its content have been removed from here.
+        // *** CSS for Datepicker is now included here again ***
+        const style = document.createElement('style');
+        style.textContent = `
+            .${DATEPICKER_WRAPPER_CLASS} {
+                background: white;
+                border: 1px solid #e0e0e0;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                padding: 15px;
+                width: 300px;
+                border-radius: 8px;
+                box-sizing: border-box;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                color: #333;
+            }
+            .${DATEPICKER_HEADER_CLASS} {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+            }
+            .${DATEPICKER_CONTROLS_CLASS} {
+                display: flex;
+                align-items: center;
+                font-weight: 600;
+                font-size: 1.05em;
+            }
+            .${DATEPICKER_CONTROLS_CLASS} button {
+                background: transparent;
+                border: none;
+                padding: 8px;
+                cursor: pointer;
+                font-size: 1.4em;
+                color: #555;
+                line-height: 1;
+                transition: color 0.2s ease-in-out;
+            }
+            .${DATEPICKER_CONTROLS_CLASS} button:hover {
+                color: ${DATEPICKER_PRIMARY_COLOR};
+            }
+            .${DATEPICKER_CONTROLS_CLASS} span {
+                margin: 0 12px;
+                color: #333;
+                min-width: 120px;
+                text-align: center;
+            }
+            .${DATEPICKER_TODAY_BTN_CLASS} {
+                background: #f5f5f5;
+                border: 1px solid #ddd;
+                padding: 6px 12px;
+                cursor: pointer;
+                border-radius: 6px;
+                font-size: 0.9em;
+                color: #333;
+                font-weight: 500;
+                transition: background-color 0.2s ease-in-out;
+            }
+            .${DATEPICKER_TODAY_BTN_CLASS}:hover {
+                background-color: #e9e9e9;
+            }
+            .${DATEPICKER_GRID_CLASS} {
+                display: grid;
+                grid-template-columns: repeat(7, 1fr);
+                gap: 5px;
+                text-align: center;
+            }
+            .${DATEPICKER_DAY_HEADER_CLASS} {
+                font-weight: 600;
+                font-size: 0.8em;
+                color: #888;
+                padding: 8px 0;
+                text-transform: uppercase;
+            }
+            .${DATEPICKER_DAY_CLASS} {
+                padding: 0;
+                cursor: pointer;
+                border-radius: 50%;
+                font-size: 0.9em;
+                width: 36px;
+                height: 36px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-sizing: border-box;
+                transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+                border: 1px solid transparent;
+            }
+            .${DATEPICKER_DAY_CLASS}:hover {
+                background-color: #f0f0f0;
+                border-color: #e0e0e0;
+            }
+            .${DATEPICKER_DAY_OTHER_MONTH_CLASS} {
+                color: #ccc;
+                cursor: default;
+            }
+            .${DATEPICKER_DAY_OTHER_MONTH_CLASS}:hover {
+                background-color: transparent;
+                border-color: transparent;
+            }
+            .${DATEPICKER_DAY_TODAY_CLASS} {
+                font-weight: 700;
+                border: 1px solid ${DATEPICKER_PRIMARY_COLOR};
+                color: ${DATEPICKER_PRIMARY_COLOR};
+            }
+            .${DATEPICKER_DAY_TODAY_CLASS}:hover {
+                background-color: #fce4ec;
+            }
+            .${DATEPICKER_DAY_SELECTED_CLASS} {
+                background-color: ${DATEPICKER_PRIMARY_COLOR};
+                color: white !important;
+                border-color: ${DATEPICKER_PRIMARY_COLOR};
+                font-weight: 700;
+            }
+            .${DATEPICKER_DAY_SELECTED_CLASS}:hover {
+                background-color: #e64a83;
+                border-color: #e64a83;
+            }
+        `;
+        document.head.appendChild(style);
+
 
         return datePickerWrapper;
     };
@@ -777,9 +893,15 @@
             }
 
             dayEl.addEventListener('click', () => {
+                console.log('Day clicked:', day); // DEBUG
                 if (currentDatePickerInput) {
-                    currentDatePickerInput.value = formatDateDDMMYYYY(currentDate);
+                    const formattedDate = formatDateDDMMYYYY(currentDate);
+                    console.log('Formatted Date:', formattedDate); // DEBUG
+                    currentDatePickerInput.value = formattedDate;
+                    console.log('Input value after set:', currentDatePickerInput.value); // DEBUG
                     currentDatePickerInput.dispatchEvent(new Event('change', { bubbles: true }));
+                } else {
+                    console.log('currentDatePickerInput is null'); // DEBUG
                 }
                 hideCustomDatePicker();
             });
@@ -788,8 +910,9 @@
     };
 
     const showCustomDatePicker = (inputElement) => {
+        console.log('Showing datepicker for:', inputElement); // DEBUG
         if (!datePickerWrapper) createDatePickerUI();
-        currentDatePickerInput = inputElement;
+        currentDatePickerInput = inputElement; // Set the reference HERE
         const initialDateStr = inputElement.value;
         const parsedDate = parseDateDDMMYYYY(initialDateStr);
         currentDisplayDate = parsedDate || new Date();
@@ -804,12 +927,15 @@
         if (datePickerWrapper) {
             datePickerWrapper.style.display = 'none';
         }
-        currentDatePickerInput = null;
+        currentDatePickerInput = null; // Clear reference when hiding
+        console.log('Datepicker hidden, current input cleared'); // DEBUG
     };
 
     document.addEventListener('click', (event) => {
         if (datePickerWrapper && datePickerWrapper.style.display === 'block') {
+            // Check if the click target is the input itself OR inside the datepicker wrapper
             if (currentDatePickerInput && !currentDatePickerInput.contains(event.target) && !datePickerWrapper.contains(event.target)) {
+                 console.log('Clicked outside datepicker'); // DEBUG
                 hideCustomDatePicker();
             }
         }
@@ -818,13 +944,17 @@
     const initializeCustomDatepickers = () => {
         const datepickerInputs = findAll(`[${DATA_ATTR_DATEPICKER}]`);
         datepickerInputs.forEach(input => {
+             // Use 'mousedown' or 'touchstart' to potentially open before focus fully registers?
+             // Or stick to click/focus but ensure reference is set correctly.
             input.addEventListener('focus', (event) => {
-                event.preventDefault();
-                showCustomDatePicker(input);
+                event.preventDefault(); // Prevent potential native pickers
+                // Delay showing slightly to ensure focus is established? Might not be needed.
+                // setTimeout(() => showCustomDatePicker(input), 0);
+                 showCustomDatePicker(input);
             });
-            input.addEventListener('click', (event) => {
+            input.addEventListener('click', (event) => { // Also open on click
                 event.preventDefault();
-                showCustomDatePicker(input);
+                 showCustomDatePicker(input);
             });
         });
     };

@@ -1,0 +1,8 @@
+# .gitignore
+config.js
+
+// Verweise auf die Konfigurationsdatei
+import config from './config.js';
+
+// Verwende den API-Key aus der Konfigurationsdatei
+const apiKey = config.apiKey;

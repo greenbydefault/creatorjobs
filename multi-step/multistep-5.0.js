@@ -967,7 +967,7 @@
                     }
                      console.log('[DEBUG JobTitle] Title exists.'); // DEBUG
                 } else {
-                    jobTitleInput.style.border = '1px solid #3DB927';
+                    jobTitleInput.style.border = '1px solid #9EC0B2';
                     addClass(jobTitleInput, CLASS_JOB_TITLE_SUCCESS);
                     if (messageElement) {
                         messageElement.textContent = 'Dieser Jobtitel ist verfügbar.';

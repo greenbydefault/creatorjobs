@@ -674,23 +674,26 @@
         // Initialize Real-time Selection Displays
         initializeSelectionDisplays();
 
-        // *** UPDATED: Datepicker initialization with polling ***
+        // *** UPDATED: Datepicker initialization moved to window.onload with polling ***
+    }); // End DOMContentLoaded
+
+    // *** NEW: Use window.onload for Datepicker initialization ***
+    window.addEventListener('load', () => {
         let datepickerInitAttempts = 0;
         const maxDatepickerInitAttempts = 50; // Try for 5 seconds (50 * 100ms)
         const tryInitializeDatepickers = () => {
-            if (typeof window.Datepicker !== 'undefined') {
+            if (typeof window.Datepicker !== 'undefined' && typeof window.Datepicker.languages.de !== 'undefined') {
                 initializeDatepickers();
             } else {
                 datepickerInitAttempts++;
                 if (datepickerInitAttempts < maxDatepickerInitAttempts) {
                     setTimeout(tryInitializeDatepickers, 100); // Check again after 100ms
                 } else {
-                    console.warn('Datepicker library failed to load after several attempts.');
+                    console.warn('Datepicker library or German locale failed to load after several attempts.');
                 }
             }
         };
-        tryInitializeDatepickers(); // Start polling
-
-    }); // End DOMContentLoaded
+        tryInitializeDatepickers(); // Start polling after full page load
+    });
 
 })(); // Ende der IIFE

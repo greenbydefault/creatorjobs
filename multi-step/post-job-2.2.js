@@ -1,8 +1,8 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
 // und das Senden an den Webflow CMS Worker.
-// AKTUELLE VERSION: Ignoriert leere Felder, sendet job-date-start nicht mehr,
-// behandelt Budget als "tba" bei Leere und mappt Nutzungsrechte.
+// AKTUELLE VERSION: Ignoriert leere Felder (außer Budget), sendet job-date-start nicht mehr,
+// behandelt Budget als Zahl oder 0 bei Leere, mappt Nutzungsrechte.
 
 (function() {
     'use strict';
@@ -21,7 +21,7 @@
 
     // --- Mapping für Referenzfelder (Textwert zu Webflow Item ID) ---
     // DIESES MAPPING MUSS GENAU MIT DEINEN WEBFLOW COLLECTION ITEMS ÜBEREINSTIMMEN!
-    // BITTE ERSETZE DIE PLATZHALTER-IDs ('deine_id_hier_...') DURCH DIE TATSÄCHLICHEN IDs AUS WEBFLOW!
+    // BITTE ERSETZE DIE PLATZHALTER-IDs ('deine_id_hier_...') DURCH DIE TATSÄCHTLICHEN IDs AUS WEBFLOW!
     const REFERENCE_MAPPINGS = {
         'creatorFollower': {
             '0 - 2.500': '3d869451e837ddf527fc54d0fb477ab4',
@@ -65,7 +65,7 @@
         'hookCount': { // Mapping für anzahl-der-hooks
              '1': 'b776e9ef4e9ab8b165019c1a2a04e8a',
              '2': '1667c831d9cba5adc9416401031796f3',
-             '3': '355ef3ceb930dd4bdd28458265b0a4cf0',
+             '3': '355ef3ceb930ddbdd28458265b0a4cf0', // Korrigierte ID
              '4': 'be2c319b5dccd012016df2e33408c39'
         },
          'videoFormat': { // Mapping für format - BITTE PLATZHALTER ERSETZEN!
@@ -214,7 +214,7 @@
                 case 'projectName':           webflowSlug = 'name'; projectNameValue = field.value.trim(); break;
                 case 'jobSlug':               webflowSlug = 'slug'; break; // Optional: Falls ein explizites Slug-Feld existiert
                 case 'job-adress-optional':   webflowSlug = 'location'; break;
-                case 'budget':                webflowSlug = 'job-payment'; break; // Spezialbehandlung für "tba" bei Leere
+                case 'budget':                webflowSlug = 'job-payment'; break; // Spezialbehandlung für 0 bei Leere
                 // case 'startDate':          webflowSlug = 'job-date-start'; break; // ENTFERNT
                 case 'jobOnline':             webflowSlug = 'job-date-end'; break; // jobOnline -> job-date-end
                 case 'contentDeadline':       webflowSlug = 'fertigstellung-content'; break; // Hinzugefügt
@@ -317,11 +317,8 @@
 
                 } else if (fieldNameKey === 'budget') { // Spezialbehandlung für Budget
                      const budgetValue = field.value.trim();
-                     if (budgetValue === '') {
-                         webflowPayload[webflowSlug] = 'tba'; // Sende "tba", wenn leer
-                     } else {
-                         webflowPayload[webflowSlug] = parseFloat(budgetValue); // Sende als Zahl, wenn nicht leer
-                     }
+                     // Wenn budgetValue leer ist, sende 0, sonst parse als Float
+                     webflowPayload[webflowSlug] = budgetValue === '' ? 0 : parseFloat(budgetValue);
 
                 } else if (field.type === 'number') { // Felder für Zahlen (außer Budget)
                     const numVal = field.value.trim();

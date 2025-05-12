@@ -5,7 +5,7 @@ const API_BASE_URL = "https://api.webflow.com/v2/collections";
 const WORKER_BASE_URL = "https://bewerbungen.oliver-258.workers.dev/?url="; // Dein Worker-Endpunkt
 const VIDEO_COLLECTION_ID = "680b45a22b15fa4643ebdca9"; // Video Collection
 const CUSTOMER_COLLECTION_ID = "6448faf9c5a8a15f6cc05526"; // Kunden/Member Collection
-const INITIAL_ITEMS_TO_FETCH_FROM_API = 6; // NEU: Anzahl für den allerersten API-Aufruf
+const INITIAL_ITEMS_TO_FETCH_FROM_API = 8; // OPTIMIERT: Anzahl für den allerersten API-Aufruf, um 8 Videos initial anzeigen zu können.
 const ITEMS_PER_API_CHUNK = 12; // Anzahl der Items, die pro nachfolgendem API-Aufruf geladen werden
 const VIDEOS_PER_LOAD_DISPLAY = 8; // Anzahl der Videos, die pro Klick auf "Mehr laden" angezeigt werden
 

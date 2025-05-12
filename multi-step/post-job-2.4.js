@@ -1,8 +1,9 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
 // und das Senden an den Webflow CMS Worker.
-// AKTUELLE VERSION: Sammelt Memberstack Felder, ignoriert leere Felder (außer Budget),
-// sendet job-date-start nicht mehr, behandelt Budget als Zahl oder 0 bei Leere, mappt Nutzungsrechte.
+// AKTUELLE VERSION: Sammelt alle bekannten Felder, ignoriert leere Felder (außer Budget),
+// sendet job-date-start nicht mehr, behandelt Budget als Zahl oder 0 bei Leere, mappt Nutzungsrechte,
+// fügt job-title hinzu und behandelt neue Checkbox-Gruppen.
 
 (function() {
     'use strict';
@@ -77,10 +78,9 @@
             'Beauty': 'deine_id_hier_beauty',
             // Füge hier weitere Industrie-Kategorien hinzu
         },
-         'subtitles': { // Mapping für untertitel - BITTE PLATZHALTER ERSETZEN!
-            'Ja': 'ac9e02ffc119b7bd0e05403e096f89b3', // ID aus Beispiel übernommen, Textwert Annahme
-            'Nein': 'deine_id_hier_nein_untertitel'
-            // Füge hier weitere Untertitel-Optionen hinzu
+         'subtitlesOptional': { // NEU: Mapping für untertitel
+            'Ja': '587b210d6015c519f05e0aeea6abf1fa', // ID basierend auf neuem Mapping
+            'Nein': 'ac9e02ffc119b7bd0e05403e096f89b3' // ID basierend auf neuem Mapping
         },
         'durationOptional': { // Mapping für dauer-nutzungsrechte
             '24 Monate': 'dd24b0de3f7a906d9619c8f56d9c2484',
@@ -203,6 +203,13 @@
         const fields = findAll(`[${DATA_FIELD_ATTRIBUTE}]`, formElement);
         let projectNameValue = ''; // Speichere den Projektnamen für die Slug-Generierung
 
+        // Temporäre Arrays für Checkbox-Gruppen
+        const creatorLangValues = [];
+        const creatorLandValues = [];
+        const nutzungOptionalValues = []; // NEU: Für job-posting
+        const channelsValues = []; // NEU: Für fur-welchen-kanale-wird-der-content-produziert
+
+
         fields.forEach(field => {
             const fieldNameKey = field.getAttribute(DATA_FIELD_ATTRIBUTE); // Das ist der Schlüssel aus deinem Formular
             let value;
@@ -222,8 +229,12 @@
                 case 'creatorCount':          webflowSlug = 'anzahl-gesuchte-creator'; break;
                 case 'creatorCategorie':      webflowSlug = 'art-des-contents'; break;
                 case 'creatorCountOptional':  webflowSlug = 'creator-follower'; break; // Referenzfeld
-                case 'creatorLand':           webflowSlug = 'land'; break; // Checkbox-Gruppe
-                case 'creatorLang':           webflowSlug = 'sprache'; break; // Checkbox-Gruppe
+                case 'creatorLand':           // Checkbox-Gruppe, sammle Werte separat
+                    if (field.checked) creatorLandValues.push(field.value.trim());
+                    return; // Weiter zum nächsten Feld
+                case 'creatorLang':           // Checkbox-Gruppe, sammle Werte separat
+                    if (field.checked) creatorLangValues.push(field.value.trim());
+                    return; // Weiter zum nächsten Feld
                 case 'aufgabe':               webflowSlug = 'job-beschreibung'; break;
                 case 'steckbrief':            webflowSlug = 'deine-aufgaben'; break;
                 case 'genderOptional':        webflowSlug = 'creator-geschlecht'; break; // Referenzfeld
@@ -233,19 +244,23 @@
                 case 'reviewsOptional':       webflowSlug = 'anzahl-der-reviews'; break; // Hinzugefügt (Text)
                 case 'durationOptional':      webflowSlug = 'dauer-nutzungsrechte'; break; // NEU: durationOptional -> dauer-nutzungsrechte (Referenzfeld)
                 case 'scriptOptional':        webflowSlug = 'script'; break; // Referenzfeld
-                case 'jobPostingChannel':     webflowSlug = 'job-posting'; break; // Hinzugefügt (Text)
-                case 'contentChannels':       webflowSlug = 'fur-welchen-kanale-wird-der-content-produziert'; break; // Hinzugefügt (Text)
+                case 'nutzungOptional':       // NEU: Checkbox-Gruppe für job-posting
+                    if (field.checked) nutzungOptionalValues.push(field.value.trim());
+                    return; // Weiter zum nächsten Feld
+                case 'channels':              // NEU: Checkbox-Gruppe für fur-welchen-kanale-wird-der-content-produziert
+                    if (field.checked) channelsValues.push(field.value.trim());
+                    return; // Weiter zum nächsten Feld
                 case 'previewText':           webflowSlug = 'previewtext'; break; // Hinzugefügt (Text)
                 case 'brandName':             webflowSlug = 'brand-name'; break; // Hinzugefügt (Text)
                 case 'contactMail':           webflowSlug = 'contact-mail'; break; // Hinzugefügt (Text)
                 case 'barterDealToggle':      webflowSlug = 'barter-deal'; break; // Hinzugefügt (Boolean)
-                case 'plusJobToggle':         webflowSlug = 'plus-job'; break; // Hinzugefügt (Boolean)
+                case 'plusJobToggle':         webflowSlug = 'plus-job'; break; break; // Hinzugefügt (Boolean)
                 case 'jobImageUpload':        webflowSlug = 'job-image'; break; // Hinzugefügt (Text/URL)
                 case 'industryCategory':      webflowSlug = 'industrie-kategorie'; break; // Referenzfeld
                 case 'creatorAge':            webflowSlug = 'creator-alter'; break; // Referenzfeld
                 case 'videoFormat':           webflowSlug = 'format'; break; // Referenzfeld
                 case 'hookCount':             webflowSlug = 'anzahl-der-hooks'; break; // Referenzfeld
-                case 'subtitles':             webflowSlug = 'untertitel'; break; // Referenzfeld
+                case 'subtitelOptional':      webflowSlug = 'untertitel'; break; // NEU: subtitelOptional -> untertitel (Referenzfeld)
                 // Memberstack Felder
                 case 'userName':              webflowSlug = 'brand-name'; break; // userName -> brand-name
                 case 'webflowId':             webflowSlug = 'webflow-member-id'; break; // webflowId -> webflow-member-id
@@ -255,34 +270,16 @@
 
                 default:
                     // console.log(`Unbekanntes Feld für Webflow-Mapping: ${fieldNameKey}`);
-                    return; // Nächstes Feld bearbeiten, wenn kein Mapping gefunden wurde
+                    return; // Weiter zum nächsten Feld, wenn kein Mapping gefunden wurde
             }
 
-            // Nur wenn ein webflowSlug gefunden wurde, den Wert sammeln
+            // Nur wenn ein webflowSlug gefunden wurde (und es keine separat behandelte Checkbox-Gruppe ist), den Wert sammeln
             if (webflowSlug) {
                 // Werte sammeln und formatieren basierend auf dem Feldtyp
                 if (field.type === 'checkbox') {
-                     // Für Checkbox-Gruppen (Sprachen, Länder)
-                    if (fieldNameKey === 'creatorLang' || fieldNameKey === 'creatorLand') {
-                        // Initialisiere das Array, falls es noch nicht existiert
-                        if (!webflowPayload[webflowSlug]) {
-                            webflowPayload[webflowSlug] = [];
-                        }
-                        // Füge den Wert hinzu, wenn die Checkbox ausgewählt ist
-                        if (field.checked) {
-                            webflowPayload[webflowSlug].push(field.value);
-                        }
-                         // Füge das Feld auch hinzu, wenn kein Wert ausgewählt ist, aber das Array initialisiert wurde (für leere Multi-Reference)
-                         if (webflowPayload[webflowSlug].length === 0) {
-                             // Optional: Sende ein leeres Array oder lasse das Feld weg, je nach Webflow-Konfiguration
-                             // Lassen wir es weg, wenn es leer ist, um Probleme zu vermeiden.
-                             delete webflowPayload[webflowSlug];
-                         }
-
-                    } else { // Für einzelne Boolean-Checkboxes
-                        value = field.checked;
-                        webflowPayload[webflowSlug] = value; // Immer senden (true oder false)
-                    }
+                     // Für einzelne Boolean-Checkboxes
+                    value = field.checked;
+                    webflowPayload[webflowSlug] = value; // Immer senden (true oder false)
                 } else if (field.tagName === 'SELECT') {
                     // Für Select-Felder
                     value = field.options[field.selectedIndex]?.value || field.value;
@@ -368,14 +365,22 @@
             }
         });
 
-        // Checkbox-Gruppen Arrays zu kommaseparierten Strings machen
-        // Dies geschieht NUR, wenn das Array nicht leer ist, da leere Arrays oben gelöscht werden.
-        if (webflowPayload['sprache'] && Array.isArray(webflowPayload['sprache'])) {
-            webflowPayload['sprache'] = webflowPayload['sprache'].join(', ');
+        // Checkbox-Gruppen Arrays zu kommaseparierten Strings machen und zur Payload hinzufügen
+        if (creatorLangValues.length > 0) {
+            webflowPayload['sprache'] = creatorLangValues.join(', ');
         }
-        if (webflowPayload['land'] && Array.isArray(webflowPayload['land'])) {
-            webflowPayload['land'] = webflowPayload['land'].join(', ');
+         if (creatorLandValues.length > 0) {
+            webflowPayload['land'] = creatorLandValues.join(', ');
         }
+         // NEU: nutzungOptional (job-posting)
+         if (nutzungOptionalValues.length > 0) {
+             webflowPayload['job-posting'] = nutzungOptionalValues.join(', ');
+         }
+         // NEU: channels (fur-welchen-kanale-wird-der-content-produziert)
+         if (channelsValues.length > 0) {
+              webflowPayload['fur-welchen-kanale-wird-der-content-produziert'] = channelsValues.join(', ');
+         }
+
 
         // Füge den Slug hinzu, generiert aus dem Projektnamen, falls noch nicht vorhanden
         // und stelle sicher, dass der Projektname nicht leer ist
@@ -385,6 +390,11 @@
              // Logge eine Warnung, wenn kein Projektname da ist und kein Slug gesammelt wurde
              console.warn('Projektname fehlt, kann keinen Slug generieren.');
              // Das Slug-Feld wird in diesem Fall nicht gesendet. Wenn Slug ein Pflichtfeld ist, wird der Worker einen Fehler zurückgeben.
+        }
+
+        // Füge job-title hinzu (gleicher Wert wie name)
+        if (projectNameValue) {
+             webflowPayload['job-title'] = projectNameValue;
         }
 
 

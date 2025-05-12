@@ -1,7 +1,7 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
 // und das Senden an den Webflow CMS Worker.
-// AKTUELLE VERSION: Enthält alle Felder und eine Funktion zum Testen mit vordefinierten Daten.
+// AKTUELLE VERSION: Ignoriert leere Felder beim Sammeln der Daten.
 
 (function() {
     'use strict';
@@ -47,8 +47,8 @@
             'Weiblich': 'bcb50387552afc123405ae7fa7640d0d',
             'Diverse': '870da58473ebc5d7db4c78e7363ca417',
             'Couple': '8bab076ffc2e114b52620f965aa046fb',
-            'Alle': 'ec933c35230bc628da6029deee4159e', // Korrigierte ID basierend auf vorherigem Log
-            'Keine Angabe': 'd157525b18b53e6263884fd58368cfa8'
+            'Alle': 'ec933c35230bc628da6029deee4159e',
+            'Keine Angabe': 'd157525b18b53e62638884fd58368cfa8' // Korrigierte ID
         },
          'videoDurationOptional': { // Mapping für video-dauer
             '0 - 15 Sekunden': 'a58ac00b365993a9dbc6e7084c6fda10',
@@ -259,44 +259,74 @@
                         if (field.checked) {
                             webflowPayload[webflowSlug].push(field.value);
                         }
+                         // Füge das Feld auch hinzu, wenn kein Wert ausgewählt ist, aber das Array initialisiert wurde (für leere Multi-Reference)
+                         if (webflowPayload[webflowSlug].length === 0) {
+                             // Optional: Sende ein leeres Array oder lasse das Feld weg, je nach Webflow-Konfiguration
+                             // Lassen wir es weg, wenn es leer ist, um Probleme zu vermeiden.
+                             delete webflowPayload[webflowSlug];
+                         }
+
                     } else { // Für einzelne Boolean-Checkboxes
                         value = field.checked;
-                        webflowPayload[webflowSlug] = value;
+                        webflowPayload[webflowSlug] = value; // Immer senden (true oder false)
                     }
                 } else if (field.tagName === 'SELECT') {
                     // Für Select-Felder
                     value = field.options[field.selectedIndex]?.value || field.value;
 
                     // Spezielle Behandlung für Referenzfelder, die ein Mapping benötigen
-                    if (REFERENCE_MAPPINGS[fieldNameKey] && REFERENCE_MAPPINGS[fieldNameKey][value]) {
-                         webflowPayload[webflowSlug] = REFERENCE_MAPPINGS[fieldNameKey][value]; // Sende die gemappte ID
+                    if (REFERENCE_MAPPINGS[fieldNameKey]) {
+                        // Wenn ein Mapping existiert und der Wert im Mapping gefunden wird
+                        if (REFERENCE_MAPPINGS[fieldNameKey][value]) {
+                             webflowPayload[webflowSlug] = REFERENCE_MAPPINGS[fieldNameKey][value]; // Sende die gemappte ID
+                        } else if (value) {
+                            // Wenn ein Wert vorhanden ist, aber kein Mapping gefunden wurde (z.B. "Keine Angabe" hat keine ID im Mapping)
+                            // Logge eine Warnung und sende den Originalwert (könnte die ID sein, wenn im Value-Attribut)
+                            console.warn(`Kein Mapping für "${value}" im REFERENCE_MAPPINGS für Feld "${fieldNameKey}". Sende Originalwert.`);
+                             webflowPayload[webflowSlug] = value;
+                        }
+                        // Wenn value leer ist und kein Mapping gefunden wurde, wird das Feld nicht hinzugefügt (korrekt für optionale Referenzen)
                     } else {
-                        // Standardverhalten: Sende den gesammelten Wert (kann die ID sein, wenn im Value-Attribut)
-                         webflowPayload[webflowSlug] = value;
+                        // Standardverhalten für Selects ohne spezielles Mapping: Sende den gesammelten Wert
+                        // Füge nur hinzu, wenn der Wert nicht leer ist
+                         if (value) {
+                             webflowPayload[webflowSlug] = value;
+                         }
                     }
 
                 } else if (field.hasAttribute('data-datepicker') || ['startDate', 'endDate', 'contentDeadline', 'scriptDeadline', 'jobOnline'].includes(fieldNameKey)) { // Felder für Datum
                     const isoDate = formatToISODate(field.value.trim());
-                     // Nur setzen, wenn Datum gültig ist ODER wenn das Feld 'jobOnline' ist und leer sein darf
-                    if (isoDate || (fieldNameKey === 'jobOnline' && field.value.trim() === '')) {
+                     // Füge das Datum nur hinzu, wenn es gültig formatiert wurde UND nicht leer ist
+                    if (isoDate) {
                          webflowPayload[webflowSlug] = isoDate;
                     } else if (field.value.trim() !== '') {
                         // Logge eine Warnung, wenn ein Datumswert vorhanden ist, aber ungültig formatiert war
                         console.warn(`Datumswert für ${fieldNameKey} konnte nicht als ISO-Datum formatiert werden: "${field.value.trim()}"`);
+                        // Das Feld wird in diesem Fall nicht gesendet.
                     }
+                     // Wenn field.value.trim() === '', wird das Feld ebenfalls nicht gesendet.
+
                 } else if (field.type === 'number') { // Felder für Zahlen
                     const numVal = field.value.trim();
-                    webflowPayload[webflowSlug] = numVal ? parseFloat(numVal) : null; // Sende null, wenn leer
+                    // Füge die Zahl nur hinzu, wenn sie nicht leer ist
+                    if (numVal !== '') {
+                         webflowPayload[webflowSlug] = parseFloat(numVal);
+                    }
+                    // Wenn numVal === '', wird das Feld nicht gesendet.
+
                 } else { // Standard Textfelder
                     value = field.value.trim();
-                    // Sende auch leere Strings für Textfelder, falls sie in Webflow nicht erforderlich sind
-                    webflowPayload[webflowSlug] = value;
+                    // Füge den Text nur hinzu, wenn er nicht leer ist
+                    if (value !== '') {
+                        webflowPayload[webflowSlug] = value;
+                    }
+                    // Wenn value === '', wird das Feld nicht gesendet.
                 }
             }
         });
 
         // Checkbox-Gruppen Arrays zu kommaseparierten Strings machen
-        // Passe dies an, falls Webflow Arrays oder Multi-Reference IDs erwartet
+        // Dies geschieht NUR, wenn das Array nicht leer ist, da leere Arrays oben gelöscht werden.
         if (webflowPayload['sprache'] && Array.isArray(webflowPayload['sprache'])) {
             webflowPayload['sprache'] = webflowPayload['sprache'].join(', ');
         }
@@ -305,12 +335,13 @@
         }
 
         // Füge den Slug hinzu, generiert aus dem Projektnamen, falls noch nicht vorhanden
+        // und stelle sicher, dass der Projektname nicht leer ist
         if (!webflowPayload['slug'] && projectNameValue) {
              webflowPayload['slug'] = slugify(projectNameValue);
         } else if (!webflowPayload['slug'] && !projectNameValue) {
-             // Optional: Handle den Fall, dass kein Projektname da ist, wenn Slug benötigt wird
+             // Logge eine Warnung, wenn kein Projektname da ist und kein Slug gesammelt wurde
              console.warn('Projektname fehlt, kann keinen Slug generieren.');
-             // Du könntest hier auch einen Fehler werfen oder einen Standard-Slug setzen
+             // Das Slug-Feld wird in diesem Fall nicht gesendet. Wenn Slug ein Pflichtfeld ist, wird der Worker einen Fehler zurückgeben.
         }
 
 
@@ -345,8 +376,9 @@
         const fieldDataForWebflow = testData ? testData : collectAndFormatWebflowData(form);
 
         // Prüfe, ob der Slug generiert wurde (falls erforderlich) und der Name vorhanden ist
+        // Diese Prüfungen sind kritisch, da Name und Slug Pflichtfelder in Webflow sind
         if (!fieldDataForWebflow['slug']) {
-             const errorMessage = 'Fehler: Slug fehlt.';
+             const errorMessage = 'Fehler: Slug fehlt. Bitte stelle sicher, dass der Job-Titel ausgefüllt ist.';
              console.error(errorMessage);
              showStatusMessage(errorMessage, 'error', form);
              if (submitButton) {

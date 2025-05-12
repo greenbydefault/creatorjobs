@@ -544,8 +544,9 @@
                     // Find all checked inputs with the given data-preview-field name
                     const fields = findAll(`[${DATA_ATTR_PREVIEW_FIELD}="${fieldName}"]:checked`, this.form);
                     if (!fields || fields.length === 0) return null; // Return null if no checkboxes are checked
-                    // Map checked checkboxes to their value or the text content of the next sibling label
-                    return Array.from(fields).map(cb => cb.value || cb.nextElementSibling?.textContent?.trim() || '');
+                    // Map checked checkboxes to the text content of the next sibling label,
+                    // falling back to the value if label text is empty.
+                    return Array.from(fields).map(cb => cb.nextElementSibling?.textContent?.trim() || cb.value.trim() || '');
                 } else {
                     // Handle single input fields (text, select, textarea, etc.)
                     let value = '';

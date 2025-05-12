@@ -206,7 +206,7 @@
             // Logge die gesendeten Daten zur Fehlersuche
             console.log('Sende an Webflow Worker:', WEBFLOW_CMS_POST_WORKER_URL, JSON.stringify({ fields: fieldDataForWebflow }));
             // Sende die Daten an den Worker per POST-Request
-            const response = await fetch(WEBFLOW_CMS_POST_WORKer_URL, {
+            const response = await fetch(WEBFLOW_CMS_POST_WORKER_URL, { // <-- Hier wurde der Tippfehler korrigiert
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json', // Wichtig: Datenformat ist JSON
@@ -293,7 +293,6 @@
             mainForm.addEventListener('submit', handleFormSubmit);
             console.log(`Form Submission Handler initialisiert für Formular: #${MAIN_FORM_ID}`);
         } else {
-            // Warnung, wenn das Formular nicht gefunden wurde
             console.warn(`Hauptformular mit ID "${MAIN_FORM_ID}" nicht gefunden. Der Submission Handler ist nicht aktiv.`);
         }
     });

@@ -1,7 +1,7 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
 // und das Senden an den Webflow CMS Worker.
-// AKTUELLE VERSION: Sendet nur 'name', 'slug' und 'admin-test' zum Testen.
+// AKTUELLE VERSION: Enthält eine Funktion zum Testen mit vordefinierten Daten.
 
 (function() {
     'use strict';
@@ -118,6 +118,7 @@
 
     /**
      * Sammelt und formatiert die minimalen Formulardaten (name, slug) für die Webflow API.
+     * Diese Funktion wird NICHT verwendet, wenn testSubmissionWithData aufgerufen wird.
      * @param {HTMLFormElement} formElement - Das Formular-Element.
      * @returns {Object} - Die aufbereiteten Daten für Webflow im 'fieldData' Format.
      */
@@ -161,10 +162,11 @@
 
     /**
      * Hauptfunktion zum Absenden des Formulars.
-     * Wird aufgerufen, wenn das Formular abgeschickt wird.
-     * @param {Event} event - Das Submit-Event.
+     * Wird aufgerufen, wenn das Formular abgeschickt wird, oder simuliert durch testSubmissionWithData.
+     * @param {Event} event - Das Submit-Event (oder simuliertes Event).
+     * @param {Object} [testData] - Optionale Testdaten, wenn die Funktion direkt aufgerufen wird.
      */
-    async function handleFormSubmit(event) {
+    async function handleFormSubmit(event, testData = null) {
         event.preventDefault(); // Verhindert das Standard-Formular-Absenden
         const form = event.target;
         // Finde den Submit-Button, um ihn während des Sendens zu deaktivieren
@@ -177,11 +179,12 @@
         // Zeige eine Lade-Nachricht an
         showStatusMessage('Daten werden an Webflow übermittelt...', 'loading', form);
 
-        const fieldDataForWebflow = collectAndFormatWebflowData(form);
+        // Verwende Testdaten, falls provided, sonst sammle aus dem Formular
+        const fieldDataForWebflow = testData ? testData : collectAndFormatWebflowData(form);
 
         // Prüfe, ob der Slug generiert wurde (falls erforderlich) und der Name vorhanden ist
         if (!fieldDataForWebflow['slug']) {
-             const errorMessage = 'Fehler: Slug konnte nicht generiert werden. Bitte stelle sicher, dass der Job-Titel ausgefüllt ist.';
+             const errorMessage = 'Fehler: Slug fehlt.';
              console.error(errorMessage);
              showStatusMessage(errorMessage, 'error', form);
              if (submitButton) {
@@ -206,7 +209,7 @@
             // Logge die gesendeten Daten zur Fehlersuche
             console.log('Sende an Webflow Worker:', WEBFLOW_CMS_POST_WORKER_URL, JSON.stringify({ fields: fieldDataForWebflow }));
             // Sende die Daten an den Worker per POST-Request
-            const response = await fetch(WEBFLOW_CMS_POST_WORKER_URL, { // <-- Hier wurde der Tippfehler korrigiert
+            const response = await fetch(WEBFLOW_CMS_POST_WORKER_URL, { // <-- Korrigierter Tippfehler
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json', // Wichtig: Datenformat ist JSON
@@ -274,8 +277,42 @@
                 submitButton.disabled = false; // Aktiviere den Button wieder
                 submitButton.textContent = 'Absenden fehlgeschlagen'; // Ändere den Button-Text
             }
+        } finally {
+             // Setze den Button-Zustand zurück, auch bei Erfolg oder Fehler
+             if (submitButton && submitButton.textContent.includes('Wird gesendet')) {
+                 submitButton.disabled = false;
+                 submitButton.textContent = 'Absenden'; // Oder den ursprünglichen Text
+             }
         }
     }
+
+    /**
+     * Funktion zum Testen der Formularübermittlung mit vordefinierten Daten.
+     * Kann über die Browser-Konsole aufgerufen werden.
+     * @param {Object} testData - Die Testdaten im fieldData-Format.
+     */
+    function testSubmissionWithData(testData) {
+        console.log('Starte Test-Übermittlung mit Daten:', testData);
+        const mainForm = document.getElementById(MAIN_FORM_ID);
+        if (!mainForm) {
+            console.error(`Hauptformular mit ID "${MAIN_FORM_ID}" nicht gefunden. Test kann nicht durchgeführt werden.`);
+            return;
+        }
+
+        // Simuliere ein Event-Objekt mit dem Formular als Target
+        const simulatedEvent = {
+            preventDefault: () => {}, // Dummy preventDefault Funktion
+            target: mainForm
+        };
+
+        // Rufe handleFormSubmit mit dem simulierten Event und den Testdaten auf
+        handleFormSubmit(simulatedEvent, testData);
+    }
+
+    // Exponiere die Testfunktion global, damit sie von der Konsole aus aufgerufen werden kann
+    window.testSubmissionWithData = testSubmissionWithData;
+    console.log('Testfunktion testSubmissionWithData ist verfügbar. Beispielaufruf: testSubmissionWithData({ name: "Test Job", slug: "test-job", "admin-test": true });');
+
 
     /**
      * Initialisierung, wenn das DOM geladen ist.
@@ -290,7 +327,7 @@
             // Falls dieses Skript mehrmals geladen wird (unwahrscheinlich bei korrekter Einbindung),
             // könnte man hier eine Prüfung einbauen.
             mainForm.removeEventListener('submit', handleFormSubmit); // Vorsichtshalber entfernen, falls schon vorhanden
-            mainForm.addEventListener('submit', handleFormSubmit);
+            mainForm.addEventListener('submit', (event) => handleFormSubmit(event, null)); // Übergibt null für testData bei echter Übermittlung
             console.log(`Form Submission Handler initialisiert für Formular: #${MAIN_FORM_ID}`);
         } else {
             console.warn(`Hauptformular mit ID "${MAIN_FORM_ID}" nicht gefunden. Der Submission Handler ist nicht aktiv.`);

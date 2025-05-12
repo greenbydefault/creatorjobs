@@ -398,6 +398,12 @@
             return; // Beende die Funktion, wenn der Name fehlt
         }
 
+        // HINWEIS ZUR FEHLERSUCHE BEI DATUMSFELDERN:
+        // Wenn beim Senden von Datumsfeldern Fehler auftreten, überprüfe bitte die Cloudflare Worker Logs.
+        // Der Worker sollte die spezifische Fehlermeldung von der Webflow API protokollieren,
+        // die genau angibt, welches Datumsproblem vorliegt (z. B. falsches Format, fehlendes Pflichtfeld).
+        console.log("Prüfe Worker-Logs für spezifische Webflow API Fehler, besonders bei Datumsfeldern.");
+
 
         try {
             // Logge die gesendeten Daten zur Fehlersuche

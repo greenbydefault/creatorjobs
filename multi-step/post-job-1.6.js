@@ -1,7 +1,7 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
 // und das Senden an den Webflow CMS Worker.
-// AKTUELLE VERSION: Enthält eine Funktion zum Testen mit vordefinierten Daten.
+// AKTUELLE VERSION: Enthält erweiterte Felder und eine Funktion zum Testen mit vordefinierten Daten.
 
 (function() {
     'use strict';
@@ -17,6 +17,29 @@
     // (identisch zum Attribut im multistep_form_js für die Vorschau)
     const DATA_FIELD_ATTRIBUTE = 'data-preview-field';
     const CLASS_HIDE = 'hide'; // CSS-Klasse zum Ausblenden
+
+    // --- Mapping für Referenzfelder (Textwert zu Webflow Item ID) ---
+    // DIESES MAPPING MUSS GENAU MIT DEINEN WEBFLOW COLLECTION ITEMS ÜBEREINSTIMMEN!
+    const REFERENCE_MAPPINGS = {
+        'creatorFollower': {
+            '0 - 2.500': '3d869451e837ddf527fc54d0fb477ab4', // Beispiel ID, bitte mit deinen echten IDs abgleichen!
+            '2.500 - 5.000': 'e2d86c9f8febf4fecd674f01beb05bf5',
+            '5.000 - 10.000': '27420dd46db02b53abb3a50d4859df84',
+            '10.000 - 25.000': 'd61d9c5625c03e86d87ef854aa702265',
+            '25.000 - 50.000': '78672a41f18d13b57c84e24ae8f9edb9',
+            '50.00 - 100.000': '4ed1bbe4e792cfae473584da597445a8',
+            '100.000 - 250.000': 'afb6fa102d3defaad347edae3fc8452a',
+            '250.000 - 500.000': '6a1072f2e2a7058fba98f58fb45ab7fe',
+            '500.000 - 1.000.000': '18efe7a8d618cf2c2344329254f5ee0b',
+            '1.000.000+': '205b22b080e9f3bc2bb6869d12cbe298',
+            'Keine Angabe': '5e33b6550adcb786fafd43d422c63de1'
+        },
+        // Füge hier weitere Mappings für Referenzfelder hinzu, falls nötig
+        // 'creatorAlter': { '18-24': 'deine_id_hier', ... },
+        // 'creatorGeschlecht': { 'Männlich': 'deine_id_hier', ... },
+        // etc.
+    };
+
 
     // --- Hilfsfunktionen ---
     // Findet das erste Element, das dem Selektor entspricht
@@ -117,7 +140,7 @@
 
 
     /**
-     * Sammelt und formatiert die minimalen Formulardaten (name, slug) für die Webflow API.
+     * Sammelt und formatiert die Formulardaten für die Webflow API.
      * Diese Funktion wird NICHT verwendet, wenn testSubmissionWithData aufgerufen wird.
      * @param {HTMLFormElement} formElement - Das Formular-Element.
      * @returns {Object} - Die aufbereiteten Daten für Webflow im 'fieldData' Format.
@@ -126,23 +149,118 @@
         const webflowPayload = {}; // Dieses Objekt wird die `fieldData` für Webflow enthalten
         const fields = findAll(`[${DATA_FIELD_ATTRIBUTE}]`, formElement);
         let projectNameValue = ''; // Speichere den Projektnamen für die Slug-Generierung
-        let jobSlugValue = ''; // Speichere einen explizit gesetzten Slug, falls vorhanden
 
         fields.forEach(field => {
             const fieldNameKey = field.getAttribute(DATA_FIELD_ATTRIBUTE); // Das ist der Schlüssel aus deinem Formular
+            let value;
+            let webflowSlug = null; // Der tatsächliche Slug in Webflow CMS
 
-            // Sammle nur die relevanten Felder für diesen Test
-            if (fieldNameKey === 'projectName') {
-                projectNameValue = field.value.trim();
-                webflowPayload['name'] = projectNameValue;
-            } else if (fieldNameKey === 'jobSlug') { // Falls ein explizites Slug-Feld existiert
-                 jobSlugValue = field.value.trim();
-                 webflowPayload['slug'] = jobSlugValue;
+             // --- Mapping von data-preview-field zu Webflow CMS Slugs ---
+            // Füge hier die Mappings für die neuen Felder hinzu
+            switch (fieldNameKey) {
+                case 'projectName':           webflowSlug = 'name'; projectNameValue = field.value.trim(); break;
+                case 'jobSlug':               webflowSlug = 'slug'; break; // Optional: Falls ein explizites Slug-Feld existiert
+                case 'job-adress-optional':   webflowSlug = 'job-adress-optional'; break; // location
+                case 'budget':                webflowSlug = 'job-payment'; break; // job-payment
+                // case 'startDate':          webflowSlug = 'job-date-start'; break; // Nicht in der neuen Liste, aber im alten Skript
+                case 'jobOnline':             webflowSlug = 'job-date-end'; break; // job-date-end
+                case 'creatorCount':          webflowSlug = 'anzahl-gesuchte-creator'; break; // anzahl-gesuchte-creator
+                case 'creatorCategorie':      webflowSlug = 'art-des-contents'; break; // art-des-contents
+                case 'creatorCountOptional':  webflowSlug = 'creator-follower'; break; // creator-follower (Referenzfeld)
+                case 'creatorLand':           webflowSlug = 'land'; break; // land (Checkbox-Gruppe)
+                case 'creatorLang':           webflowSlug = 'sprache'; break; // sprache (Checkbox-Gruppe)
+                case 'aufgabe':               webflowSlug = 'job-beschreibung'; break; // job-beschreibung
+                case 'steckbrief':            webflowSlug = 'deine-aufgaben'; break; // deine-aufgaben
+                // Füge hier weitere Mappings hinzu, wenn du weitere Felder testen möchtest
+                 case 'genderOptional':        webflowSlug = 'creator-geschlecht'; break;
+                 case 'videoCountOptional':    webflowSlug = 'anzahl-videos-2'; break;
+                 case 'imgCountOptional':      webflowSlug = 'anzahl-bilder-2'; break;
+                 case 'videoDurationOptional': webflowSlug = 'video-dauer'; break;
+                 case 'reviewsOptional':       webflowSlug = 'anzahl-der-reviews'; break;
+                 case 'durationOptional':      webflowSlug = 'nutzungsrechte-dauer'; break;
+                 case 'scriptOptional':        webflowSlug = 'script'; break;
+                 case 'jobPostingChannel':     webflowSlug = 'job-posting'; break;
+                 case 'contentChannels':       webflowSlug = 'fur-welchen-kanale-wird-der-content-produziert'; break;
+                 case 'previewText':           webflowSlug = 'previewtext'; break;
+                 case 'brandName':             webflowSlug = 'brand-name'; break;
+                 case 'contactMail':           webflowSlug = 'contact-mail'; break;
+                 case 'barterDealToggle':      webflowSlug = 'barter-deal'; break;
+                 case 'plusJobToggle':         webflowSlug = 'plus-job'; break;
+                 case 'jobImageUpload':        webflowSlug = 'job-image'; break; // Erwartet eine Bild-URL oder ein Asset-Objekt
+                 case 'industryCategory':      webflowSlug = 'industrie-kategorie'; break;
+                 case 'creatorAge':            webflowSlug = 'creator-alter'; break;
+                 case 'videoFormat':           webflowSlug = 'format'; break;
+                 case 'hookCount':             webflowSlug = 'anzahl-der-hooks'; break;
+                 case 'subtitles':             webflowSlug = 'untertitel'; break;
+                 case 'webflowMemberId':       webflowSlug = 'webflow-member-id'; break;
+                 case 'msMemberId':            webflowSlug = 'ms-member-id'; break;
+
+                default:
+                    // console.log(`Unbekanntes Feld für Webflow-Mapping: ${fieldNameKey}`);
+                    return; // Nächstes Feld bearbeiten, wenn kein Mapping gefunden wurde
             }
-            // Alle anderen Felder werden ignoriert
+
+            // Nur wenn ein webflowSlug gefunden wurde, den Wert sammeln
+            if (webflowSlug) {
+                // Werte sammeln und formatieren basierend auf dem Feldtyp
+                if (field.type === 'checkbox') {
+                     // Für Checkbox-Gruppen (Sprachen, Länder)
+                    if (fieldNameKey === 'creatorLang' || fieldNameKey === 'creatorLand') {
+                        // Initialisiere das Array, falls es noch nicht existiert
+                        if (!webflowPayload[webflowSlug]) {
+                            webflowPayload[webflowSlug] = [];
+                        }
+                        // Füge den Wert hinzu, wenn die Checkbox ausgewählt ist
+                        if (field.checked) {
+                            webflowPayload[webflowSlug].push(field.value);
+                        }
+                    } else { // Für einzelne Boolean-Checkboxes
+                        value = field.checked;
+                        webflowPayload[webflowSlug] = value;
+                    }
+                } else if (field.tagName === 'SELECT') {
+                    // Für Select-Felder
+                    value = field.options[field.selectedIndex]?.value || field.value;
+
+                    // Spezielle Behandlung für Referenzfelder, die ein Mapping benötigen
+                    if (REFERENCE_MAPPINGS[fieldNameKey] && REFERENCE_MAPPINGS[fieldNameKey][value]) {
+                         webflowPayload[webflowSlug] = REFERENCE_MAPPINGS[fieldNameKey][value]; // Sende die gemappte ID
+                    } else {
+                        // Standardverhalten: Sende den gesammelten Wert (kann die ID sein, wenn im Value-Attribut)
+                         webflowPayload[webflowSlug] = value;
+                    }
+
+                } else if (field.hasAttribute('data-datepicker') || fieldNameKey === 'jobOnline') { // Felder für Datum
+                    const isoDate = formatToISODate(field.value.trim());
+                    if (isoDate) { // Nur setzen, wenn Datum gültig ist
+                        webflowPayload[webflowSlug] = isoDate;
+                    } else if (fieldNameKey === 'jobOnline') { // Spezialfall für jobOnline
+                        // Wenn jobOnline leer ist, nicht an Webflow senden, damit es dort ggf. leer bleibt
+                        // oder dein Worker eine Standardlogik anwendet.
+                        // Die "3 Tage" Logik ist für die *Anzeige* in der Preview, nicht unbedingt für das Senden.
+                    }
+                } else if (field.type === 'number') { // Felder für Zahlen
+                    const numVal = field.value.trim();
+                    webflowPayload[webflowSlug] = numVal ? parseFloat(numVal) : null; // Sende null, wenn leer
+                } else { // Standard Textfelder
+                    value = field.value.trim();
+                    if (value) { // Nur nicht-leere Strings senden
+                        webflowPayload[webflowSlug] = value;
+                    }
+                }
+            }
         });
 
-        // Füge den Slug hinzu, generiert aus dem Projektnamen, falls noch kein expliziter Slug gesammelt wurde
+        // Checkbox-Gruppen Arrays zu kommaseparierten Strings machen
+        // Passe dies an, falls Webflow Arrays oder Multi-Reference IDs erwartet
+        if (webflowPayload['sprache'] && Array.isArray(webflowPayload['sprache'])) {
+            webflowPayload['sprache'] = webflowPayload['sprache'].join(', ');
+        }
+        if (webflowPayload['land'] && Array.isArray(webflowPayload['land'])) {
+            webflowPayload['land'] = webflowPayload['land'].join(', ');
+        }
+
+        // Füge den Slug hinzu, generiert aus dem Projektnamen, falls noch nicht vorhanden
         if (!webflowPayload['slug'] && projectNameValue) {
              webflowPayload['slug'] = slugify(projectNameValue);
         } else if (!webflowPayload['slug'] && !projectNameValue) {
@@ -209,7 +327,7 @@
             // Logge die gesendeten Daten zur Fehlersuche
             console.log('Sende an Webflow Worker:', WEBFLOW_CMS_POST_WORKER_URL, JSON.stringify({ fields: fieldDataForWebflow }));
             // Sende die Daten an den Worker per POST-Request
-            const response = await fetch(WEBFLOW_CMS_POST_WORKER_URL, { // <-- Korrigierter Tippfehler
+            const response = await fetch(WEBFLOW_CMS_POST_WORKER_URL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json', // Wichtig: Datenformat ist JSON
@@ -311,7 +429,7 @@
 
     // Exponiere die Testfunktion global, damit sie von der Konsole aus aufgerufen werden kann
     window.testSubmissionWithData = testSubmissionWithData;
-    console.log('Testfunktion testSubmissionWithData ist verfügbar. Beispielaufruf: testSubmissionWithData({ name: "Test Job", slug: "test-job", "admin-test": true });');
+    console.log('Testfunktion testSubmissionWithData ist verfügbar.');
 
 
     /**

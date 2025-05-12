@@ -1,7 +1,7 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
 // und das Senden an den Webflow CMS Worker.
-// AKTUELLE VERSION: Ignoriert leere Felder beim Sammeln der Daten.
+// AKTUELLE VERSION: Ignoriert leere Felder und sendet job-date-start nicht mehr.
 
 (function() {
     'use strict';
@@ -206,8 +206,8 @@
                 case 'jobSlug':               webflowSlug = 'slug'; break; // Optional: Falls ein explizites Slug-Feld existiert
                 case 'job-adress-optional':   webflowSlug = 'location'; break;
                 case 'budget':                webflowSlug = 'job-payment'; break;
-                case 'startDate':             webflowSlug = 'job-date-start'; break; // Hinzugefügt
-                case 'endDate':               webflowSlug = 'job-date-end'; break; // Hinzugefügt
+                // case 'startDate':          webflowSlug = 'job-date-start'; break; // ENTFERNT
+                case 'jobOnline':             webflowSlug = 'job-date-end'; break; // jobOnline -> job-date-end
                 case 'contentDeadline':       webflowSlug = 'fertigstellung-content'; break; // Hinzugefügt
                 case 'scriptDeadline':        webflowSlug = 'job-scriptdeadline'; break; // Hinzugefügt
                 case 'creatorCount':          webflowSlug = 'anzahl-gesuchte-creator'; break;
@@ -294,7 +294,7 @@
                          }
                     }
 
-                } else if (field.hasAttribute('data-datepicker') || ['startDate', 'endDate', 'contentDeadline', 'scriptDeadline', 'jobOnline'].includes(fieldNameKey)) { // Felder für Datum
+                } else if (field.hasAttribute('data-datepicker') || ['endDate', 'contentDeadline', 'scriptDeadline', 'jobOnline'].includes(fieldNameKey)) { // Felder für Datum (startDate entfernt)
                     const isoDate = formatToISODate(field.value.trim());
                      // Füge das Datum nur hinzu, wenn es gültig formatiert wurde UND nicht leer ist
                     if (isoDate) {

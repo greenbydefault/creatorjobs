@@ -1,8 +1,8 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
 // und das Senden an den Webflow CMS Worker.
-// AKTUELLE VERSION: Ignoriert leere Felder (außer Budget), sendet job-date-start nicht mehr,
-// behandelt Budget als Zahl oder 0 bei Leere, mappt Nutzungsrechte.
+// AKTUELLE VERSION: Sammelt Memberstack Felder, ignoriert leere Felder (außer Budget),
+// sendet job-date-start nicht mehr, behandelt Budget als Zahl oder 0 bei Leere, mappt Nutzungsrechte.
 
 (function() {
     'use strict';
@@ -216,7 +216,7 @@
                 case 'job-adress-optional':   webflowSlug = 'location'; break;
                 case 'budget':                webflowSlug = 'job-payment'; break; // Spezialbehandlung für 0 bei Leere
                 // case 'startDate':          webflowSlug = 'job-date-start'; break; // ENTFERNT
-                case 'jobOnline':             webflowSlug = 'job-date-end'; break; // jobOnline -> job-date-end
+                case 'jobOnline':             webflowSlug = 'job-date-end'; break; // jobOnline -> job-date-end (Spezialbehandlung für Auto-Datum)
                 case 'contentDeadline':       webflowSlug = 'fertigstellung-content'; break; // Hinzugefügt
                 case 'scriptDeadline':        webflowSlug = 'job-scriptdeadline'; break; // Hinzugefügt
                 case 'creatorCount':          webflowSlug = 'anzahl-gesuchte-creator'; break;
@@ -246,8 +246,12 @@
                 case 'videoFormat':           webflowSlug = 'format'; break; // Referenzfeld
                 case 'hookCount':             webflowSlug = 'anzahl-der-hooks'; break; // Referenzfeld
                 case 'subtitles':             webflowSlug = 'untertitel'; break; // Referenzfeld
-                case 'webflowMemberId':       webflowSlug = 'webflow-member-id'; break; // Hinzugefügt (Text)
-                case 'msMemberId':            webflowSlug = 'ms-member-id'; break; // Hinzugefügt (Text)
+                // Memberstack Felder
+                case 'userName':              webflowSlug = 'brand-name'; break; // userName -> brand-name
+                case 'webflowId':             webflowSlug = 'webflow-member-id'; break; // webflowId -> webflow-member-id
+                case 'memberEmail':           webflowSlug = 'contact-mail'; break; // memberEmail -> contact-mail
+                case 'memberstackId':         webflowSlug = 'ms-member-id'; break; // memberstackId -> ms-member-id
+                 // job-id wird im Worker gesetzt, nicht vom Frontend gesammelt
 
                 default:
                     // console.log(`Unbekanntes Feld für Webflow-Mapping: ${fieldNameKey}`);
@@ -303,7 +307,7 @@
                          }
                     }
 
-                } else if (field.hasAttribute('data-datepicker') || ['endDate', 'contentDeadline', 'scriptDeadline', 'jobOnline'].includes(fieldNameKey)) { // Felder für Datum (startDate entfernt)
+                } else if (field.hasAttribute('data-datepicker') || ['endDate', 'contentDeadline', 'scriptDeadline'].includes(fieldNameKey)) { // Datumsfelder (außer jobOnline)
                     const isoDate = formatToISODate(field.value.trim());
                      // Füge das Datum nur hinzu, wenn es gültig formatiert wurde UND nicht leer ist
                     if (isoDate) {
@@ -314,6 +318,31 @@
                         // Das Feld wird in diesem Fall nicht gesendet.
                     }
                      // Wenn field.value.trim() === '', wird das Feld ebenfalls nicht gesendet.
+
+                } else if (fieldNameKey === 'jobOnline') { // Spezialbehandlung für jobOnline (job-date-end)
+                     const jobOnlineValue = field.value.trim();
+                     let isoDate;
+                     if (jobOnlineValue === '') {
+                         // Wenn leer, berechne heute + 3 Tage
+                         const today = new Date();
+                         today.setDate(today.getDate() + 3);
+                         // Setze die Zeit auf 00:00:00.000Z, um Konsistenz zu gewährleisten
+                         today.setHours(0, 0, 0, 0);
+                         isoDate = today.toISOString();
+                         console.log(`jobOnline Feld war leer, setze job-date-end auf heute + 3 Tage: ${isoDate}`);
+                     } else {
+                         // Wenn nicht leer, formatiere den eingegebenen Wert
+                         isoDate = formatToISODate(jobOnlineValue);
+                         if (!isoDate) {
+                              console.warn(`Ungültiges Datum im jobOnline Feld: "${jobOnlineValue}". job-date-end wird nicht gesendet.`);
+                              // Das Feld wird in diesem Fall nicht gesendet.
+                         }
+                     }
+                     // Füge das Datum nur hinzu, wenn es gültig ist (egal ob berechnet oder vom User eingegeben)
+                     if (isoDate) {
+                         webflowPayload[webflowSlug] = isoDate;
+                     }
+
 
                 } else if (fieldNameKey === 'budget') { // Spezialbehandlung für Budget
                      const budgetValue = field.value.trim();
@@ -503,7 +532,7 @@
     /**
      * Funktion zum Testen der Formularübermittlung mit vordefinierten Daten.
      * Kann über die Browser-Konsole aufgerufen werden.
-     * @param {Object} testData - Die Testdaten im fieldData-Format.
+     * @param {Object} testData - Die Testdaten im fieldData-format.
      */
     function testSubmissionWithData(testData) {
         console.log('Starte Test-Übermittlung mit Daten:', testData);

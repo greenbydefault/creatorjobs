@@ -1,7 +1,7 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
 // und das Senden an den Webflow CMS Worker.
-// AKTUELLE VERSION: Enthält erweiterte Felder und eine Funktion zum Testen mit vordefinierten Daten.
+// AKTUELLE VERSION: Enthält alle Felder und eine Funktion zum Testen mit vordefinierten Daten.
 
 (function() {
     'use strict';
@@ -20,9 +20,10 @@
 
     // --- Mapping für Referenzfelder (Textwert zu Webflow Item ID) ---
     // DIESES MAPPING MUSS GENAU MIT DEINEN WEBFLOW COLLECTION ITEMS ÜBEREINSTIMMEN!
+    // BITTE ERSETZE DIE PLATZHALTER-IDs ('deine_id_hier_...') DURCH DIE TATSÄCHLICHEN IDs AUS WEBFLOW!
     const REFERENCE_MAPPINGS = {
         'creatorFollower': {
-            '0 - 2.500': '3d869451e837ddf527fc54d0fb477ab4', // Beispiel ID, bitte mit deinen echten IDs abgleichen!
+            '0 - 2.500': '3d869451e837ddf527fc54d0fb477ab4',
             '2.500 - 5.000': 'e2d86c9f8febf4fecd674f01beb05bf5',
             '5.000 - 10.000': '27420dd46db02b53abb3a50d4859df84',
             '10.000 - 25.000': 'd61d9c5625c03e86d87ef854aa702265',
@@ -32,12 +33,55 @@
             '250.000 - 500.000': '6a1072f2e2a7058fba98f58fb45ab7fe',
             '500.000 - 1.000.000': '18efe7a8d618cf2c2344329254f5ee0b',
             '1.000.000+': '205b22b080e9f3bc2bb6869d12cbe298',
-            'Keine Angabe': '5e33b6550adcb786fafd43d422c63de1'
+            'Keine Angabe': '5e33b6550adcb786fafd43d22c63de1'
         },
+        'creatorAge': {
+            '18-24': '4bf57b0debb3abf9dc11de2ddd50eac7',
+            '25-35': '07fae9d66db85489dc77dd3594fba822',
+            '36-50': 'a0745052dec634f59654ab2578d5db06',
+            '50+': '44b95760d7ac99ecf71b2cbf8f610fdd',
+            'Keine Angabe': '5660c84f647c97a3aee75cce5da8493b'
+        },
+        'genderOptional': { // Mapping für creator-geschlecht
+            'Männlich': '6c84301c22d5e827d05308a33d6ef510',
+            'Weiblich': 'bcb50387552afc123405ae7fa7640d0d',
+            'Diverse': '870da58473ebc5d7db4c78e7363ca417',
+            'Couple': '8bab076ffc2e114b52620f965aa046fb',
+            'Alle': 'ec933c35230bc628da6029deee4159e', // Korrigierte ID basierend auf vorherigem Log
+            'Keine Angabe': 'd157525b18b53e6263884fd58368cfa8'
+        },
+         'videoDurationOptional': { // Mapping für video-dauer
+            '0 - 15 Sekunden': 'a58ac00b365993a9dbc6e7084c6fda10',
+            '15 - 30 Sekunden': '49914418e6b0fc02e4eb742f46658400',
+            '30 - 45 Sekunden': '6ef12194838992fb1584150b97d246f3',
+            '45 - 60 Sekunden': '37b2d32959e6be1bfaa5a60427229be3',
+            '60 - 90 Sekunden': '070c836b61cdb5d3bf49900ea9d11d1f'
+        },
+        'scriptOptional': { // Mapping für script
+            'Brand': '3b95cafa5a06a54e025d38ba71b7b475',
+            'Creator': 'f907b4b8d30d0b55cc831eb054094dad'
+        },
+        'hookCount': { // Mapping für anzahl-der-hooks
+             '1': 'b776e9ef4e9ab8b165019c1a2a04e8a',
+             '2': '1667c831d9cba5adc9416401031796f3',
+             '3': '355ef3ceb930dd4bdd28458265b0a4cf0',
+             '4': 'be2c319b5dccd012016df2e33408c39'
+        },
+         'videoFormat': { // Mapping für format - BITTE PLATZHALTER ERSETZEN!
+            '16:9': 'deine_id_hier_16_9',
+            '4:5': 'deine_id_hier_4_5',
+            '9:16': 'deine_id_hier_9_16'
+        },
+         'industryCategory': { // Mapping für industrie-kategorie - BITTE PLATZHALTER ERSETZEN!
+            'Beauty': 'deine_id_hier_beauty',
+            // Füge hier weitere Industrie-Kategorien hinzu
+        },
+         'subtitles': { // Mapping für untertitel - BITTE PLATZHALTER ERSETZEN!
+            'Ja': 'ac9e02ffc119b7bd0e05403e096f89b3', // ID aus Beispiel übernommen, Textwert Annahme
+            'Nein': 'deine_id_hier_nein_untertitel'
+            // Füge hier weitere Untertitel-Optionen hinzu
+        }
         // Füge hier weitere Mappings für Referenzfelder hinzu, falls nötig
-        // 'creatorAlter': { '18-24': 'deine_id_hier', ... },
-        // 'creatorGeschlecht': { 'Männlich': 'deine_id_hier', ... },
-        // etc.
     };
 
 
@@ -156,44 +200,45 @@
             let webflowSlug = null; // Der tatsächliche Slug in Webflow CMS
 
              // --- Mapping von data-preview-field zu Webflow CMS Slugs ---
-            // Füge hier die Mappings für die neuen Felder hinzu
+            // Füge hier die Mappings für alle Felder hinzu
             switch (fieldNameKey) {
                 case 'projectName':           webflowSlug = 'name'; projectNameValue = field.value.trim(); break;
                 case 'jobSlug':               webflowSlug = 'slug'; break; // Optional: Falls ein explizites Slug-Feld existiert
-                case 'job-adress-optional':   webflowSlug = 'job-adress-optional'; break; // location
-                case 'budget':                webflowSlug = 'job-payment'; break; // job-payment
-                // case 'startDate':          webflowSlug = 'job-date-start'; break; // Nicht in der neuen Liste, aber im alten Skript
-                case 'jobOnline':             webflowSlug = 'job-date-end'; break; // job-date-end
-                case 'creatorCount':          webflowSlug = 'anzahl-gesuchte-creator'; break; // anzahl-gesuchte-creator
-                case 'creatorCategorie':      webflowSlug = 'art-des-contents'; break; // art-des-contents
-                case 'creatorCountOptional':  webflowSlug = 'creator-follower'; break; // creator-follower (Referenzfeld)
-                case 'creatorLand':           webflowSlug = 'land'; break; // land (Checkbox-Gruppe)
-                case 'creatorLang':           webflowSlug = 'sprache'; break; // sprache (Checkbox-Gruppe)
-                case 'aufgabe':               webflowSlug = 'job-beschreibung'; break; // job-beschreibung
-                case 'steckbrief':            webflowSlug = 'deine-aufgaben'; break; // deine-aufgaben
-                // Füge hier weitere Mappings hinzu, wenn du weitere Felder testen möchtest
-                 case 'genderOptional':        webflowSlug = 'creator-geschlecht'; break;
-                 case 'videoCountOptional':    webflowSlug = 'anzahl-videos-2'; break;
-                 case 'imgCountOptional':      webflowSlug = 'anzahl-bilder-2'; break;
-                 case 'videoDurationOptional': webflowSlug = 'video-dauer'; break;
-                 case 'reviewsOptional':       webflowSlug = 'anzahl-der-reviews'; break;
-                 case 'durationOptional':      webflowSlug = 'nutzungsrechte-dauer'; break;
-                 case 'scriptOptional':        webflowSlug = 'script'; break;
-                 case 'jobPostingChannel':     webflowSlug = 'job-posting'; break;
-                 case 'contentChannels':       webflowSlug = 'fur-welchen-kanale-wird-der-content-produziert'; break;
-                 case 'previewText':           webflowSlug = 'previewtext'; break;
-                 case 'brandName':             webflowSlug = 'brand-name'; break;
-                 case 'contactMail':           webflowSlug = 'contact-mail'; break;
-                 case 'barterDealToggle':      webflowSlug = 'barter-deal'; break;
-                 case 'plusJobToggle':         webflowSlug = 'plus-job'; break;
-                 case 'jobImageUpload':        webflowSlug = 'job-image'; break; // Erwartet eine Bild-URL oder ein Asset-Objekt
-                 case 'industryCategory':      webflowSlug = 'industrie-kategorie'; break;
-                 case 'creatorAge':            webflowSlug = 'creator-alter'; break;
-                 case 'videoFormat':           webflowSlug = 'format'; break;
-                 case 'hookCount':             webflowSlug = 'anzahl-der-hooks'; break;
-                 case 'subtitles':             webflowSlug = 'untertitel'; break;
-                 case 'webflowMemberId':       webflowSlug = 'webflow-member-id'; break;
-                 case 'msMemberId':            webflowSlug = 'ms-member-id'; break;
+                case 'job-adress-optional':   webflowSlug = 'location'; break;
+                case 'budget':                webflowSlug = 'job-payment'; break;
+                case 'startDate':             webflowSlug = 'job-date-start'; break; // Hinzugefügt
+                case 'endDate':               webflowSlug = 'job-date-end'; break; // Hinzugefügt
+                case 'contentDeadline':       webflowSlug = 'fertigstellung-content'; break; // Hinzugefügt
+                case 'scriptDeadline':        webflowSlug = 'job-scriptdeadline'; break; // Hinzugefügt
+                case 'creatorCount':          webflowSlug = 'anzahl-gesuchte-creator'; break;
+                case 'creatorCategorie':      webflowSlug = 'art-des-contents'; break;
+                case 'creatorCountOptional':  webflowSlug = 'creator-follower'; break; // Referenzfeld
+                case 'creatorLand':           webflowSlug = 'land'; break; // Checkbox-Gruppe
+                case 'creatorLang':           webflowSlug = 'sprache'; break; // Checkbox-Gruppe
+                case 'aufgabe':               webflowSlug = 'job-beschreibung'; break;
+                case 'steckbrief':            webflowSlug = 'deine-aufgaben'; break;
+                case 'genderOptional':        webflowSlug = 'creator-geschlecht'; break; // Referenzfeld
+                case 'videoCountOptional':    webflowSlug = 'anzahl-videos-2'; break; // Hinzugefügt (Zahl)
+                case 'imgCountOptional':      webflowSlug = 'anzahl-bilder-2'; break; // Hinzugefügt (Zahl)
+                case 'videoDurationOptional': webflowSlug = 'video-dauer'; break; // Referenzfeld
+                case 'reviewsOptional':       webflowSlug = 'anzahl-der-reviews'; break; // Hinzugefügt (Text)
+                case 'durationOptional':      webflowSlug = 'nutzungsrechte-dauer'; break; // Hinzugefügt (Text)
+                case 'scriptOptional':        webflowSlug = 'script'; break; // Referenzfeld
+                case 'jobPostingChannel':     webflowSlug = 'job-posting'; break; // Hinzugefügt (Text)
+                case 'contentChannels':       webflowSlug = 'fur-welchen-kanale-wird-der-content-produziert'; break; // Hinzugefügt (Text)
+                case 'previewText':           webflowSlug = 'previewtext'; break; // Hinzugefügt (Text)
+                case 'brandName':             webflowSlug = 'brand-name'; break; // Hinzugefügt (Text)
+                case 'contactMail':           webflowSlug = 'contact-mail'; break; // Hinzugefügt (Text)
+                case 'barterDealToggle':      webflowSlug = 'barter-deal'; break; // Hinzugefügt (Boolean)
+                case 'plusJobToggle':         webflowSlug = 'plus-job'; break; // Hinzugefügt (Boolean)
+                case 'jobImageUpload':        webflowSlug = 'job-image'; break; // Hinzugefügt (Text/URL)
+                case 'industryCategory':      webflowSlug = 'industrie-kategorie'; break; // Referenzfeld
+                case 'creatorAge':            webflowSlug = 'creator-alter'; break; // Referenzfeld
+                case 'videoFormat':           webflowSlug = 'format'; break; // Referenzfeld
+                case 'hookCount':             webflowSlug = 'anzahl-der-hooks'; break; // Referenzfeld
+                case 'subtitles':             webflowSlug = 'untertitel'; break; // Referenzfeld
+                case 'webflowMemberId':       webflowSlug = 'webflow-member-id'; break; // Hinzugefügt (Text)
+                case 'msMemberId':            webflowSlug = 'ms-member-id'; break; // Hinzugefügt (Text)
 
                 default:
                     // console.log(`Unbekanntes Feld für Webflow-Mapping: ${fieldNameKey}`);
@@ -230,23 +275,22 @@
                          webflowPayload[webflowSlug] = value;
                     }
 
-                } else if (field.hasAttribute('data-datepicker') || fieldNameKey === 'jobOnline') { // Felder für Datum
+                } else if (field.hasAttribute('data-datepicker') || ['startDate', 'endDate', 'contentDeadline', 'scriptDeadline', 'jobOnline'].includes(fieldNameKey)) { // Felder für Datum
                     const isoDate = formatToISODate(field.value.trim());
-                    if (isoDate) { // Nur setzen, wenn Datum gültig ist
-                        webflowPayload[webflowSlug] = isoDate;
-                    } else if (fieldNameKey === 'jobOnline') { // Spezialfall für jobOnline
-                        // Wenn jobOnline leer ist, nicht an Webflow senden, damit es dort ggf. leer bleibt
-                        // oder dein Worker eine Standardlogik anwendet.
-                        // Die "3 Tage" Logik ist für die *Anzeige* in der Preview, nicht unbedingt für das Senden.
+                     // Nur setzen, wenn Datum gültig ist ODER wenn das Feld 'jobOnline' ist und leer sein darf
+                    if (isoDate || (fieldNameKey === 'jobOnline' && field.value.trim() === '')) {
+                         webflowPayload[webflowSlug] = isoDate;
+                    } else if (field.value.trim() !== '') {
+                        // Logge eine Warnung, wenn ein Datumswert vorhanden ist, aber ungültig formatiert war
+                        console.warn(`Datumswert für ${fieldNameKey} konnte nicht als ISO-Datum formatiert werden: "${field.value.trim()}"`);
                     }
                 } else if (field.type === 'number') { // Felder für Zahlen
                     const numVal = field.value.trim();
                     webflowPayload[webflowSlug] = numVal ? parseFloat(numVal) : null; // Sende null, wenn leer
                 } else { // Standard Textfelder
                     value = field.value.trim();
-                    if (value) { // Nur nicht-leere Strings senden
-                        webflowPayload[webflowSlug] = value;
-                    }
+                    // Sende auch leere Strings für Textfelder, falls sie in Webflow nicht erforderlich sind
+                    webflowPayload[webflowSlug] = value;
                 }
             }
         });

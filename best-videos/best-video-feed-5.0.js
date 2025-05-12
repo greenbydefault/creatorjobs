@@ -1,4 +1,4 @@
-// 🌐 Optimierte Webflow API Integration für GitHub-Hosting mit "Load More" & Chunks
+// 🌐 Optimierte Webflow API Integration für GitHub-Hosting mit "Load More", Chunks & Timer
 
 // 🔧 Konfiguration
 const API_BASE_URL = "https://api.webflow.com/v2/collections";
@@ -24,7 +24,9 @@ const filterTagWrapperId = "filter-tag-wrapper";
 const searchInputId = "filter-search";
 const filterResetButtonId = "filter-reset";
 const loadMoreButtonId = "load-more-button";
-const loadingSpinnerId = "loading-spinner"; // ID für den Preloader (MUSS im HTML existieren)
+const loadingSpinnerId = "loading-spinner"; // ID für den Preloader
+const loadingTimeDisplayId = "loading-time-display"; // ID für die Zeitanzeige (MUSS im HTML existieren)
+
 
 let searchDebounceTimer = null;
 const DEBOUNCE_DELAY = 300;
@@ -86,7 +88,6 @@ const searchableFields = ['name', 'creator', 'beschreibung', 'video-name', 'prod
 function showSpinner() {
     const spinner = document.getElementById(loadingSpinnerId);
     if (spinner) spinner.style.display = 'block';
-    // Optional: "Mehr laden"-Button während des API-Ladens deaktivieren/Text ändern
     const loadMoreBtn = document.getElementById(loadMoreButtonId);
     if (loadMoreBtn) loadMoreBtn.disabled = true;
 }
@@ -98,7 +99,7 @@ function hideSpinner() {
     if (loadMoreBtn) loadMoreBtn.disabled = false;
 }
 
-// 🛠️ Hilfsfunktionen (fetchWebflowData, buildWorkerUrl, fetchSingleItem bleiben gleich)
+// 🛠️ Hilfsfunktionen
 function buildWorkerUrl(apiUrl) {
     return `${WORKER_BASE_URL}${encodeURIComponent(apiUrl)}`;
 }
@@ -129,18 +130,10 @@ async function fetchSingleItem(collectionId, itemId) {
     return await fetchWebflowData(apiUrl);
 }
 
-
-/**
- * Ruft einen *Chunk* von Video-Items von der Webflow API ab.
- * @param {number} offset - Der Startindex für den API-Abruf.
- * @param {number} limit - Die maximale Anzahl der abzurufenden Items.
- * @returns {Promise<{items: Array, pagination: object}|null>} Ein Promise, das die Items und Paginierungsinfos oder null bei Fehler zurückgibt.
- */
 async function fetchVideoItemsChunk(offset, limit) {
     console.log(`🚀 Lade Video-Chunk von API: Offset ${offset}, Limit ${limit}`);
     const apiUrl = `${API_BASE_URL}/${VIDEO_COLLECTION_ID}/items/live?limit=${limit}&offset=${offset}`;
     const data = await fetchWebflowData(apiUrl);
-
     if (data && data.items) {
         console.log(`✅ ${data.items.length} Video-Items im Chunk geladen. Gesamt laut API (falls vorhanden): ${data.pagination?.total}`);
         return { items: data.items, pagination: data.pagination };
@@ -150,43 +143,28 @@ async function fetchVideoItemsChunk(offset, limit) {
     }
 }
 
-
-/**
- * Lädt die Daten (Name, Logo) für eine Liste von Kunden-IDs und fügt sie zu `allCustomerData` hinzu.
- * @param {Array<string>} customerIds - Ein Array mit den zu ladenden Kunden-IDs.
- * @returns {Promise<boolean>} Ein Promise, das true bei Erfolg oder false bei schwerwiegenden Fehlern zurückgibt.
- */
 async function fetchAndMergeRelevantCustomerData(customerIds) {
-    if (!customerIds || customerIds.length === 0) {
-        // console.log("Keine neuen Kunden-IDs zum Laden.");
-        return true;
-    }
-
-    // Filtere IDs heraus, die bereits in allCustomerData vorhanden sind, um unnötige Abrufe zu vermeiden
+    if (!customerIds || customerIds.length === 0) return true;
     const newCustomerIdsToFetch = customerIds.filter(id => !allCustomerData[id]);
-    if (newCustomerIdsToFetch.length === 0) {
-        // console.log("Alle relevanten Kundendaten bereits vorhanden.");
-        return true;
-    }
+    if (newCustomerIdsToFetch.length === 0) return true;
 
     console.log(`🤵‍♂️ Lade Daten für ${newCustomerIdsToFetch.length} neue relevante(n) Kunden...`);
     const customerPromises = newCustomerIdsToFetch.map(id => fetchSingleItem(CUSTOMER_COLLECTION_ID, id));
-
     try {
         const customerItems = await Promise.all(customerPromises);
         let newCustomersFetchedCount = 0;
         customerItems.forEach(customer => {
             if (customer && customer.id && customer.fieldData) {
-                allCustomerData[customer.id] = { // Füge hinzu oder überschreibe in allCustomerData
+                allCustomerData[customer.id] = {
                     name: customer.fieldData.name || 'Unbekannter Kunde',
                     logoUrl: customer.fieldData['user-profile-img'] || null
                 };
                 newCustomersFetchedCount++;
             } else if (customer === null) {
-                console.warn("    -> Ein Kunde konnte nicht geladen werden (siehe vorherige Fehlermeldung).");
+                console.warn("    -> Ein Kunde konnte nicht geladen werden.");
             }
         });
-        console.log(`👍 ${newCustomersFetchedCount} neue Kundendaten erfolgreich geladen und zusammengeführt.`);
+        console.log(`👍 ${newCustomersFetchedCount} neue Kundendaten erfolgreich geladen.`);
         return true;
     } catch (error) {
         console.error("❌ Schwerwiegender Fehler beim parallelen Abrufen der Kundendaten:", error);
@@ -194,21 +172,15 @@ async function fetchAndMergeRelevantCustomerData(customerIds) {
     }
 }
 
-// --- Rendering-Funktionen (renderVideosSlice, renderInitialVideoBatch, updateLoadMoreButtonVisibility bleiben ähnlich) ---
+// --- Rendering-Funktionen ---
 function renderVideosSlice(videoSlice, containerId) {
     const container = document.getElementById(containerId);
-    if (!container) {
-        console.error(`❌ Video-Container mit ID '${containerId}' nicht gefunden.`);
-        return;
-    }
+    if (!container) return;
     const fragment = document.createDocumentFragment();
     if (!videoSlice || videoSlice.length === 0) return;
 
     videoSlice.forEach((item, index) => {
-        if (!item || !item.fieldData) {
-            console.warn("Ungültiges Video-Item übersprungen:", item);
-            return;
-        }
+        if (!item || !item.fieldData) { console.warn("Ungültiges Video-Item übersprungen:", item); return; }
         const fieldData = item.fieldData;
         let videoLink = fieldData['video-link'];
         const kundenIds = fieldData['kunden'];
@@ -216,7 +188,6 @@ function renderVideosSlice(videoSlice, containerId) {
         if (videoLink) {
             const feedContainer = document.createElement("div");
             feedContainer.classList.add("video-feed-container");
-
             const firstCustomerId = (Array.isArray(kundenIds) && kundenIds.length > 0) ? kundenIds[0] : null;
             const customerInfo = firstCustomerId ? allCustomerData[firstCustomerId] : null;
 
@@ -231,12 +202,10 @@ function renderVideosSlice(videoSlice, containerId) {
                     logoImg.loading = 'lazy';
                     logoImg.onerror = () => {
                         logoImg.style.display = 'none';
-                        console.warn(`Kundenlogo für ${customerInfo.name} konnte nicht geladen werden: ${customerInfo.logoUrl}`);
                         const placeholder = document.createElement('div');
                         placeholder.classList.add('video-feed-logo-placeholder');
-                        const customerNameSpan = customerRow.querySelector('.video-feed-customer');
-                        if (customerNameSpan) customerRow.insertBefore(placeholder, customerNameSpan);
-                        else customerRow.appendChild(placeholder);
+                        const cNameSpan = customerRow.querySelector('.video-feed-customer');
+                        if (cNameSpan) customerRow.insertBefore(placeholder, cNameSpan); else customerRow.appendChild(placeholder);
                     };
                     customerRow.appendChild(logoImg);
                 } else {
@@ -249,27 +218,22 @@ function renderVideosSlice(videoSlice, containerId) {
                 customerNameSpan.textContent = customerInfo.name;
                 customerRow.appendChild(customerNameSpan);
                 feedContainer.appendChild(customerRow);
-            } else if (firstCustomerId) {
-                // console.warn(`Kundendaten für ID ${firstCustomerId} nicht in allCustomerData gefunden. Wird evtl. später geladen.`);
             }
 
             const videoInnerContainer = document.createElement('div');
             videoInnerContainer.classList.add('feed-video-container');
             const videoElement = document.createElement('video');
-            videoElement.playsInline = true;
-            videoElement.preload = "metadata";
-            videoElement.controls = true;
+            videoElement.playsInline = true; videoElement.preload = "metadata"; videoElement.controls = true;
             videoElement.classList.add('db-video-player');
             videoElement.id = `db-user-video--${item.id || `slice-${Date.now()}-${index}`}`;
             const sourceElement = document.createElement('source');
-            sourceElement.src = videoLink;
-            sourceElement.type = 'video/mp4';
+            sourceElement.src = videoLink; sourceElement.type = 'video/mp4';
             videoElement.appendChild(sourceElement);
             videoElement.appendChild(document.createTextNode('Dein Browser unterstützt das Video-Tag nicht.'));
             videoElement.addEventListener('error', (e) => {
                 console.error(`Fehler beim Laden von Video ${videoElement.id} von ${videoLink}:`, e);
                 const errorP = document.createElement('p');
-                errorP.style.color = 'red'; errorP.style.padding = '10px'; errorP.style.border = '1px solid red';
+                errorP.style.cssText = 'color:red; padding:10px; border:1px solid red;';
                 errorP.textContent = 'Video konnte nicht geladen werden.';
                 videoInnerContainer.innerHTML = ''; videoInnerContainer.appendChild(errorP);
             }, { once: true });
@@ -286,21 +250,17 @@ function renderVideosSlice(videoSlice, containerId) {
 function renderInitialVideoBatch() {
     const container = document.getElementById(videoContainerId);
     if (!container) return;
-    container.innerHTML = ''; // Container leeren
-
+    container.innerHTML = '';
     const initialCount = Math.min(VIDEOS_PER_LOAD_DISPLAY, currentFilteredItems.length);
     displayedVideoCount = initialCount;
 
-    if (initialCount === 0 && allVideoItems.length > 0) { // Es gibt Videos, aber keine passen zum Filter
+    if (initialCount === 0 && allVideoItems.length > 0) {
         container.innerHTML = "<p>Keine Videos entsprechen den aktuellen Filtern oder der Suche.</p>";
     } else if (initialCount === 0 && allVideoItems.length === 0 && currentAPIOffset === 0) {
-        // Dies ist der Fall, bevor überhaupt etwas von der API geladen wurde, oder die API gab 0 Items zurück
-        // Der Spinner sollte noch sichtbar sein oder eine Meldung "Lade Videos..."
+        // Initial load, API might not have returned yet, or returned 0. Spinner handles this.
     } else if (initialCount === 0 && allVideoItems.length === 0 && totalVideosAvailableFromAPI === 0 && currentAPIOffset > 0) {
-        // API hat initial 0 Videos gemeldet
         container.innerHTML = "<p>Keine Videos in dieser Sammlung gefunden.</p>";
-    }
-    else {
+    } else {
         const initialSlice = currentFilteredItems.slice(0, initialCount);
         renderVideosSlice(initialSlice, videoContainerId);
     }
@@ -310,20 +270,17 @@ function renderInitialVideoBatch() {
 function updateLoadMoreButtonVisibility() {
     const loadMoreButton = document.getElementById(loadMoreButtonId);
     if (!loadMoreButton) return;
-
-    // Bedingung 1: Gibt es mehr *gefilterte und bereits von der API geladene* Videos anzuzeigen?
     const moreFilteredVideosToDisplay = displayedVideoCount < currentFilteredItems.length;
-    // Bedingung 2: Gibt es *potenziell mehr Videos auf der API*, die noch nicht geladen wurden?
     const moreVideosOnAPI = allVideoItems.length < totalVideosAvailableFromAPI;
 
     if (moreFilteredVideosToDisplay || moreVideosOnAPI) {
         loadMoreButton.style.display = 'block';
-        loadMoreButton.disabled = isLoadingFromAPI; // Deaktiviere, während API lädt
+        loadMoreButton.disabled = isLoadingFromAPI;
         if (isLoadingFromAPI) {
             loadMoreButton.textContent = "Lade mehr...";
         } else if (moreFilteredVideosToDisplay) {
             loadMoreButton.textContent = "Mehr Videos laden";
-        } else { // moreVideosOnAPI muss true sein
+        } else {
             loadMoreButton.textContent = "Mehr von Server laden";
         }
     } else {
@@ -331,111 +288,75 @@ function updateLoadMoreButtonVisibility() {
     }
 }
 
-/**
- * Behandelt den Klick auf den "Mehr laden"-Button.
- * Lädt entweder mehr von der API oder zeigt mehr bereits geladene an.
- */
-async function handleLoadMore() {
-    // Fall 1: Es gibt noch mehr gefilterte Videos, die bereits geladen (allVideoItems), aber noch nicht angezeigt wurden.
+async function handleLoadMore(event) {
+    if (event) {
+        event.preventDefault(); // Verhindert Standardverhalten und mögliches Springen
+    }
+
     if (displayedVideoCount < currentFilteredItems.length) {
         const startIndex = displayedVideoCount;
         const endIndex = Math.min(startIndex + VIDEOS_PER_LOAD_DISPLAY, currentFilteredItems.length);
         const nextSlice = currentFilteredItems.slice(startIndex, endIndex);
-        
         renderVideosSlice(nextSlice, videoContainerId);
         displayedVideoCount = endIndex;
-        updateLoadMoreButtonVisibility();
-    }
-    // Fall 2: Alle aktuell geladenen und gefilterten Videos sind angezeigt, ABER es gibt potenziell mehr auf der API.
-    else if (allVideoItems.length < totalVideosAvailableFromAPI && !isLoadingFromAPI) {
-        console.log("Alle geladenen Videos angezeigt, versuche mehr von API zu laden...");
+    } else if (allVideoItems.length < totalVideosAvailableFromAPI && !isLoadingFromAPI) {
         isLoadingFromAPI = true;
-        showSpinner(); // Zeige Spinner für API-Ladevorgang
-        updateLoadMoreButtonVisibility(); // Aktualisiert Button-Text/Status
-
+        showSpinner();
+        updateLoadMoreButtonVisibility();
         const chunkData = await fetchVideoItemsChunk(currentAPIOffset, ITEMS_PER_API_CHUNK);
         if (chunkData && chunkData.items.length > 0) {
             allVideoItems = allVideoItems.concat(chunkData.items);
             currentAPIOffset += chunkData.items.length;
-
-            // Kundendaten für die neu geladenen Items abrufen
             const newCustomerIds = new Set();
             chunkData.items.forEach(item => {
                 const kunden = item?.fieldData?.kunden;
-                if (Array.isArray(kunden)) {
-                    kunden.forEach(id => newCustomerIds.add(id));
-                }
+                if (Array.isArray(kunden)) kunden.forEach(id => newCustomerIds.add(id));
             });
             await fetchAndMergeRelevantCustomerData(Array.from(newCustomerIds));
-
-            // Filter neu anwenden, da sich allVideoItems geändert hat
-            // applyFiltersAndRender wird dann renderInitialVideoBatch aufrufen,
-            // was aber den Container leert. Wir wollen hier eigentlich nur anhängen.
-            // Daher filtern wir manuell und rufen dann die Logik zum Anzeigen des nächsten Chunks auf.
-            
-            // Filter erneut anwenden, um currentFilteredItems zu aktualisieren
-            applyFilters(); // Nur filtern, nicht rendern!
-            
-            // Jetzt den nächsten Satz von (neu gefilterten) Videos anzeigen
-            const startIndex = displayedVideoCount; // Sollte gleich bleiben, da wir vorher am Ende waren
+            applyFilters(); // Nur filtern, nicht initial rendern
+            const startIndex = displayedVideoCount;
             const endIndex = Math.min(startIndex + VIDEOS_PER_LOAD_DISPLAY, currentFilteredItems.length);
-            
-            if (endIndex > startIndex) { // Nur rendern, wenn es tatsächlich neue gefilterte Videos gibt
-                 const nextSlice = currentFilteredItems.slice(startIndex, endIndex);
-                 renderVideosSlice(nextSlice, videoContainerId);
-                 displayedVideoCount = endIndex;
+            if (endIndex > startIndex) {
+                const nextSliceToDisplay = currentFilteredItems.slice(startIndex, endIndex);
+                renderVideosSlice(nextSliceToDisplay, videoContainerId);
+                displayedVideoCount = endIndex;
             }
-
         } else if (chunkData && chunkData.items.length === 0) {
-            console.log("API hat keine weiteren Videos zurückgegeben.");
-            // Setze totalVideosAvailableFromAPI auf die aktuelle Länge, da die API nichts mehr liefert.
-            totalVideosAvailableFromAPI = allVideoItems.length;
-        } else {
-            console.error("Fehler beim Nachladen von der API.");
-            // Fehlerbehandlung, evtl. totalVideosAvailableFromAPI anpassen, damit nicht endlos versucht wird.
+            totalVideosAvailableFromAPI = allVideoItems.length; // Keine weiteren Videos auf API
         }
         isLoadingFromAPI = false;
         hideSpinner();
-        updateLoadMoreButtonVisibility();
-    } else {
-        console.log("Keine weiteren Videos zum Laden (weder lokal noch von API).");
-        updateLoadMoreButtonVisibility(); // Button sicherheitshalber ausblenden
     }
+    updateLoadMoreButtonVisibility();
 }
 
 // --- Filterlogik ---
-function renderFilterTags(activeFiltersFlat) { // Unverändert von V2
+function renderFilterTags(activeFiltersFlat) {
     const wrapper = document.getElementById(filterTagWrapperId);
-    if (!wrapper) { console.warn(`⚠️ Filter-Tag-Wrapper mit ID '${filterTagWrapperId}' nicht gefunden.`); return; }
+    if (!wrapper) return;
     const fragment = document.createDocumentFragment();
     activeFiltersFlat.forEach(filter => {
         const tagElement = document.createElement('div');
         tagElement.classList.add('search-filter-tag');
         const tagName = document.createElement('span');
-        tagName.classList.add('tag-text');
-        tagName.textContent = filter.display;
+        tagName.classList.add('tag-text'); tagName.textContent = filter.display;
         const removeButton = document.createElement('button');
-        removeButton.classList.add('filter-close-button');
-        removeButton.textContent = '×';
+        removeButton.classList.add('filter-close-button'); removeButton.textContent = '×';
         removeButton.setAttribute('aria-label', `Filter ${filter.display} entfernen`);
         removeButton.dataset.checkboxId = filter.id;
         removeButton.addEventListener('click', (e) => {
-            const checkboxIdToRemove = e.currentTarget.dataset.checkboxId;
-            const correspondingCheckbox = document.getElementById(checkboxIdToRemove);
-            if (correspondingCheckbox) {
-                correspondingCheckbox.checked = false;
+            const cbId = e.currentTarget.dataset.checkboxId;
+            const cb = document.getElementById(cbId);
+            if (cb) {
+                cb.checked = false;
                 const event = new Event('change', { bubbles: true });
-                correspondingCheckbox.dispatchEvent(event); // Triggers applyFiltersAndRender
-            } else {
-                console.error(`FEHLER: Konnte Checkbox mit ID ${checkboxIdToRemove} zum Entfernen nicht finden!`);
+                cb.dispatchEvent(event);
             }
         });
-        tagElement.appendChild(tagName);
-        tagElement.appendChild(removeButton);
+        tagElement.appendChild(tagName); tagElement.appendChild(removeButton);
         fragment.appendChild(tagElement);
     });
-    wrapper.innerHTML = '';
-    wrapper.appendChild(fragment);
+    wrapper.innerHTML = ''; wrapper.appendChild(fragment);
     const resetButton = document.getElementById(filterResetButtonId);
     if (resetButton) {
         const searchInput = document.getElementById(searchInputId);
@@ -444,21 +365,17 @@ function renderFilterTags(activeFiltersFlat) { // Unverändert von V2
     }
 }
 
-/**
- * Wendet nur die Filter an und aktualisiert `currentFilteredItems`. Rendert nicht.
- */
 function applyFilters() {
     console.time("Nur Filterung");
     const activeFiltersByGroup = {};
-    let allActiveCheckboxFiltersFlat = []; // Für renderFilterTags
+    let allActiveCheckboxFiltersFlat = [];
     filterConfig.forEach(group => {
-        const groupField = group.field;
-        activeFiltersByGroup[groupField] = [];
+        activeFiltersByGroup[group.field] = [];
         group.filters.forEach(filter => {
             const checkbox = document.getElementById(filter.id);
             if (checkbox && checkbox.checked) {
-                activeFiltersByGroup[groupField].push(filter.value);
-                allActiveCheckboxFiltersFlat.push({ ...filter, field: groupField });
+                activeFiltersByGroup[group.field].push(filter.value);
+                allActiveCheckboxFiltersFlat.push({ ...filter, field: group.field });
             }
         });
     });
@@ -466,209 +383,161 @@ function applyFilters() {
     const searchTerm = searchInput ? searchInput.value.trim().toLowerCase() : "";
 
     currentFilteredItems = allVideoItems.filter(item => {
-        let matchesCheckboxFilters = true;
+        let matchesCheckbox = true;
         for (const groupField in activeFiltersByGroup) {
-            const activeValuesInGroup = activeFiltersByGroup[groupField];
-            if (activeValuesInGroup.length > 0) {
-                const itemFieldValue = item?.fieldData?.[groupField];
+            const activeVals = activeFiltersByGroup[groupField];
+            if (activeVals.length > 0) {
+                const itemVal = item?.fieldData?.[groupField];
                 if (groupField === 'kunden') {
-                    if (!itemFieldValue || !Array.isArray(itemFieldValue) || !activeValuesInGroup.some(id => itemFieldValue.includes(id))) {
-                        matchesCheckboxFilters = false; break;
+                    if (!itemVal || !Array.isArray(itemVal) || !activeVals.some(id => itemVal.includes(id))) {
+                        matchesCheckbox = false; break;
                     }
-                } else if (groupField === 'creatortype' || groupField === 'produktion' || groupField === 'anzeige') {
-                    if (itemFieldValue === undefined || itemFieldValue === null || !activeValuesInGroup.includes(itemFieldValue)) {
-                        matchesCheckboxFilters = false; break;
+                } else if (['creatortype', 'produktion', 'anzeige'].includes(groupField)) {
+                    if (itemVal === undefined || itemVal === null || !activeVals.includes(itemVal)) {
+                        matchesCheckbox = false; break;
                     }
                 } else {
-                    const itemValueLower = String(itemFieldValue || '').toLowerCase();
-                    const normalizedActiveValues = activeValuesInGroup.map(v => String(v || '').toLowerCase());
-                    if (!itemValueLower || !normalizedActiveValues.includes(itemValueLower)) {
-                        matchesCheckboxFilters = false; break;
+                    const itemStr = String(itemVal || '').toLowerCase();
+                    const normVals = activeVals.map(v => String(v || '').toLowerCase());
+                    if (!itemStr || !normVals.includes(itemStr)) {
+                        matchesCheckbox = false; break;
                     }
                 }
             }
         }
-        if (!matchesCheckboxFilters) return false;
-        let matchesSearchTerm = true;
+        if (!matchesCheckbox) return false;
+        let matchesSearch = true;
         if (searchTerm) {
-            matchesSearchTerm = false;
+            matchesSearch = false;
             for (const field of searchableFields) {
-                const fieldValue = item?.fieldData?.[field];
-                if (fieldValue && typeof fieldValue === 'string' && fieldValue.toLowerCase().includes(searchTerm)) {
-                    matchesSearchTerm = true; break;
+                const fieldVal = item?.fieldData?.[field];
+                if (fieldVal && typeof fieldVal === 'string' && fieldVal.toLowerCase().includes(searchTerm)) {
+                    matchesSearch = true; break;
                 }
                 if (field === 'kunden' && Array.isArray(item?.fieldData?.kunden) && Object.keys(allCustomerData).length > 0) {
-                    const customerNames = item.fieldData.kunden
-                        .map(id => allCustomerData[id]?.name).filter(name => name).join(' ').toLowerCase();
-                    if (customerNames.includes(searchTerm)) {
-                        matchesSearchTerm = true; break;
-                    }
+                    const names = item.fieldData.kunden.map(id => allCustomerData[id]?.name).filter(n => n).join(' ').toLowerCase();
+                    if (names.includes(searchTerm)) { matchesSearch = true; break; }
                 }
             }
         }
-        return matchesSearchTerm;
+        return matchesSearch;
     });
     console.timeEnd("Nur Filterung");
-    console.log(`📊 ${currentFilteredItems.length} von ${allVideoItems.length} (geladenen) Videos entsprechen den Filtern.`);
-    renderFilterTags(allActiveCheckboxFiltersFlat); // Tags immer aktualisieren
+    console.log(`📊 ${currentFilteredItems.length} von ${allVideoItems.length} Videos entsprechen Filtern.`);
+    renderFilterTags(allActiveCheckboxFiltersFlat);
 }
 
-
-/**
- * Wendet Filter an und rendert die erste Charge der Videos.
- */
 function applyFiltersAndRender() {
-    applyFilters(); // Filtert und aktualisiert currentFilteredItems & Tags
-    renderInitialVideoBatch(); // Rendert die erste Charge basierend auf den neuen currentFilteredItems
+    applyFilters();
+    renderInitialVideoBatch();
 }
 
-function clearAllFilters() { // Unverändert von V2
+function clearAllFilters() {
     console.log("🧹 Setze alle Filter zurück...");
     let changed = false;
     filterConfig.forEach(group => {
         group.filters.forEach(filter => {
             const checkbox = document.getElementById(filter.id);
-            if (checkbox) {
-                if (checkbox.checked) {
-                    checkbox.checked = false;
-                    changed = true;
-                    const event = new Event('change', { bubbles: true });
-                    checkbox.dispatchEvent(event); // Triggers applyFiltersAndRender
-                }
+            if (checkbox && checkbox.checked) {
+                checkbox.checked = false; changed = true;
+                const event = new Event('change', { bubbles: true });
+                checkbox.dispatchEvent(event);
             }
         });
     });
     const searchInput = document.getElementById(searchInputId);
     if (searchInput && searchInput.value !== "") {
-        searchInput.value = "";
-        changed = true;
+        searchInput.value = ""; changed = true;
         const event = new Event('input', { bubbles: true });
-        searchInput.dispatchEvent(event); // Triggers applyFiltersAndRender via debounce
+        searchInput.dispatchEvent(event);
     }
-    if (!changed) {
-        // Wenn nichts geändert wurde, aber der Reset-Button geklickt wurde,
-        // wollen wir vielleicht trotzdem die Ansicht auf den Anfang zurücksetzen.
-        applyFiltersAndRender();
-    }
+    if (!changed) applyFiltersAndRender(); // Reset view even if no filters were active
 }
 
 // 🚀 Initialisierung und Hauptfunktionen
 async function displayVideoCollection() {
-    showSpinner(); // Zeige Spinner beim Start
+    const startTime = performance.now();
+    const loadingTimeElem = document.getElementById(loadingTimeDisplayId);
+    if (loadingTimeElem) loadingTimeElem.textContent = '';
 
-    // --- SCHRITT 1: Ersten Chunk von Videos laden ---
-    const initialChunkData = await fetchVideoItemsChunk(currentAPIOffset, ITEMS_PER_API_CHUNK);
+    showSpinner();
 
-    if (initialChunkData && initialChunkData.items) {
-        allVideoItems = initialChunkData.items;
-        currentAPIOffset += initialChunkData.items.length;
-        if (initialChunkData.pagination && initialChunkData.pagination.total) {
-            totalVideosAvailableFromAPI = initialChunkData.pagination.total;
+    try {
+        const initialChunk = await fetchVideoItemsChunk(currentAPIOffset, ITEMS_PER_API_CHUNK);
+        if (initialChunk && initialChunk.items) {
+            allVideoItems = initialChunk.items;
+            currentAPIOffset += initialChunk.items.length;
+            totalVideosAvailableFromAPI = initialChunk.pagination?.total ?? (initialChunk.items.length < ITEMS_PER_API_CHUNK ? initialChunk.items.length : currentAPIOffset +1);
+            console.log(`📹 Erster Chunk: ${allVideoItems.length}. Gesamt API: ${totalVideosAvailableFromAPI}`);
+            const initialCustIds = new Set();
+            allVideoItems.forEach(item => {
+                const kunden = item?.fieldData?.kunden;
+                if (Array.isArray(kunden)) kunden.forEach(id => initialCustIds.add(id));
+            });
+            await fetchAndMergeRelevantCustomerData(Array.from(initialCustIds));
         } else {
-            // Fallback, falls pagination.total nicht verfügbar ist (sollte es aber sein)
-            totalVideosAvailableFromAPI = initialChunkData.items.length;
-            if (initialChunkData.items.length < ITEMS_PER_API_CHUNK) {
-                // Wahrscheinlich alle Items geladen
-            } else {
-                console.warn("Konnte totalVideosAvailableFromAPI nicht sicher bestimmen, 'Mehr laden von API' könnte unzuverlässig sein.");
-                // Setze es auf einen Wert, der zumindest weiteres Laden ermöglicht, wenn ITEMS_PER_API_CHUNK erreicht wurde
-                totalVideosAvailableFromAPI = currentAPIOffset + 1; // Annahme: es gibt mind. noch eins
-            }
+            console.error("Fehler beim Laden des initialen Chunks.");
+            if (loadingTimeElem) loadingTimeElem.textContent = 'Fehler beim Laden.';
+            hideSpinner(); return;
         }
-        console.log(`📹 Erster Chunk: ${allVideoItems.length} Videos geladen. Gesamt auf API: ${totalVideosAvailableFromAPI}`);
 
-        // --- SCHRITT 2: Relevante Kunden-IDs für ersten Chunk sammeln & laden ---
-        const initialCustomerIds = new Set();
-        allVideoItems.forEach(item => {
-            const kunden = item?.fieldData?.kunden;
-            if (Array.isArray(kunden)) {
-                kunden.forEach(id => initialCustomerIds.add(id));
-            }
-        });
-        await fetchAndMergeRelevantCustomerData(Array.from(initialCustomerIds));
+        if (allVideoItems.length === 0) {
+            console.log("Keine Videos gefunden.");
+            const container = document.getElementById(videoContainerId);
+            if(container) container.innerHTML = "<p>Keine Videos in dieser Sammlung gefunden.</p>";
+            if (loadingTimeElem) loadingTimeElem.textContent = 'Keine Videos gefunden.';
+            renderFilterTags([]); updateLoadMoreButtonVisibility(); hideSpinner(); return;
+        }
 
-    } else {
-        console.error("Fehler beim Laden des initialen Video-Chunks. Breche ab.");
-        const container = document.getElementById(videoContainerId);
-        if (container) container.innerHTML = "<p>Fehler beim Laden der Videos.</p>";
-        hideSpinner();
-        updateLoadMoreButtonVisibility();
-        return;
-    }
-    
-    if (allVideoItems.length === 0) {
-        console.log("Keine Video-Items in der Collection gefunden.");
-        const container = document.getElementById(videoContainerId);
-        if (container) container.innerHTML = "<p>Keine Videos in dieser Sammlung gefunden.</p>";
-        // Filter-Tags und Load-More-Button trotzdem initialisieren/verstecken
-        renderFilterTags([]);
-        updateLoadMoreButtonVisibility();
-        hideSpinner();
-        return;
-    }
-
-
-    // --- SCHRITT 3: Event Listener einrichten ---
-    console.log("Schritt 3: Richte Event Listener ein.");
-    filterConfig.forEach(group => {
-        group.filters.forEach(filter => {
-            const checkbox = document.getElementById(filter.id);
-            if (checkbox) checkbox.addEventListener('change', applyFiltersAndRender);
-            else console.warn(`⚠️ Filter-Checkbox mit ID '${filter.id}' nicht im DOM gefunden.`);
-        });
-    });
-    const searchInput = document.getElementById(searchInputId);
-    if (searchInput) {
-        searchInput.addEventListener('input', () => {
+        console.log("Schritt 3: Event Listener einrichten.");
+        filterConfig.forEach(group => group.filters.forEach(filter => {
+            const cb = document.getElementById(filter.id);
+            if (cb) cb.addEventListener('change', applyFiltersAndRender);
+        }));
+        const search = document.getElementById(searchInputId);
+        if (search) search.addEventListener('input', () => {
             clearTimeout(searchDebounceTimer);
             searchDebounceTimer = setTimeout(applyFiltersAndRender, DEBOUNCE_DELAY);
         });
-    } else console.warn(`⚠️ Such-Eingabefeld mit ID '${searchInputId}' nicht im DOM gefunden.`);
-    const resetButton = document.getElementById(filterResetButtonId);
-    if (resetButton) {
-        resetButton.addEventListener('click', clearAllFilters);
-        resetButton.style.display = 'none';
-    } else console.warn(`⚠️ Reset-Button mit ID '${filterResetButtonId}' nicht im DOM gefunden.`);
-    const loadMoreButton = document.getElementById(loadMoreButtonId);
-    if (loadMoreButton) {
-        loadMoreButton.addEventListener('click', handleLoadMore);
-        loadMoreButton.style.display = 'none';
-    } else console.error(`❌ "Mehr laden"-Button mit ID '${loadMoreButtonId}' NICHT im DOM gefunden.`);
+        const resetBtn = document.getElementById(filterResetButtonId);
+        if (resetBtn) { resetBtn.addEventListener('click', clearAllFilters); resetBtn.style.display = 'none';}
+        const loadMoreBtn = document.getElementById(loadMoreButtonId);
+        // Event wird direkt an handleLoadMore übergeben
+        if (loadMoreBtn) { loadMoreBtn.addEventListener('click', handleLoadMore); loadMoreBtn.style.display = 'none';}
+        else { console.error(`❌ "Mehr laden"-Button mit ID '${loadMoreButtonId}' NICHT im DOM gefunden.`);}
 
-    // --- SCHRITT 4: Initiales Rendern (erste Charge) ---
-    console.log("Schritt 4: Rufe initial applyFiltersAndRender auf.");
-    applyFiltersAndRender(); // Wendet Filter an und rendert die erste Charge
 
-    hideSpinner(); // Verstecke Spinner nach dem ersten Rendern
+        console.log("Schritt 4: Initiales Rendern.");
+        applyFiltersAndRender();
+
+        const endTime = performance.now();
+        const loadTime = ((endTime - startTime) / 1000).toFixed(2);
+        if (loadingTimeElem) loadingTimeElem.textContent = `Initiale Ladezeit: ${loadTime} Sek.`;
+        console.log(`Initiale Ladezeit: ${loadTime} Sek.`);
+        hideSpinner();
+    } catch (error) {
+        console.error("❌ Schwerwiegender Fehler:", error);
+        if (loadingTimeElem) loadingTimeElem.textContent = 'Ein Fehler ist aufgetreten.';
+        hideSpinner();
+    }
 }
 
 // --- Start der Anwendung ---
 window.addEventListener("DOMContentLoaded", () => {
-    console.log("🚀 DOM geladen. Starte Ladevorgänge...");
+    console.log("🚀 DOM geladen.");
     const videoContainerExists = !!document.getElementById(videoContainerId);
     const tagWrapperExists = !!document.getElementById(filterTagWrapperId);
     const spinnerExists = !!document.getElementById(loadingSpinnerId);
+    const timeDisplayExists = !!document.getElementById(loadingTimeDisplayId);
 
-    if (!spinnerExists) {
-        console.error(`FEHLER: Lade-Spinner ('${loadingSpinnerId}') nicht gefunden! Bitte füge ihn zum HTML hinzu.`);
-        // Optional: Fehlermeldung im UI anzeigen, wenn Spinner fehlt
-        const body = document.querySelector('body');
-        if (body) {
-            const errorMsg = document.createElement('p');
-            errorMsg.textContent = "Fehler: Lade-Spinner Element fehlt auf der Seite.";
-            errorMsg.style.color = "red"; errorMsg.style.fontWeight = "bold";
-            body.prepend(errorMsg);
-        }
-        // Man könnte hier abbrechen, aber versuchen wir es trotzdem, falls der Nutzer ihn später hinzufügt
-    }
+    if (!spinnerExists) console.error(`FEHLER: Lade-Spinner ('${loadingSpinnerId}') fehlt!`);
+    if (!timeDisplayExists) console.error(`FEHLER: Zeitanzeige ('${loadingTimeDisplayId}') fehlt!`);
 
     if (videoContainerExists && tagWrapperExists) {
          displayVideoCollection();
     } else {
-        if (!videoContainerExists) console.error(`FEHLER: Video-Container ('${videoContainerId}') nicht gefunden!`);
-        if (!tagWrapperExists) console.error(`FEHLER: Filter-Tag-Wrapper ('${filterTagWrapperId}') nicht gefunden!`);
-        console.error("Video-Feed kann nicht initialisiert werden, da wichtige HTML-Elemente fehlen.");
-        // Hier könnte man den Spinner ausblenden, falls er angezeigt wurde und nichts geladen werden kann
+        if (!videoContainerExists) console.error(`FEHLER: Video-Container ('${videoContainerId}') fehlt!`);
+        if (!tagWrapperExists) console.error(`FEHLER: Filter-Tag-Wrapper ('${filterTagWrapperId}') fehlt!`);
         hideSpinner();
     }
 });

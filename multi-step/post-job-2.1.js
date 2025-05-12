@@ -1,7 +1,8 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
 // und das Senden an den Webflow CMS Worker.
-// AKTUELLE VERSION: Ignoriert leere Felder und sendet job-date-start nicht mehr.
+// AKTUELLE VERSION: Ignoriert leere Felder, sendet job-date-start nicht mehr,
+// behandelt Budget als "tba" bei Leere und mappt Nutzungsrechte.
 
 (function() {
     'use strict';
@@ -48,7 +49,7 @@
             'Diverse': '870da58473ebc5d7db4c78e7363ca417',
             'Couple': '8bab076ffc2e114b52620f965aa046fb',
             'Alle': 'ec933c35230bc628da6029deee4159e',
-            'Keine Angabe': 'd157525b18b53e62638884fd58368cfa8' // Korrigierte ID
+            'Keine Angabe': 'd157525b18b53e62638884fd58368cfa8'
         },
          'videoDurationOptional': { // Mapping für video-dauer
             '0 - 15 Sekunden': 'a58ac00b365993a9dbc6e7084c6fda10',
@@ -80,6 +81,14 @@
             'Ja': 'ac9e02ffc119b7bd0e05403e096f89b3', // ID aus Beispiel übernommen, Textwert Annahme
             'Nein': 'deine_id_hier_nein_untertitel'
             // Füge hier weitere Untertitel-Optionen hinzu
+        },
+        'durationOptional': { // Mapping für dauer-nutzungsrechte
+            '24 Monate': 'dd24b0de3f7a906d9619c8f56d9c2484',
+            'unbegrenzt': 'dcbb14e9f4c1ee9aaeeddd62b4d8b625',
+            '18 Monate': 'c97680a1c8a5214809b7885b00e7c1d8',
+            '12 Monate': 'e544d894fe78aaeaf83d8d5a35be5f3f',
+            '6 Monate': 'b8353db272656593b627e67fb4730bd6',
+            '3 Monate': '9dab07affd09299a345cf4f2322ece34'
         }
         // Füge hier weitere Mappings für Referenzfelder hinzu, falls nötig
     };
@@ -205,7 +214,7 @@
                 case 'projectName':           webflowSlug = 'name'; projectNameValue = field.value.trim(); break;
                 case 'jobSlug':               webflowSlug = 'slug'; break; // Optional: Falls ein explizites Slug-Feld existiert
                 case 'job-adress-optional':   webflowSlug = 'location'; break;
-                case 'budget':                webflowSlug = 'job-payment'; break;
+                case 'budget':                webflowSlug = 'job-payment'; break; // Spezialbehandlung für "tba" bei Leere
                 // case 'startDate':          webflowSlug = 'job-date-start'; break; // ENTFERNT
                 case 'jobOnline':             webflowSlug = 'job-date-end'; break; // jobOnline -> job-date-end
                 case 'contentDeadline':       webflowSlug = 'fertigstellung-content'; break; // Hinzugefügt
@@ -222,7 +231,7 @@
                 case 'imgCountOptional':      webflowSlug = 'anzahl-bilder-2'; break; // Hinzugefügt (Zahl)
                 case 'videoDurationOptional': webflowSlug = 'video-dauer'; break; // Referenzfeld
                 case 'reviewsOptional':       webflowSlug = 'anzahl-der-reviews'; break; // Hinzugefügt (Text)
-                case 'durationOptional':      webflowSlug = 'nutzungsrechte-dauer'; break; // Hinzugefügt (Text)
+                case 'durationOptional':      webflowSlug = 'dauer-nutzungsrechte'; break; // NEU: durationOptional -> dauer-nutzungsrechte (Referenzfeld)
                 case 'scriptOptional':        webflowSlug = 'script'; break; // Referenzfeld
                 case 'jobPostingChannel':     webflowSlug = 'job-posting'; break; // Hinzugefügt (Text)
                 case 'contentChannels':       webflowSlug = 'fur-welchen-kanale-wird-der-content-produziert'; break; // Hinzugefügt (Text)
@@ -306,7 +315,15 @@
                     }
                      // Wenn field.value.trim() === '', wird das Feld ebenfalls nicht gesendet.
 
-                } else if (field.type === 'number') { // Felder für Zahlen
+                } else if (fieldNameKey === 'budget') { // Spezialbehandlung für Budget
+                     const budgetValue = field.value.trim();
+                     if (budgetValue === '') {
+                         webflowPayload[webflowSlug] = 'tba'; // Sende "tba", wenn leer
+                     } else {
+                         webflowPayload[webflowSlug] = parseFloat(budgetValue); // Sende als Zahl, wenn nicht leer
+                     }
+
+                } else if (field.type === 'number') { // Felder für Zahlen (außer Budget)
                     const numVal = field.value.trim();
                     // Füge die Zahl nur hinzu, wenn sie nicht leer ist
                     if (numVal !== '') {

@@ -5,7 +5,8 @@ const API_BASE_URL = "https://api.webflow.com/v2/collections";
 const WORKER_BASE_URL = "https://bewerbungen.oliver-258.workers.dev/?url="; // Dein Worker-Endpunkt
 const VIDEO_COLLECTION_ID = "680b45a22b15fa4643ebdca9"; // Video Collection
 const CUSTOMER_COLLECTION_ID = "6448faf9c5a8a15f6cc05526"; // Kunden/Member Collection
-const ITEMS_PER_API_CHUNK = 12; // Anzahl der Items, die pro API-Aufruf geladen werden
+const INITIAL_ITEMS_TO_FETCH_FROM_API = 6; // NEU: Anzahl für den allerersten API-Aufruf
+const ITEMS_PER_API_CHUNK = 12; // Anzahl der Items, die pro nachfolgendem API-Aufruf geladen werden
 const VIDEOS_PER_LOAD_DISPLAY = 8; // Anzahl der Videos, die pro Klick auf "Mehr laden" angezeigt werden
 
 // Globale Variablen
@@ -303,6 +304,7 @@ async function handleLoadMore(event) {
         isLoadingFromAPI = true;
         showSpinner();
         updateLoadMoreButtonVisibility();
+        // Wichtig: Beim Nachladen vom Server den regulären ITEMS_PER_API_CHUNK verwenden
         const chunkData = await fetchVideoItemsChunk(currentAPIOffset, ITEMS_PER_API_CHUNK);
         if (chunkData && chunkData.items.length > 0) {
             allVideoItems = allVideoItems.concat(chunkData.items);
@@ -463,12 +465,17 @@ async function displayVideoCollection() {
     showSpinner();
 
     try {
-        const initialChunk = await fetchVideoItemsChunk(currentAPIOffset, ITEMS_PER_API_CHUNK);
+        // Verwende INITIAL_ITEMS_TO_FETCH_FROM_API für den ersten Chunk
+        const initialChunk = await fetchVideoItemsChunk(currentAPIOffset, INITIAL_ITEMS_TO_FETCH_FROM_API);
         if (initialChunk && initialChunk.items) {
             allVideoItems = initialChunk.items;
             currentAPIOffset += initialChunk.items.length;
-            totalVideosAvailableFromAPI = initialChunk.pagination?.total ?? (initialChunk.items.length < ITEMS_PER_API_CHUNK ? initialChunk.items.length : currentAPIOffset +1);
-            console.log(`📹 Erster Chunk: ${allVideoItems.length}. Gesamt API: ${totalVideosAvailableFromAPI}`);
+            // Anpassung der totalVideosAvailableFromAPI Logik für den Fall, dass pagination.total fehlt
+            totalVideosAvailableFromAPI = initialChunk.pagination?.total ??
+                                         (initialChunk.items.length < INITIAL_ITEMS_TO_FETCH_FROM_API ?
+                                          currentAPIOffset : // Wenn weniger als angefragt geladen wurde, ist das (vorerst) das Total
+                                          currentAPIOffset + 1); // Annahme: es gibt mind. noch eins, um "Mehr laden" zu ermöglichen
+            console.log(`📹 Erster Chunk: ${allVideoItems.length}. Gesamt API geschätzt/bekannt: ${totalVideosAvailableFromAPI}`);
             const initialCustIds = new Set();
             allVideoItems.forEach(item => {
                 const kunden = item?.fieldData?.kunden;
@@ -502,7 +509,6 @@ async function displayVideoCollection() {
         const resetBtn = document.getElementById(filterResetButtonId);
         if (resetBtn) { resetBtn.addEventListener('click', clearAllFilters); resetBtn.style.display = 'none';}
         const loadMoreBtn = document.getElementById(loadMoreButtonId);
-        // Event wird direkt an handleLoadMore übergeben
         if (loadMoreBtn) { loadMoreBtn.addEventListener('click', handleLoadMore); loadMoreBtn.style.display = 'none';}
         else { console.error(`❌ "Mehr laden"-Button mit ID '${loadMoreButtonId}' NICHT im DOM gefunden.`);}
 

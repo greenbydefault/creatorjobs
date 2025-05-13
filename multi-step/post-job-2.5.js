@@ -1,9 +1,8 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
 // und das Senden an den Webflow CMS Worker.
-// AKTUELLE VERSION: Sammelt alle bekannten Felder, ignoriert leere Felder (außer Budget),
-// sendet job-date-start nicht mehr, behandelt Budget als Zahl oder 0 bei Leere, mappt Nutzungsrechte,
-// fügt job-title hinzu und behandelt neue Checkbox-Gruppen.
+// AKTUELLE VERSION: Verbesserte Fehlerbehandlung mit kategorisiertem Popup,
+// interagiert mit benutzerdefiniertem HTML über Data-Attribute.
 
 (function() {
     'use strict';
@@ -19,6 +18,17 @@
     // (identisch zum Attribut im multistep_form_js für die Vorschau)
     const DATA_FIELD_ATTRIBUTE = 'data-preview-field';
     const CLASS_HIDE = 'hide'; // CSS-Klasse zum Ausblenden
+
+     // Support E-Mail Adresse
+    const SUPPORT_EMAIL = 'support@yourcompany.com'; // ERSETZE DIES DURCH DEINE EIGENE SUPPORT E-MAIL!
+
+    // Data-Attribute für die Popup-Elemente
+    const POPUP_WRAPPER_ATTR = '[data-error-target="popup-wrapper"]';
+    const POPUP_TITLE_ATTR = '[data-error-target="popup-title"]';
+    const POPUP_MESSAGE_ATTR = '[data-error-target="popup-message"]';
+    const CLOSE_POPUP_ATTR = '[data-error-target="close-popup"]';
+    const MAIL_ERROR_ATTR = '[data-error-target="mail-error"]';
+
 
     // --- Mapping für Referenzfelder (Textwert zu Webflow Item ID) ---
     // DIESES MAPPING MUSS GENAU MIT DEINEN WEBFLOW COLLECTION ITEMS ÜBEREINSTIMMEN!
@@ -101,52 +111,83 @@
     const findAll = (selector, element = document) => element.querySelectorAll(selector);
 
     /**
-     * Zeigt eine Statusmeldung für den Benutzer an.
+     * Zeigt eine Statusmeldung im benutzerdefinierten Popup an.
      * @param {string} message - Die anzuzeigende Nachricht.
      * @param {string} type - 'success', 'error', oder 'loading'.
-     * @param {HTMLElement} formElement - Das Formular-Element, um die Nachricht zu platzieren.
+     * @param {string} title - Der Titel des Popups.
+     * @param {string} [supportDetails=''] - Detaillierte Informationen für den Support (nur bei type 'error').
      */
-    function showStatusMessage(message, type, formElement) {
-        let messageElement = find('.form-submission-status', formElement);
-        if (!messageElement) {
-            messageElement = document.createElement('div');
-            messageElement.className = 'form-submission-status';
-            // Füge die Nachricht vor dem ersten Button-Container oder am Ende des Formulars ein
-            const buttonWrapper = find('.form-navigation', formElement) || formElement.lastElementChild;
-            if (buttonWrapper) {
-                formElement.insertBefore(messageElement, buttonWrapper);
-            } else {
-                formElement.appendChild(messageElement);
-            }
+    function showCustomPopup(message, type, title, supportDetails = '') {
+        const popup = find(POPUP_WRAPPER_ATTR);
+        const popupTitle = find(POPUP_TITLE_ATTR);
+        const popupMessage = find(POPUP_MESSAGE_ATTR);
+        const mailIconLink = find(MAIL_ERROR_ATTR); // Das Link-Element für das Mail-Icon
+
+        if (!popup || !popupTitle || !popupMessage || !mailIconLink) {
+            console.error("Popup-Elemente nicht gefunden! Bitte stelle sicher, dass die Data-Attribute korrekt gesetzt sind.");
+            // Fallback zur Konsolenausgabe, falls Popup-Elemente fehlen
+            console.log(`Status: ${type.toUpperCase()} - Titel: ${title} - Nachricht: ${message}`);
+            if (supportDetails) console.log('Support Details:', supportDetails);
+            return;
         }
 
-        messageElement.textContent = message;
-        messageElement.className = `form-submission-status status-${type}`;
+        // Setze Klassen für Styling (du musst CSS-Klassen wie .error-popup.error, .error-popup.success, .error-popup.loading definieren)
+        // Beispiel: popup.classList.remove('error', 'success', 'loading');
+        // popup.classList.add(type);
+        // Oder setze einfach eine Data-Attribut für den Typ, falls du CSS so gestaltest:
+        popup.setAttribute('data-popup-type', type);
 
-        // Grundlegendes Styling für die Nachricht
-        messageElement.style.display = 'block';
-        messageElement.style.padding = '10px 15px';
-        messageElement.style.marginTop = '15px';
-        messageElement.style.marginBottom = '15px';
-        messageElement.style.borderRadius = '5px';
-        messageElement.style.textAlign = 'center';
-        messageElement.style.border = '1px solid transparent';
 
-        // Spezifisches Styling basierend auf dem Typ
-        if (type === 'success') {
-            messageElement.style.backgroundColor = '#d4edda';
-            messageElement.style.color = '#155724';
-            messageElement.style.borderColor = '#c3e6cb';
-        } else if (type === 'error') {
-            messageElement.style.backgroundColor = '#f8d7da';
-            messageElement.style.color = '#721c24';
-            messageElement.style.borderColor = '#f5c6cb';
-        } else if (type === 'loading') {
-            messageElement.style.backgroundColor = '#e2e3e5';
-            messageElement.style.color = '#383d41';
-            messageElement.style.borderColor = '#d6d8db';
+        popupTitle.textContent = title;
+        popupMessage.textContent = message;
+
+        // Zeige/verstecke Mail-Icon basierend auf Typ
+        if (type === 'error') {
+            mailIconLink.style.display = 'inline-block'; // Oder wie du es anzeigen möchtest
+            // Setze den Mailto-Link mit Details
+            const subject = encodeURIComponent(`Fehlerbericht Formularübermittlung (${title})`);
+            const body = encodeURIComponent(`Es ist ein Fehler im Formular aufgetreten:\n\nNachricht für den Benutzer:\n${message}\n\nSupport Details:\n${supportDetails}\n\nZeitstempel: ${new Date().toISOString()}\nBrowser: ${navigator.userAgent}\nSeite: ${window.location.href}`);
+            mailIconLink.href = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+            mailIconLink.target = '_blank'; // Öffne in neuem Tab
+        } else {
+            mailIconLink.style.display = 'none'; // Oder wie du es verstecken möchtest
+            mailIconLink.href = '#'; // Setze href zurück
+        }
+
+        // Zeige das Popup an (du musst das Display-Styling in deinem CSS kontrollieren)
+        popup.style.display = 'flex'; // Oder 'block', je nach deinem Layout
+
+
+        // Optional: Popup nach einiger Zeit automatisch schließen (außer bei Fehler, damit Support kontaktiert werden kann)
+        if (type !== 'error') {
+            setTimeout(() => {
+                closeCustomPopup(); // Rufe die Schließen-Funktion auf
+            }, 5000); // 5 Sekunden
         }
     }
+
+     /**
+     * Schließt das benutzerdefinierte Popup.
+     */
+    function closeCustomPopup() {
+         const popup = find(POPUP_WRAPPER_ATTR);
+         if (popup) {
+             popup.style.display = 'none'; // Oder wie du es verstecken möchtest
+         }
+    }
+
+
+    // --- Event Listener für das Schließen des Popups ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const closeBtn = find(CLOSE_POPUP_ATTR);
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeCustomPopup);
+        }
+         // Der Event Listener für das Mail Icon wird nicht hier hinzugefügt,
+         // da der href direkt in showCustomPopup gesetzt wird.
+
+    });
+
 
     /**
      * Formatiert ein Datum in einen ISO-String (YYYY-MM-DDTHH:mm:ss.sssZ).
@@ -422,8 +463,9 @@
             submitButton.disabled = true; // Deaktiviere den Button
             submitButton.textContent = 'Wird gesendet...'; // Ändere den Text des Buttons
         }
-        // Zeige eine Lade-Nachricht an
-        showStatusMessage('Daten werden an Webflow übermittelt...', 'loading', form);
+        // Zeige eine Lade-Nachricht im Popup an
+        showCustomPopup('Daten werden an Webflow übermittelt...', 'loading', 'Übermittlung läuft');
+
 
         // Verwende Testdaten, falls provided, sonst sammle aus dem Formular
         const fieldDataForWebflow = testData ? testData : collectAndFormatWebflowData(form);
@@ -431,9 +473,9 @@
         // Prüfe, ob der Slug generiert wurde (falls erforderlich) und der Name vorhanden ist
         // Diese Prüfungen sind kritisch, da Name und Slug Pflichtfelder in Webflow sind
         if (!fieldDataForWebflow['slug']) {
-             const errorMessage = 'Fehler: Slug fehlt. Bitte stelle sicher, dass der Job-Titel ausgefüllt ist.';
+             const errorMessage = 'Fehler: Slug konnte nicht generiert werden. Bitte stelle sicher, dass der Job-Titel ausgefüllt ist.';
              console.error(errorMessage);
-             showStatusMessage(errorMessage, 'error', form);
+             showCustomPopup(errorMessage, 'error', 'Fehler: Fehlende Daten', `Frontend Fehler: Slug fehlt. Gesendete Daten: ${JSON.stringify(fieldDataForWebflow)}`);
              if (submitButton) {
                 submitButton.disabled = false;
                 submitButton.textContent = 'Absenden fehlgeschlagen';
@@ -443,7 +485,7 @@
          if (!fieldDataForWebflow['name']) {
              const errorMessage = 'Fehler: Job-Titel (name) fehlt.';
              console.error(errorMessage);
-             showStatusMessage(errorMessage, 'error', form);
+             showCustomPopup(errorMessage, 'error', 'Fehler: Fehlende Daten', `Frontend Fehler: Name fehlt. Gesendete Daten: ${JSON.stringify(fieldDataForWebflow)}`);
              if (submitButton) {
                 submitButton.disabled = false;
                 submitButton.textContent = 'Absenden fehlgeschlagen';
@@ -476,66 +518,91 @@
 
             const responseData = await response.json();
 
-            // Überprüfe, ob die Antwort erfolgreich war (Status-Code 2xx)
+            // --- Verbesserte Fehlerbehandlung ---
             if (!response.ok) {
-                // Logge die Fehlermeldung vom Worker
                 console.error('Fehler vom Webflow Worker:', response.status, responseData);
-                let errorMessage = `Fehler beim Erstellen des Jobs in Webflow (${response.status}).`;
-                // Füge Details aus der Worker-Antwort hinzu, falls vorhanden (Worker sollte jetzt spezifischere Fehler liefern)
-                if (responseData && (responseData.error || responseData.msg || responseData.message)) {
-                    errorMessage += ` Details: ${responseData.error || responseData.msg || responseData.message}`;
-                     if(responseData.problems && Array.isArray(responseData.problems)) {
-                         errorMessage += ` Probleme: ${responseData.problems.join(', ')}`;
-                    }
-                     if(responseData.details && Array.isArray(responseData.details)) {
-                        const detailMessages = responseData.details.map(d => {
-                            const path = (d.path && Array.isArray(d.path)) ? d.path.join('.') : 'unknown field';
-                            return ` Field '${path}' - ${d.message}`;
-                        });
-                        errorMessage += ` Details: ${detailMessages.join('; ')}`;
-                    } else if (responseData.details) {
-                        errorMessage += ` Details: ${JSON.stringify(responseData.details)}`;
+                let userMessage = `Es ist ein Fehler beim Erstellen des Jobs aufgetreten (${response.status}).`;
+                let supportDetails = `Status: ${response.status}.`;
+
+                if (responseData) {
+                    supportDetails += ` Worker Response: ${JSON.stringify(responseData)}`;
+
+                    if (response.status === 400) {
+                        userMessage = 'Fehler bei der Datenübermittlung. Einige Felder sind ungültig oder fehlen.';
+                        if (responseData.problems && Array.isArray(responseData.problems)) {
+                            userMessage += ' Probleme: ' + responseData.problems.map(p => p.message || p.path).join(', ');
+                        } else if (responseData.details && Array.isArray(responseData.details)) {
+                             userMessage += ' Details: ' + responseData.details.map(d => `Feld '${(d.path && Array.isArray(d.path) ? d.path.join('.') : 'unbekannt')}' - ${d.message}`).join('; ');
+                        } else if (responseData.message) {
+                             userMessage += ' Details: ' + responseData.message;
+                        }
+                         userMessage += ' Bitte überprüfe deine Eingaben und versuche es erneut.';
+
+                    } else if (response.status === 401) {
+                        userMessage = 'Authentifizierungsfehler. Bitte kontaktiere den Support.';
+                    } else if (response.status === 404) {
+                         userMessage = 'Ziel nicht gefunden. Bitte kontaktiere den Support.';
+                    } else if (response.status === 429) {
+                        userMessage = 'Zu viele Anfragen. Bitte versuche es später erneut.';
+                    } else if (response.status >= 500) {
+                        userMessage = 'Ein Problem auf dem Server ist aufgetreten. Bitte versuche es später erneut.';
+                         if (responseData.details) {
+                             supportDetails += ` Details: ${responseData.details}`;
+                         }
+                    } else if (responseData.error) {
+                         userMessage += ` Details: ${responseData.error}`;
+                    } else if (responseData.msg) {
+                         userMessage += ` Details: ${responseData.msg}`;
+                    } else if (responseData.message) {
+                         userMessage += ` Details: ${responseData.message}`;
                     }
                 }
-                // Wirf einen Fehler, der im catch-block behandelt wird
-                throw new Error(errorMessage);
+
+                console.error('Support Details:', supportDetails);
+                showCustomPopup(userMessage, 'error', 'Übermittlungsfehler', supportDetails);
+
+                // Wirf hier keinen Fehler mehr, da das Popup die Fehlermeldung anzeigt
+                // throw new Error(`Webflow API Error (${response.status}): ${supportDetails}`);
+
+            } else { // Erfolgreiche Antwort (Status-Code 2xx)
+
+                // Logge die erfolgreiche Antwort
+                console.log('Antwort vom Webflow Worker:', responseData);
+                // Extrahiere die Webflow Item ID aus der Antwort
+                const webflowItemId = responseData.id; // Webflow API gibt das Item-Objekt zurück, 'id' ist die Item-ID
+
+                if (!webflowItemId) {
+                    // Dieser Fall sollte jetzt seltener auftreten, da der Worker spezifischere Fehler zurückgeben sollte
+                    console.error('Webflow Item ID nicht in der Antwort des Workers gefunden.', responseData);
+                     showCustomPopup('Job erstellt, aber ID nicht erhalten. Bitte kontaktiere den Support.', 'success', 'Erfolg mit Hinweis'); // Zeige trotzdem Erfolg, aber mit Hinweis
+                    // throw new Error('Webflow Item ID nicht in der Antwort des Workers gefunden.'); // Werfen wir hier keinen Fehler mehr, um Erfolgsmeldung zu zeigen
+                } else {
+                     // Zeige eine Erfolgsmeldung an
+                    showCustomPopup('Job erfolgreich in Webflow erstellt! ID: ' + webflowItemId, 'success', 'Erfolgreich');
+                    // Hier könnte der Aufruf zum Airtable-Worker folgen, sobald Webflow erfolgreich war.
+                    // form.reset(); // Optional: Formular zurücksetzen nach Erfolg
+                }
             }
 
-            // Logge die erfolgreiche Antwort
-            console.log('Antwort vom Webflow Worker:', responseData);
-            // Extrahiere die Webflow Item ID aus der Antwort
-            const webflowItemId = responseData.id; // Webflow API gibt das Item-Objekt zurück, 'id' ist die Item-ID
-
-            if (!webflowItemId) {
-                // Fehler, wenn keine Item ID zurückgegeben wurde
-                throw new Error('Webflow Item ID nicht in der Antwort des Workers gefunden.');
-            }
-
-            // Zeige eine Erfolgsmeldung an
-            showStatusMessage('Job erfolgreich in Webflow erstellt! ID: ' + webflowItemId, 'success', form);
-            // Hier könnte der Aufruf zum Airtable-Worker folgen, sobald Webflow erfolgreich war.
-            // form.reset(); // Optional: Formular zurücksetzen nach Erfolg
-
-            if (submitButton) {
-                // submitButton.disabled = false; // Deaktiviert lassen nach Erfolg oder weiterleiten
-                submitButton.textContent = 'Erfolgreich gesendet!'; // Ändere den Button-Text
-            }
 
         } catch (error) {
-            // Behandle Fehler beim Senden oder Verarbeiten der Antwort
-            console.error('Fehler beim Absenden an Webflow:', error);
-            // Zeige eine Fehlermeldung an
-            showStatusMessage(`Fehler: ${error.message}. Bitte versuche es später erneut oder kontaktiere den Support.`, 'error', form);
-            if (submitButton) {
-                submitButton.disabled = false; // Aktiviere den Button wieder
-                submitButton.textContent = 'Absenden fehlgeschlagen'; // Ändere den Button-Text
-            }
+            // Behandelt Netzwerkfehler oder Fehler, die im Frontend-Skript selbst auftreten (z.B. ReferenceError)
+            console.error('Unerwarteter Fehler beim Absenden an Webflow:', error);
+            // Zeige eine allgemeine Fehlermeldung für den Benutzer
+            const userMessage = `Ein unerwarteter Fehler ist aufgetreten: ${error.message}. Bitte versuche es später erneut oder kontaktiere den Support.`;
+            const supportDetails = `Unerwarteter Frontend Fehler: ${error.message}. Stack: ${error.stack}.`;
+            showCustomPopup(userMessage, 'error', 'Unerwarteter Fehler', supportDetails);
         } finally {
              // Setze den Button-Zustand zurück, auch bei Erfolg oder Fehler
              if (submitButton && submitButton.textContent.includes('Wird gesendet')) {
-                 submitButton.disabled = false;
-                 submitButton.textContent = 'Absenden'; // Oder den ursprünglichen Text
+                 // Prüfe, ob der Text noch "Wird gesendet..." ist, um nicht erfolgreiche Texte zu überschreiben
+                 // Oder setze ihn immer zurück, wenn du möchtest, dass der Benutzer erneut versuchen kann
+                 // Beispiel: submitButton.textContent = 'Absenden';
              }
+             // Wenn der Button erfolgreich gesendet wurde, lassen wir den Text "Erfolgreich gesendet!" stehen.
+             // Wenn ein Fehler aufgetreten ist, hat der Catch-Block den Text bereits geändert.
+             // Daher ist hier kein allgemeiner Reset nötig, es sei denn, wir wollen immer den ursprünglichen Text wiederherstellen.
+             // Lassen wir es so, dass der Fehlertext oder Erfolgstext sichtbar bleibt.
         }
     }
 
@@ -585,6 +652,14 @@
         } else {
             console.warn(`Hauptformular mit ID "${MAIN_FORM_ID}" nicht gefunden. Der Submission Handler ist nicht aktiv.`);
         }
+
+         // Füge Event Listener für das Schließen des Popups hinzu
+         const closeBtn = find(CLOSE_POPUP_ATTR);
+         if (closeBtn) {
+             closeBtn.addEventListener('click', closeCustomPopup);
+         }
+         // Der Event Listener für das Mail Icon wird nicht hier hinzugefügt,
+         // da der href direkt in showCustomPopup gesetzt wird.
     });
 
 })();

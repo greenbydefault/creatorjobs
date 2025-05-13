@@ -1,7 +1,7 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
 // und das Senden an den Webflow CMS Worker.
-// AKTUELLE VERSION: Verbesserte Fehlerbehandlung mit kategorisiertem Popup,
+// AKTUELLE VERSION: Verbesserte Fehlerbehandlung und Erfolgsmeldungen mit kategorisiertem Popup,
 // interagiert mit benutzerdefiniertem HTML über Data-Attribute.
 
 (function() {
@@ -131,12 +131,8 @@
             return;
         }
 
-        // Setze Klassen für Styling (du musst CSS-Klassen wie .error-popup.error, .error-popup.success, .error-popup.loading definieren)
-        // Beispiel: popup.classList.remove('error', 'success', 'loading');
-        // popup.classList.add(type);
-        // Oder setze einfach eine Data-Attribut für den Typ, falls du CSS so gestaltest:
+        // Setze Data-Attribut für den Typ, falls du CSS so gestaltest:
         popup.setAttribute('data-popup-type', type);
-
 
         popupTitle.textContent = title;
         popupMessage.textContent = message;
@@ -571,16 +567,23 @@
                 // Extrahiere die Webflow Item ID aus der Antwort
                 const webflowItemId = responseData.id; // Webflow API gibt das Item-Objekt zurück, 'id' ist die Item-ID
 
-                if (!webflowItemId) {
+                let successMessage = 'Job erfolgreich erstellt!';
+                if (webflowItemId) {
+                    successMessage += ' ID: ' + webflowItemId;
+                     showCustomPopup(successMessage, 'success', 'Erfolgreich');
+                } else {
                     // Dieser Fall sollte jetzt seltener auftreten, da der Worker spezifischere Fehler zurückgeben sollte
                     console.error('Webflow Item ID nicht in der Antwort des Workers gefunden.', responseData);
-                     showCustomPopup('Job erstellt, aber ID nicht erhalten. Bitte kontaktiere den Support.', 'success', 'Erfolg mit Hinweis'); // Zeige trotzdem Erfolg, aber mit Hinweis
-                    // throw new Error('Webflow Item ID nicht in der Antwort des Workers gefunden.'); // Werfen wir hier keinen Fehler mehr, um Erfolgsmeldung zu zeigen
-                } else {
-                     // Zeige eine Erfolgsmeldung an
-                    showCustomPopup('Job erfolgreich in Webflow erstellt! ID: ' + webflowItemId, 'success', 'Erfolgreich');
-                    // Hier könnte der Aufruf zum Airtable-Worker folgen, sobald Webflow erfolgreich war.
-                    // form.reset(); // Optional: Formular zurücksetzen nach Erfolg
+                     showCustomPopup('Job erstellt, aber ID nicht erhalten. Bitte kontaktiere den Support, falls nötig.', 'success', 'Erfolg mit Hinweis'); // Zeige trotzdem Erfolg, aber mit Hinweis
+                }
+
+
+                // Hier könnte der Aufruf zum Airtable-Worker folgen, sobald Webflow erfolgreich war.
+                // form.reset(); // Optional: Formular zurücksetzen nach Erfolg
+
+                if (submitButton) {
+                    // submitButton.disabled = false; // Deaktiviert lassen nach Erfolg oder weiterleiten
+                    submitButton.textContent = 'Erfolgreich gesendet!'; // Ändere den Button-Text
                 }
             }
 

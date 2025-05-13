@@ -1,8 +1,8 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
-// und das Senden an den Webflow CMS Worker.
-// AKTUELLE VERSION: Verbesserte Fehlerbehandlung und Erfolgsmeldungen mit kategorisiertem Popup,
-// interagiert mit benutzerdefiniertem HTML über Data-Attribute.
+// und die Orchestrierung der Speicherung in Airtable und Webflow.
+// AKTUELLE VERSION: Speichert zuerst in Airtable, dann in Webflow, aktualisiert Airtable mit Webflow ID,
+// und löscht Airtable-Eintrag bei Webflow-Fehler.
 
 (function() {
     'use strict';
@@ -10,6 +10,9 @@
     // --- Konfiguration ---
     // URL des Webflow CMS Workers
     const WEBFLOW_CMS_POST_WORKER_URL = 'https://late-meadow-00bc.oliver-258.workers.dev/';
+    // URL des Airtable Workers
+    const AIRTABLE_WORKER_URL = 'https://airtable-job-post.oliver-258.workers.dev/'; // Airtable Worker URL
+
     // Die ID deines Haupt-Formular-Elements (das alle Schritte umschließt)
     // Dieses Attribut muss an deinem <form>-Tag im Webflow Designer gesetzt sein.
     const MAIN_FORM_ID = 'wf-form-post-job-form'; // Bitte anpassen, falls deine Form-ID anders lautet!
@@ -443,9 +446,43 @@
         return webflowPayload;
     }
 
+
+    /**
+     * Sendet eine Anfrage an den Airtable Worker, um einen Record zu löschen.
+     * @param {string} airtableRecordId - Die ID des zu löschenden Airtable Records.
+     * @param {string} [reason='Unknown error'] - Grund für die Löschung.
+     */
+    async function deleteAirtableRecord(airtableRecordId, reason = 'Unknown error') {
+         if (!airtableRecordId) {
+             console.warn('Keine Airtable Record ID zum Löschen vorhanden.');
+             return;
+         }
+         console.log(`Versuche Airtable Record ${airtableRecordId} zu löschen wegen: ${reason}`);
+
+         try {
+             const response = await fetch(AIRTABLE_WORKER_URL + '/delete', { // Annahme: Airtable Worker hat einen /delete Endpunkt
+                 method: 'POST', // Oder DELETE, je nachdem wie dein Worker konfiguriert ist
+                 headers: {
+                     'Content-Type': 'application/json',
+                 },
+                 body: JSON.stringify({ recordId: airtableRecordId, reason: reason })
+             });
+
+             if (response.ok) {
+                 console.log(`Airtable Record ${airtableRecordId} erfolgreich gelöscht.`);
+             } else {
+                 const responseData = await response.json();
+                 console.error(`Fehler beim Löschen von Airtable Record ${airtableRecordId}:`, response.status, responseData);
+             }
+         } catch (error) {
+             console.error(`Unerwarteter Fehler beim Aufruf des Airtable Lösch-Endpunkts für ${airtableRecordId}:`, error);
+         }
+    }
+
+
     /**
      * Hauptfunktion zum Absenden des Formulars.
-     * Wird aufgerufen, wenn das Formular abgeschickt wird, oder simuliert durch testSubmissionWithData.
+     * Orchestriert die Speicherung in Airtable und Webflow.
      * @param {Event} event - Das Submit-Event (oder simuliertes Event).
      * @param {Object} [testData] - Optionale Testdaten, wenn die Funktion direkt aufgerufen wird.
      */
@@ -460,28 +497,28 @@
             submitButton.textContent = 'Wird gesendet...'; // Ändere den Text des Buttons
         }
         // Zeige eine Lade-Nachricht im Popup an
-        showCustomPopup('Daten werden an Webflow übermittelt...', 'loading', 'Übermittlung läuft');
+        showCustomPopup('Daten werden gesammelt...', 'loading', 'Vorbereitung');
 
 
         // Verwende Testdaten, falls provided, sonst sammle aus dem Formular
-        const fieldDataForWebflow = testData ? testData : collectAndFormatWebflowData(form);
+        const fieldDataForWorkers = testData ? testData : collectAndFormatWebflowData(form);
 
         // Prüfe, ob der Slug generiert wurde (falls erforderlich) und der Name vorhanden ist
         // Diese Prüfungen sind kritisch, da Name und Slug Pflichtfelder in Webflow sind
-        if (!fieldDataForWebflow['slug']) {
+        if (!fieldDataForWorkers['slug']) {
              const errorMessage = 'Fehler: Slug konnte nicht generiert werden. Bitte stelle sicher, dass der Job-Titel ausgefüllt ist.';
              console.error(errorMessage);
-             showCustomPopup(errorMessage, 'error', 'Fehler: Fehlende Daten', `Frontend Fehler: Slug fehlt. Gesendete Daten: ${JSON.stringify(fieldDataForWebflow)}`);
+             showCustomPopup(errorMessage, 'error', 'Fehler: Fehlende Daten', `Frontend Fehler: Slug fehlt. Gesammelte Daten: ${JSON.stringify(fieldDataForWorkers)}`);
              if (submitButton) {
                 submitButton.disabled = false;
                 submitButton.textContent = 'Absenden fehlgeschlagen';
             }
             return; // Beende die Funktion, wenn der Slug fehlt
         }
-         if (!fieldDataForWebflow['name']) {
+         if (!fieldDataForWorkers['name']) {
              const errorMessage = 'Fehler: Job-Titel (name) fehlt.';
              console.error(errorMessage);
-             showCustomPopup(errorMessage, 'error', 'Fehler: Fehlende Daten', `Frontend Fehler: Name fehlt. Gesendete Daten: ${JSON.stringify(fieldDataForWebflow)}`);
+             showCustomPopup(errorMessage, 'error', 'Fehler: Fehlende Daten', `Frontend Fehler: Name fehlt. Gesammelte Daten: ${JSON.stringify(fieldDataForWorkers)}`);
              if (submitButton) {
                 submitButton.disabled = false;
                 submitButton.textContent = 'Absenden fehlgeschlagen';
@@ -489,112 +526,205 @@
             return; // Beende die Funktion, wenn der Name fehlt
         }
 
-        // HINWEIS ZUR FEHLERSUCHE BEI DATUMSFELDERN:
-        // Wenn beim Senden von Datumsfeldern Fehler auftreten, überprüfe bitte die Cloudflare Worker Logs.
-        // Der Worker sollte die spezifische Fehlermeldung von der Webflow API protokollieren,
-        // die genau angibt, welches Datumsproblem vorliegt (z. B. falsches Format, fehlendes Pflichtfeld).
-        console.log("Prüfe Worker-Logs für spezifische Webflow API Fehler, besonders bei Datumsfeldern.");
 
+        let airtableRecordId = null; // Variable, um die Airtable Record ID zu speichern
 
         try {
-            // Logge die gesendeten Daten zur Fehlersuche
-            console.log('Sende an Webflow Worker:', WEBFLOW_CMS_POST_WORKER_URL, JSON.stringify({ fields: fieldDataForWebflow }));
-            // Sende die Daten an den Worker per POST-Request
-            const response = await fetch(WEBFLOW_CMS_POST_WORKER_URL, {
+            // --- Schritt 1: Daten an Airtable Worker senden (Erstellen) ---
+            showCustomPopup('Daten werden in Airtable gespeichert...', 'loading', 'Airtable Speicherung');
+            console.log('Sende an Airtable Worker (Create):', AIRTABLE_WORKER_URL, JSON.stringify({ jobDetails: fieldDataForWorkers })); // Sende die Job Details
+             const airtableCreateResponse = await fetch(AIRTABLE_WORKER_URL, {
+                 method: 'POST', // Annahme: POST erstellt Records
+                 headers: {
+                     'Content-Type': 'application/json',
+                 },
+                 body: JSON.stringify({
+                     jobDetails: fieldDataForWorkers // Sende die gesammelten Job Details
+                 })
+             });
+
+             const airtableCreateResponseData = await airtableCreateResponse.json();
+
+            // --- Fehlerbehandlung für Airtable Create Worker ---
+             if (!airtableCreateResponse.ok) {
+                 console.error('Fehler vom Airtable Worker (Create):', airtableCreateResponse.status, airtableCreateResponseData);
+                 let userMessage = `Es ist ein Fehler beim Speichern des Jobs in Airtable aufgetreten (${airtableCreateResponse.status}).`;
+                 let supportDetails = `Airtable Create Worker Status: ${airtableCreateResponse.status}.`;
+                 if (airtableCreateResponseData) supportDetails += ` Worker Response: ${JSON.stringify(airtableCreateResponseData)}`;
+                 console.error('Support Details (Airtable Create):', supportDetails);
+                 showCustomPopup(userMessage, 'error', 'Airtable Fehler', supportDetails);
+                 return; // Beende die Funktion nach Airtable Create Fehler
+             }
+
+            // Airtable Erstellung war erfolgreich
+             console.log('Antwort vom Airtable Worker (Create):', airtableCreateResponseData);
+             airtableRecordId = airtableCreateResponseData.records && airtableCreateResponseData.records.length > 0 ? airtableCreateResponseData.records[0].id : null;
+
+             if (!airtableRecordId) {
+                 console.error('Airtable Record ID nicht in der Antwort des Create Workers gefunden.', airtableCreateResponseData);
+                 const userMessage = 'Job in Airtable erstellt, aber Record ID nicht erhalten. Prozess abgebrochen.';
+                 const supportDetails = `Airtable Create Worker Erfolg, aber keine Record ID. Response: ${JSON.stringify(airtableCreateResponseData)}`;
+                 showCustomPopup(userMessage, 'error', 'Airtable Fehler', supportDetails);
+                 // Hier löschen wir den Airtable Record NICHT, da wir die ID nicht haben.
+                 return; // Beende die Funktion
+             }
+
+             console.log('Airtable Record erfolgreich erstellt mit ID:', airtableRecordId);
+             showCustomPopup('Job erfolgreich in Airtable gespeichert. Erstelle Item in Webflow...', 'loading', 'Webflow Erstellung');
+
+
+            // --- Schritt 2: Daten an Webflow Worker senden (Erstellen) ---
+            // Füge die Airtable Record ID zur Payload für Webflow hinzu (wenn Webflow ein Feld dafür hat)
+            // Annahme: Webflow hat ein Feld 'airtable-record-id'
+            fieldDataForWorkers['airtable-record-id'] = airtableRecordId; // Füge die Airtable ID hinzu
+
+            console.log('Sende an Webflow Worker (Create):', WEBFLOW_CMS_POST_WORKER_URL, JSON.stringify({ fields: fieldDataForWorkers }));
+            const webflowCreateResponse = await fetch(WEBFLOW_CMS_POST_WORKER_URL, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json', // Wichtig: Datenformat ist JSON
+                    'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    // Der Worker erwartet ein Objekt mit einem 'fields'-Schlüssel
-                    fields: fieldDataForWebflow
-                    // Die Collection ID ist im Worker fest codiert: '6448faf9c5a8a17455c05525'
+                    fields: fieldDataForWorkers
                 })
             });
 
-            const responseData = await response.json();
+            const webflowCreateResponseData = await webflowCreateResponse.json();
 
-            // --- Verbesserte Fehlerbehandlung ---
-            if (!response.ok) {
-                console.error('Fehler vom Webflow Worker:', response.status, responseData);
-                let userMessage = `Es ist ein Fehler beim Erstellen des Jobs aufgetreten (${response.status}).`;
-                let supportDetails = `Status: ${response.status}.`;
+            // --- Fehlerbehandlung für Webflow Create Worker ---
+            if (!webflowCreateResponse.ok) {
+                 console.error('Fehler vom Webflow Worker (Create):', webflowCreateResponse.status, webflowCreateResponseData);
+                 let userMessage = `Es ist ein Fehler beim Erstellen des Jobs in Webflow aufgetreten (${webflowCreateResponse.status}).`;
+                 let supportDetails = `Webflow Create Worker Status: ${webflowCreateResponse.status}.`;
 
-                if (responseData) {
-                    supportDetails += ` Worker Response: ${JSON.stringify(responseData)}`;
+                 if (webflowCreateResponseData) {
+                     supportDetails += ` Worker Response: ${JSON.stringify(webflowCreateResponseData)}`;
 
-                    if (response.status === 400) {
-                        userMessage = 'Fehler bei der Datenübermittlung. Einige Felder sind ungültig oder fehlen.';
-                        if (responseData.problems && Array.isArray(responseData.problems)) {
-                            userMessage += ' Probleme: ' + responseData.problems.map(p => p.message || p.path).join(', ');
-                        } else if (responseData.details && Array.isArray(responseData.details)) {
-                             userMessage += ' Details: ' + responseData.details.map(d => `Feld '${(d.path && Array.isArray(d.path) ? d.path.join('.') : 'unbekannt')}' - ${d.message}`).join('; ');
-                        } else if (responseData.message) {
-                             userMessage += ' Details: ' + responseData.message;
-                        }
-                         userMessage += ' Bitte überprüfe deine Eingaben und versuche es erneut.';
-
-                    } else if (response.status === 401) {
-                        userMessage = 'Authentifizierungsfehler. Bitte kontaktiere den Support.';
-                    } else if (response.status === 404) {
-                         userMessage = 'Ziel nicht gefunden. Bitte kontaktiere den Support.';
-                    } else if (response.status === 429) {
-                        userMessage = 'Zu viele Anfragen. Bitte versuche es später erneut.';
-                    } else if (response.status >= 500) {
-                        userMessage = 'Ein Problem auf dem Server ist aufgetreten. Bitte versuche es später erneut.';
-                         if (responseData.details) {
-                             supportDetails += ` Details: ${responseData.details}`;
+                     if (webflowCreateResponse.status === 400) {
+                         userMessage = 'Fehler bei der Datenübermittlung an Webflow. Einige Felder sind ungültig oder fehlen.';
+                         if (webflowCreateResponseData.problems && Array.isArray(webflowCreateResponseData.problems)) {
+                             userMessage += ' Probleme: ' + webflowCreateResponseData.problems.map(p => p.message || p.path).join(', ');
+                         } else if (webflowCreateResponseData.details && Array.isArray(webflowCreateResponseData.details)) {
+                              userMessage += ' Details: ' + webflowCreateResponseData.details.map(d => `Feld '${(d.path && Array.isArray(d.path) ? d.path.join('.') : 'unbekannt')}' - ${d.message}`).join('; ');
+                         } else if (webflowCreateResponseData.message) {
+                              userMessage += ' Details: ' + webflowCreateResponseData.message;
                          }
-                    } else if (responseData.error) {
-                         userMessage += ` Details: ${responseData.error}`;
-                    } else if (responseData.msg) {
-                         userMessage += ` Details: ${responseData.msg}`;
-                    } else if (responseData.message) {
-                         userMessage += ` Details: ${responseData.message}`;
-                    }
-                }
+                          userMessage += ' Bitte überprüfe deine Eingaben und versuche es erneut.';
 
-                console.error('Support Details:', supportDetails);
-                showCustomPopup(userMessage, 'error', 'Übermittlungsfehler', supportDetails);
+                     } else if (webflowCreateResponse.status === 401) {
+                         userMessage = 'Authentifizierungsfehler bei Webflow. Bitte kontaktiere den Support.';
+                     } else if (webflowCreateResponse.status === 404) {
+                          userMessage = 'Webflow Ziel nicht gefunden. Bitte kontaktiere den Support.';
+                     } else if (webflowCreateResponse.status === 429) {
+                         userMessage = 'Zu viele Anfragen an Webflow. Bitte versuche es später erneut.';
+                     } else if (webflowCreateResponse.status >= 500) {
+                         userMessage = 'Ein Problem auf dem Webflow Server ist aufgetreten. Bitte versuche es später erneut.';
+                          if (webflowCreateResponseData.details) {
+                              supportDetails += ` Details: ${webflowCreateResponseData.details}`;
+                          }
+                     } else if (webflowCreateResponseData.error) {
+                          userMessage += ` Details: ${webflowCreateResponseData.error}`;
+                     } else if (webflowCreateResponseData.msg) {
+                          userMessage += ` Details: ${webflowCreateResponseData.msg}`;
+                     } else if (webflowCreateResponseData.message) {
+                          userMessage += ` Details: ${webflowCreateResponseData.message}`;
+                     }
+                 }
 
-                // Wirf hier keinen Fehler mehr, da das Popup die Fehlermeldung anzeigt
-                // throw new Error(`Webflow API Error (${response.status}): ${supportDetails}`);
+                 console.error('Support Details (Webflow Create):', supportDetails);
+                 showCustomPopup(userMessage, 'error', 'Webflow Fehler', supportDetails);
 
-            } else { // Erfolgreiche Antwort (Status-Code 2xx)
+                 // Wenn Webflow-Erstellung fehlschlägt, lösche den Airtable Record
+                 deleteAirtableRecord(airtableRecordId, 'Webflow creation failed');
 
-                // Logge die erfolgreiche Antwort
-                console.log('Antwort vom Webflow Worker:', responseData);
-                // Extrahiere die Webflow Item ID aus der Antwort
-                const webflowItemId = responseData.id; // Webflow API gibt das Item-Objekt zurück, 'id' ist die Item-ID
-
-                let successMessage = 'Job erfolgreich erstellt!';
-                if (webflowItemId) {
-                    successMessage += ' ID: ' + webflowItemId;
-                     showCustomPopup(successMessage, 'success', 'Erfolgreich');
-                } else {
-                    // Dieser Fall sollte jetzt seltener auftreten, da der Worker spezifischere Fehler zurückgeben sollte
-                    console.error('Webflow Item ID nicht in der Antwort des Workers gefunden.', responseData);
-                     showCustomPopup('Job erstellt, aber ID nicht erhalten. Bitte kontaktiere den Support, falls nötig.', 'success', 'Erfolg mit Hinweis'); // Zeige trotzdem Erfolg, aber mit Hinweis
-                }
-
-
-                // Hier könnte der Aufruf zum Airtable-Worker folgen, sobald Webflow erfolgreich war.
-                // form.reset(); // Optional: Formular zurücksetzen nach Erfolg
-
-                if (submitButton) {
-                    // submitButton.disabled = false; // Deaktiviert lassen nach Erfolg oder weiterleiten
-                    submitButton.textContent = 'Erfolgreich gesendet!'; // Ändere den Button-Text
-                }
+                 return; // Beende die Funktion nach Webflow Create Fehler
             }
+
+            // Webflow Erstellung war erfolgreich
+            console.log('Antwort vom Webflow Worker (Create):', webflowCreateResponseData);
+            const webflowItemId = webflowCreateResponseData.id; // Webflow API gibt das Item-Objekt zurück, 'id' ist die Item-ID
+
+            if (!webflowItemId) {
+                 console.error('Webflow Item ID nicht in der Antwort des Create Workers gefunden.', webflowCreateResponseData);
+                 const userMessage = 'Job in Webflow erstellt, aber ID nicht erhalten. Airtable-Aktualisierung nicht möglich.';
+                 const supportDetails = `Webflow Create Worker Erfolg, aber keine Item ID. Response: ${JSON.stringify(webflowCreateResponseData)}`;
+                 showCustomPopup(userMessage, 'success', 'Webflow Erfolg mit Hinweis');
+                 // Wir können hier nicht mit dem Airtable Update fortfahren, wenn die Webflow ID fehlt
+                 return; // Beende die Funktion
+            }
+
+            console.log('Webflow Item erfolgreich erstellt mit ID:', webflowItemId);
+            showCustomPopup('Job erfolgreich in Webflow erstellt. Aktualisiere Airtable mit Webflow ID...', 'loading', 'Airtable Aktualisierung');
+
+
+            // --- Schritt 3: Airtable Worker aufrufen (Aktualisieren) ---
+            // Sende Airtable Record ID und Webflow Item ID an den Airtable Worker
+            // Annahme: Airtable Worker hat einen /update Endpunkt, der { recordId: '...', webflowId: '...' } erwartet
+            console.log('Sende an Airtable Worker (Update):', AIRTABLE_WORKER_URL + '/update', JSON.stringify({ recordId: airtableRecordId, webflowId: webflowItemId }));
+             const airtableUpdateResponse = await fetch(AIRTABLE_WORKER_URL + '/update', {
+                 method: 'POST', // Oder PUT/PATCH, je nachdem wie dein Worker konfiguriert ist
+                 headers: {
+                     'Content-Type': 'application/json',
+                 },
+                 body: JSON.stringify({
+                     recordId: airtableRecordId, // Die Airtable Record ID
+                     webflowId: webflowItemId // Die Webflow Item ID
+                 })
+             });
+
+             const airtableUpdateResponseData = await airtableUpdateResponse.json();
+
+            // --- Fehlerbehandlung für Airtable Update Worker ---
+             if (!airtableUpdateResponse.ok) {
+                 console.error('Fehler vom Airtable Worker (Update):', airtableUpdateResponse.status, airtableUpdateResponseData);
+                 let userMessage = `Es ist ein Fehler beim Aktualisieren des Jobs in Airtable aufgetreten (${airtableUpdateResponse.status}).`;
+                 let supportDetails = `Airtable Update Worker Status: ${airtableUpdateResponse.status}.`;
+
+                 if (airtableUpdateResponseData) {
+                      supportDetails += ` Worker Response: ${JSON.stringify(airtableUpdateResponseData)}`;
+                      if (airtableUpdateResponseData.error && airtableUpdateResponseData.error.message) {
+                          userMessage += ' Details: ' + airtableUpdateResponseData.error.message;
+                      } else if (airtableUpdateResponseData.message) {
+                          userMessage += ' Details: ' + airtableUpdateResponseData.message;
+                      }
+                 }
+
+                 console.error('Support Details (Airtable Update):', supportDetails);
+                 showCustomPopup(userMessage, 'error', 'Airtable Fehler', supportDetails);
+
+                 // Wenn Airtable-Aktualisierung fehlschlägt, lösche den Airtable Record (optional, je nach gewünschter Logik)
+                 // Hier löschen wir den Airtable Record, da die Verknüpfung zu Webflow nicht hergestellt werden konnte.
+                 deleteAirtableRecord(airtableRecordId, 'Airtable update with Webflow ID failed');
+
+                 return; // Beende die Funktion nach Airtable Update Fehler
+             }
+
+            // Airtable Aktualisierung war erfolgreich
+             console.log('Antwort vom Airtable Worker (Update):', airtableUpdateResponseData);
+             console.log(`Airtable Record ${airtableRecordId} erfolgreich mit Webflow Item ID ${webflowItemId} aktualisiert.`);
+             showCustomPopup('Job erfolgreich in Webflow und Airtable gespeichert!', 'success', 'Erfolgreich');
+
+
+             if (submitButton) {
+                 submitButton.textContent = 'Erfolgreich gesendet!'; // Ändere den Button-Text
+             }
 
 
         } catch (error) {
             // Behandelt Netzwerkfehler oder Fehler, die im Frontend-Skript selbst auftreten (z.B. ReferenceError)
-            console.error('Unerwarteter Fehler beim Absenden an Webflow:', error);
+            // Diese Fehler könnten vor oder während der Fetch-Aufrufe auftreten.
+            console.error('Unerwarteter Fehler beim Absenden:', error);
             // Zeige eine allgemeine Fehlermeldung für den Benutzer
             const userMessage = `Ein unerwarteter Fehler ist aufgetreten: ${error.message}. Bitte versuche es später erneut oder kontaktiere den Support.`;
             const supportDetails = `Unerwarteter Frontend Fehler: ${error.message}. Stack: ${error.stack}.`;
             showCustomPopup(userMessage, 'error', 'Unerwarteter Fehler', supportDetails);
+
+            // Wenn ein unerwarteter Fehler auftritt, nachdem Airtable erstellt wurde,
+            // versuchen wir, den Airtable Record zu löschen.
+            if (airtableRecordId) {
+                 deleteAirtableRecord(airtableRecordId, 'Unexpected frontend error after Airtable creation');
+            }
+
         } finally {
              // Setze den Button-Zustand zurück, auch bei Erfolg oder Fehler
              if (submitButton && submitButton.textContent.includes('Wird gesendet')) {
@@ -616,7 +746,7 @@
      */
     function testSubmissionWithData(testData) {
         console.log('Starte Test-Übermittlung mit Daten:', testData);
-        const mainForm = document.getElementById(MAIN_FORM_ID);
+        const mainForm = find(`#${MAIN_FORM_ID}`); // Finde das Formular
         if (!mainForm) {
             console.error(`Hauptformular mit ID "${MAIN_FORM_ID}" nicht gefunden. Test kann nicht durchgeführt werden.`);
             return;
@@ -643,7 +773,7 @@
      */
     document.addEventListener('DOMContentLoaded', () => {
         // Finde das Hauptformular anhand seiner ID
-        const mainForm = document.getElementById(MAIN_FORM_ID);
+        const mainForm = find(`#${MAIN_FORM_ID}`); // Finde das Formular
         if (mainForm) {
             // Füge den Event-Listener für das 'submit'-Event hinzu
             // Stelle sicher, dass der Event-Listener nur einmal hinzugefügt wird.

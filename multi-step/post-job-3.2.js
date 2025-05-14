@@ -1,7 +1,7 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
 // und die Orchestrierung der Speicherung in Airtable und Webflow.
-// AKTUELLE VERSION: Verbessertes Mapping für Webflow-Felder.
+// AKTUELLE VERSION: WEBFLOW_FIELD_SLUG_MAPPINGS stark an das erfolgreiche Webflow-Beispiel angepasst.
 
 (function() {
     'use strict';
@@ -24,120 +24,146 @@
     // 1. Die Schlüssel hier (z.B. 'creatorAge') müssen den Werten von DATA_FIELD_ATTRIBUTE in deinem Formular entsprechen.
     // 2. Die Werte der inneren Objekte (z.B. '4bf57b0debb3abf9dc11de2ddd50eac7') müssen die ECHTEN Webflow Item IDs sein.
     // 3. Alle 'deine_id_hier_...' sind PLATZHALTER und MÜSSEN ersetzt werden.
+    // 4. Überprüfe, ob die Formularwerte (linke Seite der inneren Objekte) exakt mit den Werten übereinstimmen, die aus dem Formular kommen.
     const REFERENCE_MAPPINGS = {
-        'creatorFollower': { // data-preview-field="creatorFollower"
+        'creatorFollower': { // data-preview-field="creatorFollower" -> Webflow slug "creator-follower"
             '0 - 2.500': '3d869451e837ddf527fc54d0fb477ab4',
             '2.500 - 5.000': 'e2d86c9f8febf4fecd674f01beb05bf5',
-            // ... (restliche Optionen wie zuvor)
+            '5.000 - 10.000': '27420dd46db02b53abb3a50d4859df84',
+            '10.000 - 25.000': 'd61d9c5625c03e86d87ef854aa702265',
+            '25.000 - 50.000': '78672a41f18d13b57c84e24ae8f9edb9',
+            '50.00 - 100.000': '4ed1bbe4e792cfae473584da597445a8', // Beachte "50.00" vs "50.000"
+            '100.000 - 250.000': 'afb6fa102d3defaad347edae3fc8452a',
+            '250.000 - 500.000': '6a1072f2e2a7058fba98f58fb45ab7fe',
+            '500.000 - 1.000.000': '18efe7a8d618cf2c2344329254f5ee0b',
             '1.000.000+': '205b22b080e9f3bc2bb6869d12cbe298',
-            'Keine Angabe': '5e33b6550adcb786fafd43d22c63de1'
+            'Keine Angabe': '5e33b6550adcb786fafd43d422c63de1' // Dieser Wert ist im Beispiel für creator-follower
         },
-        'creatorAge': { // data-preview-field="creatorAge"
+        'creatorAge': { // data-preview-field="creatorAge" -> Webflow slug "creator-alter"
             '18-24': '4bf57b0debb3abf9dc11de2ddd50eac7',
             '25-35': '07fae9d66db85489dc77dd3594fba822',
             '36-50': 'a0745052dec634f59654ab2578d5db06',
             '50+': '44b95760d7ac99ecf71b2cbf8f610fdd',
-            'Keine Angabe': '5660c84f647c97a3aee75cce5da8493b'
+            'Keine Angabe': '5660c84f647c97a3aee75cce5da8493b' // Dieser Wert ist im Beispiel für creator-alter
         },
-        'genderOptional': { // data-preview-field="genderOptional"
+        'genderOptional': { // data-preview-field="genderOptional" -> Webflow slug "creator-geschlecht"
             'Männlich': '6c84301c22d5e827d05308a33d6ef510',
             'Weiblich': 'bcb50387552afc123405ae7fa7640d0d',
             'Diverse': '870da58473ebc5d7db4c78e7363ca417',
             'Couple': '8bab076ffc2e114b52620f965aa046fb',
             'Alle': 'ec933c35230bc628da6029deee4159e',
-            'Keine Angabe': 'd157525b18b53e62638884fd58368cfa8'
+            'Keine Angabe': 'd157525b18b53e62638884fd58368cfa8' // Dieser Wert ist im Beispiel für creator-geschlecht
         },
-        'videoDurationOptional': { // data-preview-field="videoDurationOptional"
+        'videoDurationOptional': { // data-preview-field="videoDurationOptional" -> Webflow slug "video-dauer"
             '0 - 15 Sekunden': 'a58ac00b365993a9dbc6e7084c6fda10',
             '15 - 30 Sekunden': '49914418e6b0fc02e4eb742f46658400',
-            // ... (restliche Optionen wie zuvor)
+            '30 - 45 Sekunden': '6ef12194838992fb1584150b97d246f3', // Dieser Wert ist im Beispiel für video-dauer
+            '45 - 60 Sekunden': '37b2d32959e6be1bfaa5a60427229be3',
             '60 - 90 Sekunden': '070c836b61cdb5d3bf49900ea9d11d1f'
         },
-        'scriptOptional': { // data-preview-field="scriptOptional"
+        'scriptOptional': { // data-preview-field="scriptOptional" -> Webflow slug "script"
             'Brand': '3b95cafa5a06a54e025d38ba71b7b475',
-            'Creator': 'f907b4b8d30d0b55cc831eb054094dad'
+            'Creator': 'f907b4b8d30d0b55cc831eb054094dad' // Dieser Wert ist im Beispiel für script
         },
-        'hookCount': { // data-preview-field="hookCount"
-            '1': 'b776e9ef4e9ab8b165019c1a2a04e8a',
+        'hookCount': { // data-preview-field="hookCount" -> Webflow slug "anzahl-der-hooks"
+            '1': 'b776e9ef4e9ab8b165019c1a2a04e8a9', // ID aus Beispiel
             '2': '1667c831d9cba5adc9416401031796f3',
             '3': '355ef3ceb930ddbdd28458265b0a4cf0',
             '4': 'be2c319b5dccd012016df2e33408c39'
         },
-        'videoFormat': {  // data-preview-field="videoFormat" - BITTE PLATZHALTER ERSETZEN!
-            '16:9': 'deine_id_hier_16_9',
-            '4:5': 'deine_id_hier_4_5',
-            '9:16': 'deine_id_hier_9_16'
+        'videoFormat': {  // data-preview-field="videoFormat" -> Webflow slug "format"
+            '16:9': 'deine_id_hier_16_9', // Beispiel hat '44346d8910fb2fbca05bedebde78aad3' für format
+            '4:5': 'deine_id_hier_4_5',   // Du musst den Text finden, der zu dieser ID gehört
+            '9:16': 'deine_id_hier_9_16',
+            // Beispiel: 'Dein Format Text': '44346d8910fb2fbca05bedebde78aad3',
         },
-        'industryCategory': { // data-preview-field="industryCategory" (für Multi-Select) - BITTE PLATZHALTER ERSETZEN!
-            'Beauty': 'deine_id_hier_beauty_industrie',
-            // Füge hier weitere Industrie-Kategorien hinzu: 'Text im Formular': 'Webflow_Item_ID_fuer_Industrie'
-        },
-        'subtitelOptional': { // data-preview-field="subtitelOptional" (vorher subtitlesOptional)
-            'Ja': '587b210d6015c519f05e0aeea6abf1fa',
+        'subtitelOptional': { // data-preview-field="subtitelOptional" -> Webflow slug "untertitel"
+            'Ja': '587b210d6015c519f05e0aeea6abf1fa', // Dieser Wert ist im Beispiel für untertitel
             'Nein': 'ac9e02ffc119b7bd0e05403e096f89b3'
         },
-        'durationOptional': { // data-preview-field="durationOptional"
+        'durationOptional': { // data-preview-field="durationOptional" -> Webflow slug "nutzungsrechte-dauer"
             '24 Monate': 'dd24b0de3f7a906d9619c8f56d9c2484',
             'unbegrenzt': 'dcbb14e9f4c1ee9aaeeddd62b4d8b625',
-            // ... (restliche Optionen wie zuvor)
-            '3 Monate': '9dab07affd09299a345cf4f2322ece34'
+            '18 Monate': 'c97680a1c8a5214809b7885b00e7c1d8',
+            '12 Monate': 'e544d894fe78aaeaf83d8d5a35be5f3f',
+            '6 Monate': 'b8353db272656593b627e67fb4730bd6',
+            '3 Monate': '9dab07affd09299a345cf4f2322ece34' // Beispiel hat "3 Monate" als Text. Wenn dies ein Ref/Option Feld ist, braucht es eine ID.
+                                                       // Wenn es Plain Text ist, entferne es aus REFERENCE_MAPPINGS.
         },
-        'creatorCategorie': { // data-preview-field="creatorCategorie" - Annahme: Referenz oder Option
-            'UGC Creator': 'deine_id_hier_ugc_creator_kategorie',
-            'Influencer': 'deine_id_hier_influencer_kategorie',
-            // ... weitere Kategorien
-        },
-        // Wenn creatorLang und creatorLand Referenzfelder sind, füge sie hier hinzu:
-        // 'creatorLang': { 'Deutsch': 'webflow_id_fuer_deutsch', 'Englisch': 'webflow_id_fuer_englisch', ... },
-        // 'creatorLand': { 'Deutschland': 'webflow_id_fuer_de', 'Österreich': 'webflow_id_fuer_at', ... }
+        // Felder, die im Beispiel als Text erscheinen, aber Referenz/Option sein KÖNNTEN:
+        // Wenn sie Referenzfelder sind, füge hier Mappings hinzu:
+        // 'creatorCategorie': { 'UGC Creator': 'webflow_id_ugc_creator', ... },
+        // 'industryCategory': { 'Technology': 'webflow_id_technology', ... },
+        // 'creatorLand': { 'Deutschland': 'webflow_id_deutschland', ... },
+        // 'creatorLang': { 'Deutsch': 'webflow_id_deutsch', ... },
     };
 
     // --- Zuordnung von formData-Schlüsseln zu Webflow Feld-Slugs ---
-    // Dies ist SEHR WICHTIG. Die Schlüssel hier sind die `data-preview-field` Werte.
-    // Die Werte sind die exakten Feld-Slugs in deiner Webflow Collection.
+    // Die WERTE hier müssen EXAKT den Feld-Slugs aus deinem Webflow Beispiel `fieldData` entsprechen!
     const WEBFLOW_FIELD_SLUG_MAPPINGS = {
-        'projectName': 'project-name', // Beispiel: data-preview-field="projectName" -> Webflow Slug "project-name"
-        'job-title': 'job-title-slug',   // Wenn du ein separates Feld für den Jobtitel neben 'name' hast
-        'budget': 'budget',
-        'startDate': 'start-date',
-        'endDate': 'end-date',
-        'jobOnline': 'job-online-deadline', // Bewerbungsfrist
-        'creatorCount': 'creator-count', // Kann eine Zahl sein oder muss gemappt werden, wenn Referenz/Option
-        'creatorCategorie': 'creator-kategorie', // Wird über REFERENCE_MAPPINGS gehandhabt, wenn dort definiert
-        'aufgabe': 'job-beschreibung-aufgabe',
-        'steckbrief': 'job-beschreibung-steckbrief',
-        'creatorLang': 'sprachen', // Für Multi-Referenz oder Multi-Option
-        'creatorLand': 'laender',  // Für Multi-Referenz oder Multi-Option
-        'job-adress-optional': 'job-adresse',
-        'videoCountOptional': 'anzahl-videos',
-        'imgCountOptional': 'anzahl-bilder',
-        'videoDurationOptional': 'video-laenge', // Wird über REFERENCE_MAPPINGS gehandhabt
-        'reviewsOptional': 'anzahl-reviews',
-        'durationOptional': 'nutzungsdauer-rechte', // Wird über REFERENCE_MAPPINGS gehandhabt
-        'scriptOptional': 'script-verantwortung', // Wird über REFERENCE_MAPPINGS gehandhabt
-        'jobImageUpload': 'job-image', // Webflow Bildfeld erwartet spezielle Struktur! { "fileId": "...", "url": "..." } oder nur URL wenn Plain Text
-        'industryCategory': 'industrie-kategorie', // Wird über REFERENCE_MAPPINGS gehandhabt (Multi)
-        'creatorAge': 'gesuchtes-alter', // Wird über REFERENCE_MAPPINGS gehandhabt
-        'videoFormat': 'video-format',   // Wird über REFERENCE_MAPPINGS gehandhabt
-        'hookCount': 'anzahl-hooks',     // Wird über REFERENCE_MAPPINGS gehandhabt
-        'subtitelOptional': 'untertitel-erforderlich', // Wird über REFERENCE_MAPPINGS gehandhabt
-        'barterDealToggle': 'barter-deal', // Switch-Feld
-        'plusJobToggle': 'plus-job',       // Switch-Feld
-        'nutzungOptional': 'nutzungszwecke', // Multi-Referenz oder Textfeld, das ein Array von Strings als kommaseparierten String erwartet?
-        'channels': 'kanaele',               // dito
-        'previewText': 'preview-text',
-        'userName': 'ansprechpartner-name', // Oder was auch immer das Memberstack Feld repräsentiert
-        'webflowId': 'memberstack-webflow-id', // (von Memberstack)
-        'memberEmail': 'ansprechpartner-email',
-        'memberstackId': 'memberstack-id',
-        // Spezifische Felder, die nicht direkt aus dem Formular kommen, aber für Webflow benötigt werden:
-        'airtable-record-id': 'airtable-record-id', // Slug für das Feld, das die Airtable ID speichert
-        'admin-test': 'admin-freigabe'          // Slug für das Admin-Test Switch-Feld
+        // `name` und `slug` werden direkt im Code gesetzt.
+        'job-title': 'job-title', // Aus Webflow Beispiel (identisch zu 'name')
+        'projectName': 'name', // `projectName` aus Formular wird zu Webflow `name` (Haupttitel)
+                               // Wenn 'job-title' aus Formular auch existiert und anders sein kann,
+                               // dann braucht es ein eigenes Mapping, z.B. 'form-job-title-key': 'job-title' (Webflow Slug)
+
+        'jobOnline': 'job-date-end',          // Formular `jobOnline` -> Webflow `job-date-end`
+        'budget': 'job-payment',             // Formular `budget` -> Webflow `job-payment`
+        'creatorCount': 'anzahl-gesuchte-creator',// Formular `creatorCount` -> Webflow `anzahl-gesuchte-creator`
+        'videoCountOptional': 'anzahl-videos-2',  // Formular `videoCountOptional` -> Webflow `anzahl-videos-2`
+        'imgCountOptional': 'anzahl-bilder-2',    // Formular `imgCountOptional` -> Webflow `anzahl-bilder-2`
+        'aufgabe': 'deine-aufgaben',           // Formular `aufgabe` -> Webflow `deine-aufgaben`
+        'steckbrief': 'job-beschreibung',      // Formular `steckbrief` -> Webflow `job-beschreibung`
+        'job-adress-optional': 'job-adresse',  // Annahme, dass `job-adresse` der Slug ist (nicht im Bsp.)
+        'previewText': 'previewtext',          // Formular `previewText` -> Webflow `previewtext`
+        'userName': 'brand-name',              // Formular `userName` (Memberstack) -> Webflow `brand-name`
+        'memberEmail': 'contact-mail',         // Formular `memberEmail` (Memberstack) -> Webflow `contact-mail`
+        'webflowId': 'webflow-member-id',      // Formular `webflowId` (Memberstack) -> Webflow `webflow-member-id`
+        'memberstackId': 'ms-member-id',       // Formular `memberstackId` (Memberstack) -> Webflow `ms-member-id`
+        'jobImageUpload': 'job-image',         // Formular `jobImageUpload` -> Webflow `job-image`
+
+        // Felder, die über REFERENCE_MAPPINGS oder direkt als Text/Optionswert gehen (Slugs aus Webflow Beispiel)
+        'creatorFollower': 'creator-follower',
+        'creatorAge': 'creator-alter',
+        'genderOptional': 'creator-geschlecht',
+        'videoDurationOptional': 'video-dauer',
+        'scriptOptional': 'script',
+        'hookCount': 'anzahl-der-hooks',
+        'videoFormat': 'format',
+        'subtitelOptional': 'untertitel',
+        'durationOptional': 'nutzungsrechte-dauer', // Beachte: Beispiel hat Text "3 Monate", kein ID-Mapping!
+                                                    // Wenn es ein Textfeld ist, ist das ok. Wenn Ref/Option, braucht es ID.
+
+        'creatorCategorie': 'art-des-contents',   // Formular `creatorCategorie` -> Webflow `art-des-contents`
+        'industryCategory': 'industrie-kategorie',// Formular `industryCategory` -> Webflow `industrie-kategorie`
+        'creatorLand': 'land',                    // Formular `creatorLand` -> Webflow `land`
+        'creatorLang': 'sprache',                 // Formular `creatorLang` -> Webflow `sprache`
+
+        // Boolean Felder (Switch-Felder)
+        'barterDealToggle': 'barter-deal',
+        'plusJobToggle': 'plus-job',
+        'admin-test': 'admin-test', // Dieser Slug ist direkt im Webflow Beispiel
+
+        // Datumsfelder aus deinem Formular, die spezifischen Webflow-Slugs zugeordnet werden müssen
+        'startDate': 'job-start-datum', // Annahme, dass dies der Slug ist (nicht explizit im Bsp. `fieldData` für *diesen* Job)
+                                        // Das Beispiel hat `job-scriptdeadline` und `fertigstellung-content`
+        'endDate': 'job-end-datum',     // Annahme
+        // Wenn dein Formular Felder für job-scriptdeadline und fertigstellung-content hat:
+        // 'formKeyForScriptdeadline': 'job-scriptdeadline',
+        // 'formKeyForContentFertig': 'fertigstellung-content',
+
+
+        // Felder, die ggf. nicht direkt aus dem Formular kommen oder speziell behandelt werden
+        // 'airtable-record-id': 'airtable-record-id', // Das Beispiel hat keinen solchen Slug, Airtable ID ist im 'slug' Feld.
+                                                      // Wenn du kein Feld 'airtable-record-id' in Webflow hast, entferne diese Zeile.
+
+        // Felder, die im Beispiel sind, aber nicht im aktuellen Formular-Mapping (ggf. hinzufügen, wenn nötig):
+        // 'is-featured': 'is-featured', // Wenn du ein Formularfeld dafür hast
+        // 'nutzungszwecke': 'nutzungszwecke', // Für `nutzungOptional` aus Formular, wenn der Slug so ist
+        // 'kanaele': 'kanaele'                // Für `channels` aus Formular, wenn der Slug so ist
     };
 
 
-    // --- Hilfsfunktionen (showCustomPopup, closeCustomPopup, formatToISODate, slugify, find, findAll) ---
-    // ... (Diese Funktionen bleiben wie in der vorherigen Version)
     const find = (selector, element = document) => element.querySelector(selector);
     const findAll = (selector, element = document) => element.querySelectorAll(selector);
 
@@ -169,7 +195,7 @@
         }
         popup.style.display = 'flex';
         if (type !== 'error') {
-            setTimeout(closeCustomPopup, 7000); // Länger bei Erfolg
+            setTimeout(closeCustomPopup, 7000);
         }
     }
 
@@ -189,7 +215,6 @@
 
     function formatToISODate(dateString) {
         if (!dateString) return null;
-        // Prüfe, ob es bereits ein ISO-Datum mit Zeit ist
         if (/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z/.test(dateString)) {
             return dateString;
         }
@@ -198,25 +223,20 @@
         if (deParts) {
             dateObj = new Date(Date.UTC(parseInt(deParts[3]), parseInt(deParts[2]) - 1, parseInt(deParts[1])));
         } else {
-            // Versuche YYYY-MM-DD oder andere von Date.parse unterstützte Formate
-            // Wichtig: Date.parse kann lokale Zeitzone interpretieren, Date.UTC verwenden für Konsistenz
             const parts = dateString.split('-');
-            if (parts.length === 3) { // YYYY-MM-DD
+            if (parts.length === 3) {
                  dateObj = new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
             } else {
-                dateObj = new Date(dateString); // Fallback, könnte lokale Zeitzone verwenden
+                dateObj = new Date(dateString);
             }
         }
         if (isNaN(dateObj.getTime())) {
             console.warn('Ungültiges Datumsformat für ISO-Konvertierung:', dateString);
             return null;
         }
-        return dateObj.toISOString(); // Gibt immer UTC zurück
+        return dateObj.toISOString();
     }
 
-
-    // --- Datensammlung (collectAndFormatFormData) ---
-    // ... (Diese Funktion bleibt weitgehend wie zuvor, sammelt Rohdaten)
     function collectAndFormatFormData(formElement) {
         const formData = {};
         const fields = findAll(`[${DATA_FIELD_ATTRIBUTE}]`, formElement);
@@ -236,36 +256,37 @@
                     projectNameValue = field.value.trim();
                     formData[fieldNameKey] = projectNameValue;
                     break;
-                case 'jobSlug':
+                case 'jobSlug': // Ignored
                     break;
-                case 'creatorLand':
-                    if (field.checked) creatorLandValues.push(field.value.trim());
+                case 'creatorLand': // Assuming single radio button or select for land
+                    if (field.checked || field.tagName === 'SELECT') { // Handle radio and select
+                        value = field.value.trim();
+                        if (value) creatorLandValues.push(value); // Store as array for consistency, even if single
+                    }
                     break;
-                case 'creatorLang':
+                case 'creatorLang': // Checkbox group
                     if (field.checked) creatorLangValues.push(field.value.trim());
                     break;
-                case 'nutzungOptional':
+                case 'nutzungOptional': // Checkbox group
                     if (field.checked) nutzungOptionalValues.push(field.value.trim());
                     break;
-                case 'channels':
+                case 'channels': // Checkbox group
                     if (field.checked) channelsValues.push(field.value.trim());
                     break;
                 default:
                     if (field.type === 'checkbox') {
-                        value = field.checked; // Boolean für einzelne Checkboxen (Toggles)
-                        formData[fieldNameKey] = value;
+                        formData[fieldNameKey] = field.checked;
                     } else if (field.type === 'radio') {
                         if (field.checked) {
                            formData[fieldNameKey] = field.value.trim();
                         }
                     } else if (field.tagName === 'SELECT') {
-                        value = field.options[field.selectedIndex]?.value || field.value;
+                        value = field.options[field.selectedIndex]?.value.trim();
                         if (value !== undefined && value !== null && value !== '') formData[fieldNameKey] = value;
                     } else if (field.type === 'number') {
                         const numVal = field.value.trim();
                         if (numVal !== '') formData[fieldNameKey] = parseFloat(numVal);
-                        // else formData[fieldNameKey] = null; // oder 0, je nach Anforderung
-                    } else {
+                    } else { // Text, textarea, date, etc.
                         value = field.value.trim();
                         if (value !== '') formData[fieldNameKey] = value;
                     }
@@ -273,36 +294,41 @@
         });
 
         if (creatorLangValues.length > 0) formData['creatorLang'] = creatorLangValues;
-        if (creatorLandValues.length > 0) formData['creatorLand'] = creatorLandValues; // In der Regel nur ein Land, wenn Radiobuttons
+        // If creatorLand is single select/radio, it might not be an array after collection. Adjust if needed.
+        // For Webflow Multi-Reference, an array of IDs is needed. For Option, an array of strings.
+        if (creatorLandValues.length > 0) formData['creatorLand'] = creatorLandValues;
+
+
         if (nutzungOptionalValues.length > 0) formData['nutzungOptional'] = nutzungOptionalValues;
         if (channelsValues.length > 0) formData['channels'] = channelsValues;
 
         const jobOnlineField = find(`[${DATA_FIELD_ATTRIBUTE}="jobOnline"]`);
         if (jobOnlineField) {
             const jobOnlineValue = jobOnlineField.value.trim();
-            let isoDate;
-            if (jobOnlineValue === '') {
-                const today = new Date();
-                today.setUTCDate(today.getUTCDate() + 3); // Add 3 days in UTC
-                today.setUTCHours(0, 0, 0, 0);       // Set to midnight UTC
-                isoDate = today.toISOString();
+            if (jobOnlineValue) { // Nur formatieren, wenn ein Wert vorhanden ist
+                const isoDate = formatToISODate(jobOnlineValue);
+                if (isoDate) formData['jobOnline'] = isoDate;
             } else {
-                isoDate = formatToISODate(jobOnlineValue);
+                 // Optional: Standardwert setzen, wenn leer, wie zuvor
+                const today = new Date();
+                today.setUTCDate(today.getUTCDate() + 3);
+                today.setUTCHours(0, 0, 0, 0);
+                formData['jobOnline'] = today.toISOString();
+                console.log("jobOnline war leer, setze Standardwert:", formData['jobOnline']);
             }
-            if (isoDate) formData['jobOnline'] = isoDate;
         }
+
 
         const budgetField = find(`[${DATA_FIELD_ATTRIBUTE}="budget"]`);
         if (budgetField) {
             const budgetValue = budgetField.value.trim();
             formData['budget'] = budgetValue === '' ? 0 : parseFloat(budgetValue);
         } else {
-            formData['budget'] = 0; // Default budget to 0 if field not found or empty
+            formData['budget'] = 0;
         }
 
-
         if (projectNameValue) {
-            formData['job-title'] = projectNameValue;
+            formData['job-title'] = projectNameValue; // Dies wird für Webflow 'name' verwendet
         }
 
         const memberstackFields = findAll('[data-ms-member][data-preview-field]');
@@ -316,9 +342,6 @@
         return formData;
     }
 
-
-    // --- Airtable Löschfunktion (deleteAirtableRecord) ---
-    // ... (Diese Funktion bleibt wie zuvor)
     async function deleteAirtableRecord(airtableRecordId, reason = 'Unknown error') {
         if (!airtableRecordId) {
             console.warn('Keine Airtable Record ID zum Löschen vorhanden.');
@@ -334,7 +357,7 @@
             if (response.ok) {
                 console.log(`Airtable Record ${airtableRecordId} erfolgreich gelöscht.`);
             } else {
-                const responseData = await response.json().catch(() => ({})); // Handle empty/invalid JSON
+                const responseData = await response.json().catch(() => ({}));
                 console.error(`Fehler beim Löschen von Airtable Record ${airtableRecordId}:`, response.status, responseData);
             }
         } catch (error) {
@@ -342,16 +365,14 @@
         }
     }
 
-
     async function handleFormSubmit(event, testData = null) {
         event.preventDefault();
         const form = find(`#${MAIN_FORM_ID}`);
         const submitButton = form ? form.querySelector('button[type="submit"], input[type="submit"]') : null;
 
-
         if (submitButton) {
             submitButton.disabled = true;
-            submitButton.value = 'Wird gesendet...'; // Für input type="submit"
+            submitButton.value = 'Wird gesendet...';
             if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Wird gesendet...';
         }
         showCustomPopup('Daten werden gesammelt...', 'loading', 'Vorbereitung');
@@ -360,7 +381,6 @@
 
         if (!rawFormData['projectName'] && !rawFormData['job-title']) {
             const errorMessage = 'Fehler: Job-Titel (projectName) fehlt.';
-            console.error(errorMessage);
             showCustomPopup(errorMessage, 'error', 'Fehler: Fehlende Daten', `Frontend Fehler: projectName oder job-title fehlt. Gesammelte Daten: ${JSON.stringify(rawFormData)}`);
             if (submitButton) {
                 submitButton.disabled = false;
@@ -374,8 +394,6 @@
         let webflowItemId = null;
 
         try {
-            // --- Schritt 1: Daten an Airtable Worker senden (Erstellen) ---
-            // Airtable ist flexibler, wir senden die rawFormData (nachdem sie von collectAndFormatFormData aufbereitet wurde)
             showCustomPopup('Daten werden in Airtable gespeichert...', 'loading', 'Airtable Speicherung');
             console.log('Sende an Airtable Worker (Create):', AIRTABLE_WORKER_URL, JSON.stringify({ jobDetails: rawFormData }));
             const airtableCreateResponse = await fetch(AIRTABLE_WORKER_URL, {
@@ -399,7 +417,6 @@
             airtableRecordId = airtableCreateResponseData.records && airtableCreateResponseData.records.length > 0 ? airtableCreateResponseData.records[0].id : null;
 
             if (!airtableRecordId) {
-                console.error('Airtable Record ID nicht in der Antwort des Create Workers gefunden.', airtableCreateResponseData);
                 showCustomPopup('Job in Airtable erstellt, aber Record ID nicht erhalten. Prozess abgebrochen.', 'error', 'Airtable Fehler', `Airtable Create Worker Erfolg, aber keine Record ID. Response: ${JSON.stringify(airtableCreateResponseData)}`);
                 if (submitButton) { submitButton.disabled = false; submitButton.value = 'Erneut versuchen'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Erneut versuchen';}
                 return;
@@ -407,79 +424,59 @@
             console.log('Airtable Record erfolgreich erstellt mit ID:', airtableRecordId);
             showCustomPopup('Job erfolgreich in Airtable gespeichert. Erstelle Item in Webflow...', 'loading', 'Webflow Erstellung');
 
-
-            // --- Schritt 2: Daten für Webflow aufbereiten und senden ---
             const webflowFieldData = {};
-
-            // Standardfelder Name und Slug
             webflowFieldData['name'] = rawFormData['job-title'] || rawFormData['projectName'] || 'Unbenannter Job';
             webflowFieldData['slug'] = airtableRecordId;
 
-            // Iteriere durch die WEBFLOW_FIELD_SLUG_MAPPINGS, um die Payload für Webflow zu erstellen
             for (const formDataKey in WEBFLOW_FIELD_SLUG_MAPPINGS) {
                 const webflowSlug = WEBFLOW_FIELD_SLUG_MAPPINGS[formDataKey];
                 let formValue = rawFormData[formDataKey];
 
-                if (formValue === undefined || formValue === null || formValue === '') {
-                    // Überspringe leere oder nicht definierte Werte, außer Booleans
-                    if (typeof formValue === 'boolean') {
+                if (formValue === undefined || formValue === null || (typeof formValue === 'string' && formValue.trim() === '')) {
+                    if (typeof formValue === 'boolean') { // Booleans immer senden
                          webflowFieldData[webflowSlug] = formValue;
+                    } else if (webflowSlug === 'job-payment' && formValue !== 0) { // Budget kann 0 sein
+                        // explizit 0 setzen, wenn leer, wurde in collectAndFormatFormData gemacht
+                        webflowFieldData[webflowSlug] = rawFormData['budget']; // Nimm den Wert, der schon da ist (0 oder Zahl)
                     }
                     continue;
                 }
 
-                // A. Referenz-Mapping anwenden (für Single-Select und Multi-Select Referenzen/Optionen)
                 if (REFERENCE_MAPPINGS[formDataKey]) {
-                    if (Array.isArray(formValue)) { // Multi-Select
+                    if (Array.isArray(formValue)) {
                         const mappedIds = formValue
                             .map(itemText => REFERENCE_MAPPINGS[formDataKey][itemText])
-                            .filter(id => id); // Entferne undefined, falls ein Text nicht gemappt werden konnte
-                        if (mappedIds.length > 0) {
-                            webflowFieldData[webflowSlug] = mappedIds;
-                        } else {
-                             console.warn(`Keine gültigen Webflow IDs für Multi-Select Feld '${formDataKey}' gefunden. Formularwerte: ${formValue.join(', ')}`);
-                        }
-                    } else { // Single-Select
+                            .filter(id => id);
+                        if (mappedIds.length > 0) webflowFieldData[webflowSlug] = mappedIds;
+                        else console.warn(`Keine gültigen Webflow IDs für Multi-Select '${formDataKey}' (Slug: ${webflowSlug}). Werte: ${formValue.join(', ')}`);
+                    } else {
                         const mappedId = REFERENCE_MAPPINGS[formDataKey][formValue];
-                        if (mappedId) {
-                            webflowFieldData[webflowSlug] = mappedId;
-                        } else {
-                             console.warn(`Keine gültige Webflow ID für Single-Select Feld '${formDataKey}' gefunden. Formularwert: ${formValue}`);
-                        }
+                        if (mappedId) webflowFieldData[webflowSlug] = mappedId;
+                        else console.warn(`Keine gültige Webflow ID für Single-Select '${formDataKey}' (Slug: ${webflowSlug}). Wert: ${formValue}`);
                     }
-                }
-                // B. Spezielle Behandlung für Felder, die nicht in REFERENCE_MAPPINGS sind, aber Arrays sein könnten
-                else if ( (formDataKey === 'creatorLang' || formDataKey === 'creatorLand' || formDataKey === 'nutzungOptional' || formDataKey === 'channels') && Array.isArray(formValue) ) {
-                     // Annahme: Diese sind Multi-Option Felder in Webflow, die ein Array von Strings erwarten
-                     // ODER sie hätten in REFERENCE_MAPPINGS sein sollen, wenn sie Multi-Referenz sind.
-                    webflowFieldData[webflowSlug] = formValue;
-                }
-                // C. Datumsfelder
-                else if (['startDate', 'endDate', 'jobOnline'].includes(formDataKey)) {
-                    const isoDate = formatToISODate(formValue);
+                } else if ( (formDataKey === 'creatorLang' || formDataKey === 'creatorLand' || formDataKey === 'nutzungOptional' || formDataKey === 'channels') && Array.isArray(formValue) ) {
+                    // Wenn keine explizite ID-Map vorhanden ist, aber es ein Array ist (z.B. für Multi-Option Textfelder)
+                    if (formValue.length > 0) webflowFieldData[webflowSlug] = formValue;
+                } else if (['startDate', 'endDate', 'jobOnline'].includes(formDataKey)) {
+                    const isoDate = formatToISODate(formValue); // formatToISODate behandelt bereits leere Strings
                     if (isoDate) webflowFieldData[webflowSlug] = isoDate;
-                }
-                // D. Boolean-Felder (Toggles)
-                else if (typeof formValue === 'boolean') {
+                } else if (typeof formValue === 'boolean') {
                     webflowFieldData[webflowSlug] = formValue;
-                }
-                // E. Zahlenfelder
-                else if (formDataKey === 'budget' || formDataKey === 'creatorCount' || formDataKey === 'videoCountOptional' || formDataKey === 'imgCountOptional') {
-                    const num = parseFloat(formValue);
-                    if (!isNaN(num)) webflowFieldData[webflowSlug] = num;
-                }
-                // F. Alle anderen Felder als Text übernehmen (wenn der Slug definiert ist)
-                else if (webflowSlug) {
+                } else if (typeof formValue === 'number') {
+                     webflowFieldData[webflowSlug] = formValue;
+                } else if (webflowSlug) { // Alle anderen als String
                     webflowFieldData[webflowSlug] = String(formValue);
                 }
             }
+            // Spezifische Felder, die nicht aus dem Mapping kommen (außer Name/Slug)
+            if (WEBFLOW_FIELD_SLUG_MAPPINGS['admin-test']) { // Sicherstellen, dass der Slug existiert
+                 webflowFieldData[WEBFLOW_FIELD_SLUG_MAPPINGS['admin-test']] = false; // Aus Beispiel, war false
+            }
+            // Das Feld für die Airtable ID (wenn es existiert und nicht 'slug' ist)
+            // if (WEBFLOW_FIELD_SLUG_MAPPINGS['airtable-record-id']) {
+            //    webflowFieldData[WEBFLOW_FIELD_SLUG_MAPPINGS['airtable-record-id']] = airtableRecordId;
+            // }
 
-            // Füge spezifische Felder hinzu, die nicht direkt aus dem Formular-Mapping kommen
-            webflowFieldData[WEBFLOW_FIELD_SLUG_MAPPINGS['airtable-record-id'] || 'airtable-record-id'] = airtableRecordId;
-            webflowFieldData[WEBFLOW_FIELD_SLUG_MAPPINGS['admin-test'] || 'admin-test'] = true; // Oder wie auch immer der Slug für dein Admin-Test-Feld lautet
-
-            // Entferne Felder, die nicht an Webflow gesendet werden sollen (z.B. wenn sie nur für Airtable waren)
-            // delete webflowFieldData['someAirtableOnlyField'];
 
             console.log('Sende an Webflow Worker (Create) - Aufbereitete Daten:', WEBFLOW_CMS_POST_WORKER_URL, JSON.stringify({ fields: webflowFieldData }));
             const webflowCreateResponse = await fetch(WEBFLOW_CMS_POST_WORKER_URL, {
@@ -487,21 +484,19 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ fields: webflowFieldData })
             });
-            const webflowCreateResponseData = await webflowCreateResponse.json().catch(() => ({})); // Handle empty/invalid JSON
+            const webflowCreateResponseData = await webflowCreateResponse.json().catch(() => ({}));
 
             if (!webflowCreateResponse.ok) {
                 console.error('Fehler vom Webflow Worker (Create):', webflowCreateResponse.status, JSON.stringify(webflowCreateResponseData));
                 let userMessage = `Es ist ein Fehler beim Erstellen des Jobs in Webflow aufgetreten (${webflowCreateResponse.status}).`;
-                let errorDetails = webflowCreateResponseData.error?.message || webflowCreateResponseData.message || (typeof webflowCreateResponseData.details === 'string' ? webflowCreateResponseData.details : '');
-
-                if (webflowCreateResponseData.details && Array.isArray(webflowCreateResponseData.details)) {
-                    errorDetails = webflowCreateResponseData.details.map(d => `Feld '${d.path && d.path.length ? d.path.join('.') : (d.field || 'unbekannt')}' - ${d.message || d.reason}`).join('; ');
-                } else if (typeof webflowCreateResponseData.error === 'object' && webflowCreateResponseData.error.details) {
-                     errorDetails = JSON.stringify(webflowCreateResponseData.error.details);
+                let errorDetails = webflowCreateResponseData.message || (webflowCreateResponseData.error && webflowCreateResponseData.error.message) || '';
+                 if (webflowCreateResponseData.details && Array.isArray(webflowCreateResponseData.details)) {
+                    errorDetails = webflowCreateResponseData.details.map(d => `Feld '${d.param || (d.path && d.path.join('.')) || d.field || 'unbekannt'}': ${d.description || d.message || d.reason}`).join('; ');
+                } else if (webflowCreateResponseData.problems && Array.isArray(webflowCreateResponseData.problems)) {
+                    errorDetails = webflowCreateResponseData.problems.join('; ');
                 }
 
                 if (errorDetails) userMessage += ` Details: ${errorDetails}`;
-
                 const supportDetails = `Webflow Create Worker Status: ${webflowCreateResponse.status}. Worker Response: ${JSON.stringify(webflowCreateResponseData)}. Payload Sent: ${JSON.stringify({ fields: webflowFieldData })}`;
                 showCustomPopup(userMessage, 'error', 'Webflow Fehler', supportDetails);
                 deleteAirtableRecord(airtableRecordId, `Webflow creation failed: ${userMessage}`);
@@ -510,10 +505,9 @@
             }
 
             console.log('Antwort vom Webflow Worker (Create):', webflowCreateResponseData);
-            webflowItemId = webflowCreateResponseData.id || (webflowCreateResponseData.item && webflowCreateResponseData.item.id); // Webflow V2 API gibt {id: ...} zurück
+            webflowItemId = webflowCreateResponseData.id || (webflowCreateResponseData.item && webflowCreateResponseData.item.id);
 
             if (!webflowItemId) {
-                console.error('Webflow Item ID nicht in der Antwort des Create Workers gefunden.', webflowCreateResponseData);
                 showCustomPopup('Job in Webflow erstellt, aber ID nicht erhalten. Airtable-Aktualisierung nicht möglich.', 'success', 'Webflow Erfolg mit Hinweis', `Webflow Create Worker Erfolg, aber keine Item ID. Response: ${JSON.stringify(webflowCreateResponseData)}`);
                 if (submitButton) { submitButton.disabled = false; submitButton.value = 'Teilweise erfolgreich'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Teilweise erfolgreich';}
                 return;
@@ -521,10 +515,9 @@
             console.log('Webflow Item erfolgreich erstellt mit ID:', webflowItemId);
             showCustomPopup('Job erfolgreich in Webflow erstellt. Aktualisiere Airtable mit Webflow ID...', 'loading', 'Airtable Aktualisierung');
 
-            // --- Schritt 3: Airtable Worker aufrufen (Aktualisieren) ---
             console.log('Sende an Airtable Worker (Update):', AIRTABLE_WORKER_URL + '/update', JSON.stringify({ recordId: airtableRecordId, webflowId: webflowItemId }));
             const airtableUpdateResponse = await fetch(AIRTABLE_WORKER_URL + '/update', {
-                method: 'POST', // Oder PATCH
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ recordId: airtableRecordId, webflowId: webflowItemId })
             });
@@ -545,8 +538,6 @@
             if (submitButton) {
                 submitButton.value = 'Erfolgreich gesendet!';
                 if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Erfolgreich gesendet!';
-                 // Optional: form.reset();
-                 // Optional: window.location.href = '/success-page';
             }
 
         } catch (error) {
@@ -571,7 +562,6 @@
         }
     }
 
-    // --- Initialisierung und Testfunktion ---
     function testSubmissionWithData(testData) {
         console.log('Starte Test-Übermittlung mit Daten:', testData);
         const mainForm = find(`#${MAIN_FORM_ID}`);
@@ -583,7 +573,6 @@
         handleFormSubmit(simulatedEvent, testData);
     }
     window.testSubmissionWithData = testSubmissionWithData;
-    console.log('Testfunktion testSubmissionWithData ist verfügbar. Rufe z.B. testSubmissionWithData({"projectName":"Test Job", "budget":100}) auf.');
 
     document.addEventListener('DOMContentLoaded', () => {
         const mainForm = find(`#${MAIN_FORM_ID}`);

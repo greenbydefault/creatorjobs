@@ -39,7 +39,7 @@
     uiController: 'src/modules/ui-controller-1.1.js',
     contractTypeFactory: 'src/modules/contract-type-factory-1.1.js',
     // Vertragstypen
-    influencerContract: 'src/contracts/influencer-1.1.js'
+    influencerContract: 'src/contracts/influencer-1.2.js'
     // Weitere Vertragstypen hier hinzufügen
   };
   

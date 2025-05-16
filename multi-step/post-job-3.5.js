@@ -3,6 +3,7 @@
 // und die Orchestrierung der Speicherung in Airtable und Webflow.
 // AKTUELLE VERSION: Fehlerbehebung für Schema-Validierung (job-start-datum, job-end-datum)
 // und String/Array-Konflikt für land/sprache.
+// VERSION 4: 'admin-test' wird für Webflow immer auf true gesetzt (für Testzwecke).
 
 (function() {
     'use strict';
@@ -67,30 +68,28 @@
             '4': 'be2c319b5dccd012016df2e33408c39'
         },
         'videoFormat': {
-            // Beispiel: 'Dein Format Text im Formular': 'webflow_item_id_fuer_format',
-             '16:9': 'deine_id_hier_16_9', // Ersetze mit echter ID, wenn "16:9" der Formularwert ist
-             '4:5': 'deine_id_hier_4_5',
-             '9:16': 'deine_id_hier_9_16',
-             // Im Beispiel war 'format': '44346d8910fb2fbca05bedebde78aad3'. Du musst herausfinden,
-             // welcher Text im Formular zu dieser ID gehört, oder ob dein Formular direkt IDs sendet.
+            // HINWEIS: Ersetze 'deine_id_hier_...' mit echten Webflow Item IDs, falls dies ein Referenzfeld ist.
+            '16:9': 'deine_id_hier_16_9',
+            '4:5': 'deine_id_hier_4_5',
+            '9:16': 'deine_id_hier_9_16',
         },
         'subtitelOptional': {
             'Ja': '587b210d6015c519f05e0aeea6abf1fa',
             'Nein': 'ac9e02ffc119b7bd0e05403e096f89b3'
         },
         'durationOptional': {
-            '24 Monate': 'dd24b0de3f7a906d9619c8f56d9c2484', // Beispiel hat "3 Monate" als Text.
-            'unbegrenzt': 'dcbb14e9f4c1ee9aaeeddd62b4d8b625', // Wenn 'nutzungsrechte-dauer' ein Textfeld in Webflow ist,
-            '18 Monate': 'c97680a1c8a5214809b7885b00e7c1d8', // dann ist dieses Mapping hier nicht nötig für 'durationOptional'.
-            '12 Monate': 'e544d894fe78aaeaf83d8d5a35be5f3f', // Das Skript würde den Text direkt senden.
-            '6 Monate': 'b8353db272656593b627e67fb4730bd6',  // Wenn es ein Referenzfeld ist, sind die IDs hier korrekt.
+            '24 Monate': 'dd24b0de3f7a906d9619c8f56d9c2484',
+            'unbegrenzt': 'dcbb14e9f4c1ee9aaeeddd62b4d8b625',
+            '18 Monate': 'c97680a1c8a5214809b7885b00e7c1d8',
+            '12 Monate': 'e544d894fe78aaeaf83d8d5a35be5f3f',
+            '6 Monate': 'b8353db272656593b627e67fb4730bd6',
             '3 Monate': '9dab07affd09299a345cf4f2322ece34'
         },
     };
 
     const WEBFLOW_FIELD_SLUG_MAPPINGS = {
         'projectName': 'name',
-        'job-title': 'job-title', // Bleibt, da im Webflow Beispiel vorhanden
+        'job-title': 'job-title',
         'jobOnline': 'job-date-end',
         'budget': 'job-payment',
         'creatorCount': 'anzahl-gesuchte-creator',
@@ -98,7 +97,7 @@
         'imgCountOptional': 'anzahl-bilder-2',
         'aufgabe': 'deine-aufgaben',
         'steckbrief': 'job-beschreibung',
-        'job-adress': 'location', // Annahme, dass dies der korrekte Slug ist
+        'job-adress': 'location',
         'previewText': 'previewtext',
         'userName': 'brand-name',
         'memberEmail': 'contact-mail',
@@ -116,21 +115,14 @@
         'durationOptional': 'nutzungsrechte-dauer',
         'creatorCategorie': 'art-des-contents',
         'industryCategory': 'industrie-kategorie',
-        'creatorLand': 'land', // Webflow Feldname für das Land
-        'creatorLang': 'sprache', // Webflow Feldname für die Sprache
+        'creatorLand': 'land',
+        'creatorLang': 'sprache',
         'barterDealToggle': 'barter-deal',
         'plusJobToggle': 'plus-job',
-        'admin-test': 'true',
+        'admin-test': 'admin-test',
 
-        // Auskommentiert, da "Field not described in schema" Fehler
-        // Wenn du diese Felder in Webflow hast, stelle sicher, dass die Slugs exakt stimmen.
         // 'startDate': 'job-start-datum',
         // 'endDate': 'job-end-datum',
-
-        // Beispiel-Mappings für andere Datumsfelder aus dem Webflow-Beispiel,
-        // falls deine Formularfelder diesen entsprechen:
-        // 'formKeyForScriptdeadline': 'job-scriptdeadline',
-        // 'formKeyForContentFertig': 'fertigstellung-content',
     };
 
     const find = (selector, element = document) => element.querySelector(selector);
@@ -175,7 +167,7 @@
         }
     }
 
-     document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', () => {
         const closeBtn = find(CLOSE_POPUP_ATTR);
         if (closeBtn) {
             closeBtn.addEventListener('click', closeCustomPopup);
@@ -194,14 +186,14 @@
         } else {
             const parts = dateString.split('-');
             if (parts.length === 3) {
-                 dateObj = new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
+                dateObj = new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
             } else {
                 dateObj = new Date(dateString); // Fallback
                 if (isNaN(dateObj.getTime())) { // Wenn Fallback ungültig, versuche es als UTC zu parsen
-                     const now = new Date(dateString);
-                     if (!isNaN(now.getTime())) {
+                    const now = new Date(dateString);
+                    if (!isNaN(now.getTime())) {
                         dateObj = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds()));
-                     }
+                    }
                 }
             }
         }
@@ -218,7 +210,7 @@
         let projectNameValue = '';
 
         const creatorLangValues = [];
-        const creatorLandValues = []; // Wird als Array gesammelt, auch wenn nur ein Wert erwartet wird
+        const creatorLandValues = [];
         const nutzungOptionalValues = [];
         const channelsValues = [];
 
@@ -233,13 +225,13 @@
                     break;
                 case 'jobSlug':
                     break;
-                case 'creatorLand': // Sammle immer als Array
+                case 'creatorLand':
                     if (field.type === 'radio' && field.checked) {
                         creatorLandValues.push(field.value.trim());
                     } else if (field.tagName === 'SELECT') {
                         value = field.options[field.selectedIndex]?.value.trim();
                         if (value) creatorLandValues.push(value);
-                    } else if (field.type === 'checkbox' && field.checked) { // Falls es doch Checkboxen sind
+                    } else if (field.type === 'checkbox' && field.checked) {
                         creatorLandValues.push(field.value.trim());
                     }
                     break;
@@ -257,7 +249,7 @@
                         formData[fieldNameKey] = field.checked;
                     } else if (field.type === 'radio') {
                         if (field.checked) {
-                           formData[fieldNameKey] = field.value.trim();
+                            formData[fieldNameKey] = field.value.trim();
                         }
                     } else if (field.tagName === 'SELECT') {
                         value = field.options[field.selectedIndex]?.value.trim();
@@ -273,8 +265,7 @@
         });
 
         if (creatorLangValues.length > 0) formData['creatorLang'] = creatorLangValues;
-        if (creatorLandValues.length > 0) formData['creatorLand'] = creatorLandValues; // Bleibt Array für konsistente Behandlung
-
+        if (creatorLandValues.length > 0) formData['creatorLand'] = creatorLandValues;
         if (nutzungOptionalValues.length > 0) formData['nutzungOptional'] = nutzungOptionalValues;
         if (channelsValues.length > 0) formData['channels'] = channelsValues;
 
@@ -294,7 +285,6 @@
 
         const budgetField = find(`[${DATA_FIELD_ATTRIBUTE}="budget"]`);
         formData['budget'] = budgetField && budgetField.value.trim() !== '' ? parseFloat(budgetField.value.trim()) : 0;
-
 
         if (projectNameValue) {
             formData['job-title'] = projectNameValue;
@@ -335,14 +325,20 @@
     }
 
     async function handleFormSubmit(event, testData = null) {
-        event.preventDefault();
+        if (event && typeof event.preventDefault === 'function') {
+             event.preventDefault();
+        }
         const form = find(`#${MAIN_FORM_ID}`);
         const submitButton = form ? form.querySelector('button[type="submit"], input[type="submit"]') : null;
 
         if (submitButton) {
             submitButton.disabled = true;
-            submitButton.value = 'Wird gesendet...';
-            if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Wird gesendet...';
+            const sendingText = 'Wird gesendet...';
+            if (submitButton.tagName === 'BUTTON') {
+                submitButton.textContent = sendingText;
+            } else {
+                submitButton.value = sendingText;
+            }
         }
         showCustomPopup('Daten werden gesammelt...', 'loading', 'Vorbereitung');
 
@@ -353,8 +349,12 @@
             showCustomPopup(errorMessage, 'error', 'Fehler: Fehlende Daten', `Frontend Fehler: projectName oder job-title fehlt. Gesammelte Daten: ${JSON.stringify(rawFormData)}`);
             if (submitButton) {
                 submitButton.disabled = false;
-                submitButton.value = 'Absenden fehlgeschlagen';
-                if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Absenden fehlgeschlagen';
+                const failedText = 'Absenden fehlgeschlagen';
+                 if (submitButton.tagName === 'BUTTON') {
+                    submitButton.textContent = failedText;
+                } else {
+                    submitButton.value = failedText;
+                }
             }
             return;
         }
@@ -378,7 +378,7 @@
                 let supportDetails = `Airtable Create Worker Status: ${airtableCreateResponse.status}.`;
                 if (airtableCreateResponseData) supportDetails += ` Worker Response: ${JSON.stringify(airtableCreateResponseData)}`;
                 showCustomPopup(userMessage, 'error', 'Airtable Fehler', supportDetails);
-                if (submitButton) { submitButton.disabled = false; submitButton.value = 'Erneut versuchen'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Erneut versuchen';}
+                if (submitButton) { submitButton.disabled = false; const retryText = 'Erneut versuchen'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = retryText; else submitButton.value = retryText;}
                 return;
             }
 
@@ -387,7 +387,7 @@
 
             if (!airtableRecordId) {
                 showCustomPopup('Job in Airtable erstellt, aber Record ID nicht erhalten. Prozess abgebrochen.', 'error', 'Airtable Fehler', `Airtable Create Worker Erfolg, aber keine Record ID. Response: ${JSON.stringify(airtableCreateResponseData)}`);
-                if (submitButton) { submitButton.disabled = false; submitButton.value = 'Erneut versuchen'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Erneut versuchen';}
+                if (submitButton) { submitButton.disabled = false; const retryText = 'Erneut versuchen'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = retryText; else submitButton.value = retryText;}
                 return;
             }
             console.log('Airtable Record erfolgreich erstellt mit ID:', airtableRecordId);
@@ -399,62 +399,82 @@
 
             for (const formDataKey in WEBFLOW_FIELD_SLUG_MAPPINGS) {
                 const webflowSlug = WEBFLOW_FIELD_SLUG_MAPPINGS[formDataKey];
-                if (!webflowSlug) continue; // Überspringe, wenn kein Webflow-Slug definiert ist
-
-                let formValue = rawFormData[formDataKey];
-
-                // Überspringe leere/null/undefined Werte, außer Booleans und explizit erlaubte Nullen (z.B. Budget)
-                if (formValue === undefined || formValue === null || (typeof formValue === 'string' && formValue.trim() === '')) {
-                    if (typeof formValue === 'boolean') {
-                         webflowFieldData[webflowSlug] = formValue;
-                    } else if (webflowSlug === 'job-payment' && rawFormData['budget'] === 0) {
-                        webflowFieldData[webflowSlug] = 0;
-                    }
+                if (!webflowSlug) {
                     continue;
                 }
 
-                // Spezifische Behandlung für 'land' und 'sprache' (erwarten String, nicht Array)
-                if ((webflowSlug === 'land' || webflowSlug === 'sprache') && Array.isArray(formValue)) {
-                    if (formValue.length > 0) {
-                        webflowFieldData[webflowSlug] = String(formValue[0]); // Nimm das erste Element als String
+                let formValue = rawFormData[formDataKey];
+
+                if (formValue === undefined || formValue === null || (typeof formValue === 'string' && formValue.trim() === '')) {
+                    if (typeof formValue === 'boolean') {
+                        webflowFieldData[webflowSlug] = formValue;
+                    } else if (webflowSlug === 'job-payment' && rawFormData['budget'] === 0) {
+                        webflowFieldData[webflowSlug] = 0;
                     }
-                    continue; // Gehe zum nächsten formDataKey
+                    // Für 'admin-test' wird der Wert später explizit gesetzt, daher hier keine spezielle Behandlung für den Fall, dass es nicht im Formular ist.
+                    // Für andere Felder, wenn sie leer sind und nicht boolean/budget=0, werden sie übersprungen.
+                    else if (formDataKey !== 'admin-test') { // 'admin-test' wird unten speziell behandelt
+                        continue;
+                    }
                 }
 
+
+                if ((webflowSlug === 'land' || webflowSlug === 'sprache') && Array.isArray(formValue)) {
+                    if (formValue.length > 0) {
+                        webflowFieldData[webflowSlug] = String(formValue[0]);
+                    }
+                    continue;
+                }
 
                 if (REFERENCE_MAPPINGS[formDataKey]) {
                     if (Array.isArray(formValue)) {
                         const mappedIds = formValue
                             .map(itemText => REFERENCE_MAPPINGS[formDataKey][itemText])
-                            .filter(id => id);
+                            .filter(id => id && id.indexOf('deine_id_hier_') === -1);
                         if (mappedIds.length > 0) webflowFieldData[webflowSlug] = mappedIds;
-                        else console.warn(`Keine gültigen Webflow IDs für Multi-Select '${formDataKey}' (Slug: ${webflowSlug}). Werte: ${formValue.join(', ')}`);
+                        else if (formValue.some(item => REFERENCE_MAPPINGS[formDataKey][item] && REFERENCE_MAPPINGS[formDataKey][item].indexOf('deine_id_hier_') !== -1)) {
+                             console.warn(`Platzhalter-IDs für Multi-Select '${formDataKey}' (Slug: ${webflowSlug}) gefunden. Bitte korrigieren. Werte: ${formValue.join(', ')}`);
+                        } else {
+                            console.warn(`Keine gültigen Webflow IDs für Multi-Select '${formDataKey}' (Slug: ${webflowSlug}). Werte: ${formValue.join(', ')}`);
+                        }
                     } else {
                         const mappedId = REFERENCE_MAPPINGS[formDataKey][formValue];
-                        if (mappedId) webflowFieldData[webflowSlug] = mappedId;
+                        if (mappedId && mappedId.indexOf('deine_id_hier_') === -1) {
+                             webflowFieldData[webflowSlug] = mappedId;
+                        } else if (mappedId && mappedId.indexOf('deine_id_hier_') !== -1) {
+                            console.warn(`Platzhalter-ID für Single-Select '${formDataKey}' (Slug: ${webflowSlug}) gefunden: ${formValue}. Bitte korrigieren.`);
+                            webflowFieldData[webflowSlug] = formValue;
+                        }
                         else {
-                            // Wenn kein Mapping für Referenzfeld, aber Wert vorhanden, sende den Wert direkt (für Option-Felder)
                             console.warn(`Keine gültige Webflow ID für Single-Select '${formDataKey}' (Slug: ${webflowSlug}). Wert: ${formValue}. Sende Rohwert.`);
                             webflowFieldData[webflowSlug] = formValue;
                         }
                     }
                 } else if ( (formDataKey === 'creatorLang' || formDataKey === 'creatorLand' || formDataKey === 'nutzungOptional' || formDataKey === 'channels') && Array.isArray(formValue) ) {
-                    if (formValue.length > 0) webflowFieldData[webflowSlug] = formValue; // Für Multi-Option Textfelder
-                } else if (['startDate', 'endDate', 'jobOnline'].includes(formDataKey)) { // Beachte, dass startDate/endDate oben auskommentiert sind
+                    if (formValue.length > 0) webflowFieldData[webflowSlug] = formValue;
+                } else if (['startDate', 'endDate', 'jobOnline'].includes(formDataKey)) {
                     const isoDate = formatToISODate(formValue);
                     if (isoDate) webflowFieldData[webflowSlug] = isoDate;
                 } else if (typeof formValue === 'boolean') {
+                    // Dies behandelt 'barterDealToggle', 'plusJobToggle' und 'admin-test', wenn sie aus dem Formular kommen.
+                    // Für 'admin-test' wird der Wert unten sowieso überschrieben.
                     webflowFieldData[webflowSlug] = formValue;
                 } else if (typeof formValue === 'number') {
-                     webflowFieldData[webflowSlug] = formValue;
+                    webflowFieldData[webflowSlug] = formValue;
                 } else {
-                    webflowFieldData[webflowSlug] = String(formValue);
+                    if (formValue !== undefined && formValue !== null && String(formValue).trim() !== '') {
+                         webflowFieldData[webflowSlug] = String(formValue);
+                    }
                 }
             }
 
-            if (WEBFLOW_FIELD_SLUG_MAPPINGS['admin-test']) {
-                 webflowFieldData[WEBFLOW_FIELD_SLUG_MAPPINGS['admin-test']] = false;
+            // Spezifische Behandlung für 'admin-test': Soll für Tests immer true sein.
+            const adminTestWebflowSlug = WEBFLOW_FIELD_SLUG_MAPPINGS['admin-test']; // Ist 'admin-test'
+            if (adminTestWebflowSlug) { // Stellt sicher, dass das Mapping existiert
+                webflowFieldData[adminTestWebflowSlug] = true; // Setzt 'admin-test' in Webflow immer auf true
+                console.log(`Hinweis: Das Feld '${adminTestWebflowSlug}' wird für Webflow fest auf 'true' gesetzt.`);
             }
+
 
             console.log('Sende an Webflow Worker (Create) - Aufbereitete Daten:', WEBFLOW_CMS_POST_WORKER_URL, JSON.stringify({ fields: webflowFieldData }));
             const webflowCreateResponse = await fetch(WEBFLOW_CMS_POST_WORKER_URL, {
@@ -468,7 +488,7 @@
                 console.error('Fehler vom Webflow Worker (Create):', webflowCreateResponse.status, JSON.stringify(webflowCreateResponseData));
                 let userMessage = `Es ist ein Fehler beim Erstellen des Jobs in Webflow aufgetreten (${webflowCreateResponse.status}).`;
                 let errorDetails = webflowCreateResponseData.message || (webflowCreateResponseData.error && webflowCreateResponseData.error.message) || '';
-                 if (webflowCreateResponseData.details && Array.isArray(webflowCreateResponseData.details)) {
+                if (webflowCreateResponseData.details && Array.isArray(webflowCreateResponseData.details)) {
                     errorDetails = webflowCreateResponseData.details.map(d => `Feld '${d.param || (d.path && d.path.join('.')) || d.field || 'unbekannt'}': ${d.description || d.message || d.reason}`).join('; ');
                 } else if (webflowCreateResponseData.problems && Array.isArray(webflowCreateResponseData.problems)) {
                     errorDetails = webflowCreateResponseData.problems.join('; ');
@@ -478,7 +498,7 @@
                 const supportDetails = `Webflow Create Worker Status: ${webflowCreateResponse.status}. Worker Response: ${JSON.stringify(webflowCreateResponseData)}. Payload Sent: ${JSON.stringify({ fields: webflowFieldData })}`;
                 showCustomPopup(userMessage, 'error', 'Webflow Fehler', supportDetails);
                 deleteAirtableRecord(airtableRecordId, `Webflow creation failed: ${userMessage}`);
-                if (submitButton) { submitButton.disabled = false; submitButton.value = 'Erneut versuchen'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Erneut versuchen';}
+                if (submitButton) { submitButton.disabled = false; const retryText = 'Erneut versuchen'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = retryText; else submitButton.value = retryText;}
                 return;
             }
 
@@ -487,7 +507,7 @@
 
             if (!webflowItemId) {
                 showCustomPopup('Job in Webflow erstellt, aber ID nicht erhalten. Airtable-Aktualisierung nicht möglich.', 'success', 'Webflow Erfolg mit Hinweis', `Webflow Create Worker Erfolg, aber keine Item ID. Response: ${JSON.stringify(webflowCreateResponseData)}`);
-                if (submitButton) { submitButton.disabled = false; submitButton.value = 'Teilweise erfolgreich'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Teilweise erfolgreich';}
+                if (submitButton) { submitButton.disabled = false; const partialSuccessText = 'Teilweise erfolgreich'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = partialSuccessText; else submitButton.value = partialSuccessText;}
                 return;
             }
             console.log('Webflow Item erfolgreich erstellt mit ID:', webflowItemId);
@@ -507,15 +527,21 @@
                 let supportDetails = `Airtable Update Worker Status: ${airtableUpdateResponse.status}.`;
                 if (airtableUpdateResponseData) supportDetails += ` Worker Response: ${JSON.stringify(airtableUpdateResponseData)}`;
                 showCustomPopup(userMessage, 'error', 'Airtable Fehler', supportDetails);
-                if (submitButton) { submitButton.disabled = false; submitButton.value = 'Teilweise erfolgreich'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Teilweise erfolgreich';}
+                if (submitButton) { submitButton.disabled = false; const partialSuccessText = 'Teilweise erfolgreich'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = partialSuccessText; else submitButton.value = partialSuccessText;}
                 return;
             }
 
             console.log('Antwort vom Airtable Worker (Update):', airtableUpdateResponseData);
             showCustomPopup('Job erfolgreich in Webflow und Airtable gespeichert!', 'success', 'Erfolgreich');
             if (submitButton) {
-                submitButton.value = 'Erfolgreich gesendet!';
-                if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Erfolgreich gesendet!';
+                const successText = 'Erfolgreich gesendet!';
+                if (submitButton.tagName === 'BUTTON') {
+                    submitButton.textContent = successText;
+                } else {
+                    submitButton.value = successText;
+                }
+                 // form.reset();
+                 // window.location.href = '/success-page';
             }
 
         } catch (error) {
@@ -524,18 +550,28 @@
             const supportDetails = `Unerwarteter Frontend Fehler: ${error.message}. Stack: ${error.stack}. Raw Form Data: ${JSON.stringify(rawFormData)}`;
             showCustomPopup(userMessage, 'error', 'Unerwarteter Fehler', supportDetails);
             if (airtableRecordId && !webflowItemId) {
-                deleteAirtableRecord(airtableRecordId, `Unexpected frontend error: ${error.message}`);
+                deleteAirtableRecord(airtableRecordId, `Unexpected frontend error during Webflow step: ${error.message}`);
             }
             if (submitButton) {
                 submitButton.disabled = false;
-                submitButton.value = 'Fehler, erneut versuchen';
-                if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Fehler, erneut versuchen';
+                const errorRetryText = 'Fehler, erneut versuchen';
+                if (submitButton.tagName === 'BUTTON') {
+                    submitButton.textContent = errorRetryText;
+                } else {
+                    submitButton.value = errorRetryText;
+                }
             }
         } finally {
-            if (submitButton && (submitButton.value === 'Wird gesendet...' || (submitButton.tagName === 'BUTTON' && submitButton.textContent === 'Wird gesendet...'))) {
-                submitButton.disabled = false;
-                submitButton.value = 'Absenden';
-                if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Absenden';
+            if (submitButton && !submitButton.disabled) {
+                 const currentButtonText = submitButton.tagName === 'BUTTON' ? submitButton.textContent : submitButton.value;
+                 if (currentButtonText === 'Wird gesendet...') {
+                    const defaultSubmitText = form.getAttribute('data-initial-text') || 'Absenden';
+                    if (submitButton.tagName === 'BUTTON') {
+                        submitButton.textContent = defaultSubmitText;
+                    } else {
+                        submitButton.value = defaultSubmitText;
+                    }
+                 }
             }
         }
     }
@@ -545,22 +581,36 @@
         const mainForm = find(`#${MAIN_FORM_ID}`);
         if (!mainForm) {
             console.error(`Hauptformular mit ID "${MAIN_FORM_ID}" nicht gefunden.`);
+            showCustomPopup(`Test-Übermittlung fehlgeschlagen: Hauptformular mit ID "${MAIN_FORM_ID}" nicht gefunden.`, 'error', 'Test Fehler');
             return;
         }
-        const simulatedEvent = { preventDefault: () => {}, target: mainForm };
+        const simulatedEvent = {
+            preventDefault: () => console.log('simulated event.preventDefault() called'),
+            target: mainForm
+        };
         handleFormSubmit(simulatedEvent, testData);
     }
     window.testSubmissionWithData = testSubmissionWithData;
 
+
     document.addEventListener('DOMContentLoaded', () => {
         const mainForm = find(`#${MAIN_FORM_ID}`);
         if (mainForm) {
-            mainForm.removeEventListener('submit', handleFormSubmit);
-            mainForm.addEventListener('submit', (event) => handleFormSubmit(event, null));
+            const submitButton = mainForm.querySelector('button[type="submit"], input[type="submit"]');
+            if (submitButton) {
+                mainForm.setAttribute('data-initial-text', submitButton.tagName === 'BUTTON' ? submitButton.textContent : submitButton.value);
+            }
+
+            mainForm.removeEventListener('submit', handleFormSubmitWrapper);
+            mainForm.addEventListener('submit', handleFormSubmitWrapper);
             console.log(`Form Submission Handler initialisiert für Formular: #${MAIN_FORM_ID}`);
         } else {
-            console.warn(`Hauptformular mit ID "${MAIN_FORM_ID}" nicht gefunden.`);
+            console.warn(`Hauptformular mit ID "${MAIN_FORM_ID}" nicht gefunden. Formular-Handler nicht aktiv.`);
         }
     });
+
+    function handleFormSubmitWrapper(event) {
+        handleFormSubmit(event, null);
+    }
 
 })();

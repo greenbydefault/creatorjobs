@@ -98,7 +98,7 @@
         'imgCountOptional': 'anzahl-bilder-2',
         'aufgabe': 'deine-aufgaben',
         'steckbrief': 'job-beschreibung',
-        'job-adress-optional': 'job-adresse', // Annahme, dass dies der korrekte Slug ist
+        'job-adress': 'location', // Annahme, dass dies der korrekte Slug ist
         'previewText': 'previewtext',
         'userName': 'brand-name',
         'memberEmail': 'contact-mail',
@@ -120,7 +120,7 @@
         'creatorLang': 'sprache', // Webflow Feldname für die Sprache
         'barterDealToggle': 'barter-deal',
         'plusJobToggle': 'plus-job',
-        'admin-test': 'admin-test',
+        'admin-test': 'true',
 
         // Auskommentiert, da "Field not described in schema" Fehler
         // Wenn du diese Felder in Webflow hast, stelle sicher, dass die Slugs exakt stimmen.

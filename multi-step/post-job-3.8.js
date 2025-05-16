@@ -1,24 +1,21 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
 // und die Orchestrierung der Speicherung in Airtable und Webflow.
-// VERSION 8: Suche nach Member in Airtable anhand Webflow Member ID und Verknüpfung mit Job.
-// Abbruch, wenn Member nicht gefunden wird.
+// VERSION 9: Korrekte Übermittlung von Multi-Select-Werten (Land, Sprache) an Webflow
+// und Befüllung des 'job-id'-Feldes in Webflow mit der Airtable Record ID.
 
 (function() {
     'use strict';
 
     // --- Konfiguration ---
     const WEBFLOW_CMS_POST_WORKER_URL = 'https://late-meadow-00bc.oliver-258.workers.dev/';
-    const AIRTABLE_WORKER_URL = 'https://airtable-job-post.oliver-258.workers.dev/'; // Basis-URL für Airtable Worker
-    const AIRTABLE_MEMBER_SEARCH_ENDPOINT = AIRTABLE_WORKER_URL + '/search-member'; // ANNAHME: Endpunkt zum Suchen von Mitgliedern
+    const AIRTABLE_WORKER_URL = 'https://airtable-job-post.oliver-258.workers.dev/';
+    const AIRTABLE_MEMBER_SEARCH_ENDPOINT = AIRTABLE_WORKER_URL + '/search-member';
     const MAIN_FORM_ID = 'wf-form-post-job-form';
     const DATA_FIELD_ATTRIBUTE = 'data-preview-field';
     const SUPPORT_EMAIL = 'support@yourcompany.com'; // BITTE ERSETZEN!
 
-    // NEU: Konfiguration für die Members-Tabelle in Airtable
-    const AIRTABLE_MEMBERS_TABLE_ID = 'tblMBt42TIKloNAKB'; // ID deiner "Members"-Tabelle
-    // WICHTIG: Ersetze dies mit dem exakten Feldnamen in deiner Airtable "Members"-Tabelle,
-    // das die Webflow Member ID speichert (Groß-/Kleinschreibung beachten!).
+    const AIRTABLE_MEMBERS_TABLE_ID = 'tblMBt42TIKloNAKB';
     const AIRTABLE_MEMBERS_WEBFLOW_ID_FIELD_NAME = 'Webflow Member ID'; // Beispielname, BITTE ANPASSEN!
 
     const POPUP_WRAPPER_ATTR = '[data-error-target="popup-wrapper"]';
@@ -91,20 +88,21 @@
             '3 Monate': '9dab07affd09299a345cf4f2322ece34'
         },
         'nutzungOptional': {
-            'Organisch Social Media': 'webflow_id_organisch_sm',
-            'Paid Social Media': 'webflow_id_paid_sm',
-            'Webseite': 'webflow_id_webseite',
+            'Werbeanzeigen': 'webflow_id_werbeanzeigen', // Beispiel IDs, bitte anpassen
+            'Social Media Kanäle (Instagram, TikTok, Youtube)': 'webflow_id_social_media_kanaele',
+            // Weitere Optionen hier
         },
         'channels': {
-            'Instagram': 'webflow_id_instagram',
-            'TikTok': 'webflow_id_tiktok',
+            'Instagram': 'webflow_id_instagram', // Beispiel IDs, bitte anpassen
             'Facebook': 'webflow_id_facebook',
+            'TikTok': 'webflow_id_tiktok',
+            // Weitere Optionen hier
         },
     };
 
     const WEBFLOW_FIELD_SLUG_MAPPINGS = {
         'projectName': 'name',
-        'job-title': 'job-title',
+        'job-title': 'job-title', // Wird auch vom projectName gesetzt
         'jobOnline': 'job-date-end',
         'budget': 'job-payment',
         'creatorCount': 'anzahl-gesuchte-creator',
@@ -112,12 +110,12 @@
         'imgCountOptional': 'anzahl-bilder-2',
         'aufgabe': 'deine-aufgaben',
         'steckbrief': 'job-beschreibung',
-        'job-adress': 'location',
+        'job-adress': 'location', // Formularfeld data-preview-field="job-adress"
         'previewText': 'previewtext',
         'userName': 'brand-name',
         'memberEmail': 'contact-mail',
-        'webflowId': 'webflow-member-id',
-        'memberstackId': 'ms-member-id',
+        'webflowId': 'webflow-member-id', // Webflow CMS Feld für die Webflow Member ID des Job-Erstellers
+        'memberstackId': 'ms-member-id', // Webflow CMS Feld für die Memberstack ID des Job-Erstellers
         'jobImageUpload': 'job-image',
         'creatorFollower': 'creator-follower',
         'creatorAge': 'creator-alter',
@@ -130,13 +128,14 @@
         'durationOptional': 'dauer-nutzungsrechte',
         'creatorCategorie': 'art-des-contents',
         'industryCategory': 'industrie-kategorie',
-        'creatorLand': 'land',
-        'creatorLang': 'sprache',
+        'creatorLand': 'land', // Webflow Feldname für das Land (Multi-Select Text)
+        'creatorLang': 'sprache', // Webflow Feldname für die Sprache (Multi-Select Text)
         'barterDealToggle': 'barter-deal',
         'plusJobToggle': 'plus-job',
         'admin-test': 'admin-test',
-        'nutzungOptional': 'dein_webflow_slug_fuer_nutzungsrechte',
-        'channels': 'dein_webflow_slug_fuer_kanaele',
+        'nutzungOptional': 'dein_webflow_slug_fuer_nutzungsrechte', // z.B. 'nutzungsrechte'
+        'channels': 'dein_webflow_slug_fuer_kanaele', // z.B. 'kanaele'
+        'airtableJobIdForWebflow': 'job-id' // NEU: Webflow Slug für die Airtable Job ID
     };
 
     const AIRTABLE_FIELD_MAPPINGS = {
@@ -152,12 +151,13 @@
         'imgCountOptional': 'Image Count Optional',
         'aufgabe': 'Aufgabe',
         'steckbrief': 'Steckbrief',
-        'job-adress': 'Location',
+        'job-adress': 'Location', // Mapping für Airtable (basierend auf `job-adress-optional` aus dem Log)
+        'job-adress-optional': 'Location', // Fallback, falls `job-adress-optional` direkt verwendet wird
         'previewText': 'Preview Text',
         'userName': 'User Name',
         'memberEmail': 'Contact Mail',
-        'webflowId': 'Webflow Member ID', // Dieser Schlüssel kommt aus `rawFormData`
-        'memberstackId': 'Member ID',   // Dieser Schlüssel kommt aus `rawFormData`
+        'webflowId': 'Webflow Member ID',
+        'memberstackId': 'Member ID',
         'jobImageUpload': 'Job Image',
         'creatorFollower': 'Creator Follower',
         'creatorAge': 'Creator Age',
@@ -174,10 +174,12 @@
         'creatorLang': 'Sprache',
         'nutzungOptional': 'Nutzungsrechte',
         'channels': 'Channels',
-        // Das Feld 'job-posted-by' wird direkt mit der gefundenen Member Record ID befüllt,
-        // daher ist hier kein explizites Mapping nötig, wenn der Airtable-Feldname 'job-posted-by' ist.
-        // Wenn der Airtable-Feldname anders ist, füge hier ein Mapping hinzu:
-        // 'internalJobPostedByKey': 'Dein Airtable Feldname für Job Posted By'
+        'reviewsOptional': 'Reviews Optional', // Hinzugefügt basierend auf Log
+        'user-creatorname': 'User Creatorname', // Hinzugefügt basierend auf Log
+        'startDate': 'Start Date', // Hinzugefügt basierend auf Log
+        'endDate': 'End Date', // Hinzugefügt basierend auf Log
+        'creatorCountOptional': 'Creator Count Optional', // Hinzugefügt basierend auf Log
+        // 'job-posted-by' wird direkt im Code behandelt, kein Mapping hier nötig, wenn der Schlüssel gleich bleibt
     };
 
 
@@ -232,24 +234,27 @@
 
     function formatToISODate(dateString) {
         if (!dateString) return null;
-        if (/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z/.test(dateString)) {
+        if (/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z/.test(dateString)) { // Bereits ISO
             return dateString;
         }
+        // Prüfe auf YYYY-MM-DD Format (von type="date" input)
+        const ymdParts = dateString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (ymdParts) {
+            // new Date(year, monthIndex, day)
+            const dateObj = new Date(Date.UTC(parseInt(ymdParts[1]), parseInt(ymdParts[2]) - 1, parseInt(ymdParts[3])));
+            if (!isNaN(dateObj.getTime())) return dateObj.toISOString();
+        }
+
         let dateObj;
-        const deParts = dateString.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+        const deParts = dateString.match(/^(\d{2})\.(\d{2})\.(\d{4})$/); // DD.MM.YYYY
         if (deParts) {
             dateObj = new Date(Date.UTC(parseInt(deParts[3]), parseInt(deParts[2]) - 1, parseInt(deParts[1])));
         } else {
-            const parts = dateString.split('-');
-            if (parts.length === 3) {
-                dateObj = new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
-            } else {
-                dateObj = new Date(dateString); 
-                if (isNaN(dateObj.getTime())) { 
-                    const now = new Date(dateString);
-                    if (!isNaN(now.getTime())) {
-                        dateObj = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds()));
-                    }
+            dateObj = new Date(dateString); // Fallback für andere Formate, die Date.parse versteht
+            if (isNaN(dateObj.getTime())) { 
+                const now = new Date(dateString); // Letzter Versuch
+                if (!isNaN(now.getTime())) {
+                    dateObj = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds()));
                 }
             }
         }
@@ -285,8 +290,8 @@
                             multiSelectFields[fieldNameKey].push(option.value.trim());
                         }
                     }
-                } else if (field.tagName === 'SELECT') { 
-                     if(field.value) multiSelectFields[fieldNameKey].push(field.value.trim());
+                } else if (field.tagName === 'SELECT' && field.value) { // Einzel-Selects, die zu einem Array beitragen
+                     multiSelectFields[fieldNameKey].push(field.value.trim());
                 }
             } else { 
                 switch (fieldNameKey) {
@@ -309,9 +314,14 @@
                         } else if (field.type === 'number') {
                             const numVal = field.value.trim();
                             if (numVal !== '') formData[fieldNameKey] = parseFloat(numVal);
-                        } else {
+                        } else if (field.type === 'date') { // Spezifische Behandlung für date inputs
+                            value = field.value; // YYYY-MM-DD
+                            if (value) formData[fieldNameKey] = value; // Wird später zu ISO formatiert
+                        }
+                        else {
                             value = field.value.trim();
-                            if (value !== '' || fieldNameKey === 'job-adress') {
+                            // job-adress-optional aus dem Log, stelle sicher, dass es gesammelt wird
+                            if (value !== '' || fieldNameKey === 'job-adress' || fieldNameKey === 'job-adress-optional') {
                                 formData[fieldNameKey] = value;
                             }
                         }
@@ -325,14 +335,14 @@
             }
         }
         
-        const creatorLandValueFromForm = formData['creatorLand'];
-        if (creatorLandValueFromForm && !Array.isArray(creatorLandValueFromForm)) {
-            formData['creatorLand'] = [creatorLandValueFromForm];
+        // Stelle sicher, dass Land und Sprache als Array bleiben, auch wenn nur ein Wert da ist
+        if (formData['creatorLand'] && !Array.isArray(formData['creatorLand'])) {
+            formData['creatorLand'] = [formData['creatorLand']];
         }
-        const creatorLangValueFromForm = formData['creatorLang'];
-        if (creatorLangValueFromForm && !Array.isArray(creatorLangValueFromForm)) {
-             formData['creatorLang'] = [creatorLangValueFromForm];
+        if (formData['creatorLang'] && !Array.isArray(formData['creatorLang'])) {
+             formData['creatorLang'] = [formData['creatorLang']];
         }
+
 
         const memberstackInputs = findAll('input[data-ms-member]');
         memberstackInputs.forEach(field => {
@@ -346,19 +356,30 @@
             }
         });
 
-        const jobOnlineField = find(`[${DATA_FIELD_ATTRIBUTE}="jobOnline"]`);
-        if (jobOnlineField) {
-            const jobOnlineValue = jobOnlineField.value.trim();
-            if (jobOnlineValue) {
-                const isoDate = formatToISODate(jobOnlineValue);
-                if (isoDate) formData['jobOnline'] = isoDate;
-            } else {
+        // Datumsfelder zu ISO formatieren
+        ['jobOnline', 'startDate', 'endDate'].forEach(dateFieldKey => {
+            if (formData[dateFieldKey]) {
+                const isoDate = formatToISODate(formData[dateFieldKey]);
+                if (isoDate) {
+                    formData[dateFieldKey] = isoDate;
+                } else {
+                    console.warn(`Could not convert ${dateFieldKey} value '${formData[dateFieldKey]}' to ISO date. Removing from form data.`);
+                    delete formData[dateFieldKey]; // Entferne ungültiges Datum
+                }
+            }
+        });
+        // Spezifische Logik für jobOnline, falls leer
+        if (!formData['jobOnline']) {
+            const jobOnlineField = find(`[${DATA_FIELD_ATTRIBUTE}="jobOnline"]`);
+            if (!jobOnlineField || !jobOnlineField.value.trim()) { // Nur wenn wirklich leer und nicht nur fehlgeschlagene Konvertierung
                 const today = new Date();
                 today.setUTCDate(today.getUTCDate() + 3);
                 today.setUTCHours(0, 0, 0, 0);
                 formData['jobOnline'] = today.toISOString();
+                console.log("jobOnline was empty, set to default:", formData['jobOnline']);
             }
         }
+
 
         const budgetField = find(`[${DATA_FIELD_ATTRIBUTE}="budget"]`);
         formData['budget'] = budgetField && budgetField.value.trim() !== '' ? parseFloat(budgetField.value.trim()) : 0;
@@ -367,8 +388,7 @@
             formData['job-title'] = projectNameValue;
         }
         
-        // Sicherstellen, dass 'webflowId' (für die Membersuche) vorhanden ist, falls es von Memberstack kommt
-        if (!formData['webflowId'] && formData['Webflow Member ID']) { // Falls der Name-Attribut 'Webflow Member ID' war
+        if (!formData['webflowId'] && formData['Webflow Member ID']) {
             formData['webflowId'] = formData['Webflow Member ID'];
         }
 
@@ -384,8 +404,8 @@
         }
         console.log(`Versuche Airtable Record ${airtableRecordId} zu löschen wegen: ${reason}`);
         try {
-            const response = await fetch(AIRTABLE_WORKER_URL + '/delete', { // Annahme: /delete ist der korrekte Endpunkt zum Löschen
-                method: 'POST', // Oder 'DELETE', je nach Worker-Implementierung
+            const response = await fetch(AIRTABLE_WORKER_URL + '/delete', {
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ recordId: airtableRecordId, reason: reason })
             });
@@ -435,8 +455,7 @@
             return;
         }
         
-        // NEU: Schritt 0 - Webflow Member ID für die Suche extrahieren
-        const webflowMemberIdToSearch = rawFormData['webflowId']; // 'webflowId' ist der 'name' des Hidden Fields
+        const webflowMemberIdToSearch = rawFormData['webflowId'];
         if (!webflowMemberIdToSearch) {
             const errorMsg = 'Webflow Member ID nicht im Formular gefunden. Job kann nicht zugeordnet werden.';
             console.error(errorMsg, rawFormData);
@@ -452,13 +471,7 @@
             const memberSearchResponse = await fetch(AIRTABLE_MEMBER_SEARCH_ENDPOINT, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    webflowMemberId: webflowMemberIdToSearch,
-                    // Der Worker muss wissen, in welcher Tabelle und nach welchem Feld er suchen soll.
-                    // Alternativ könnten diese Infos auch im Worker hartcodiert sein, wenn der Endpunkt spezifisch ist.
-                    // memberTableId: AIRTABLE_MEMBERS_TABLE_ID, // Optional, wenn der Worker es benötigt
-                    // webflowIdFieldNameInMembersTable: AIRTABLE_MEMBERS_WEBFLOW_ID_FIELD_NAME // Optional
-                })
+                body: JSON.stringify({ webflowMemberId: webflowMemberIdToSearch })
             });
             const memberSearchData = await memberSearchResponse.json();
 
@@ -470,7 +483,7 @@
                 console.error('Fehler bei der Mitgliedersuche oder Mitglied nicht gefunden:', memberSearchData);
                 showCustomPopup(errorMsg, 'error', 'Fehler: Mitglied nicht gefunden', `Mitglied mit Webflow Member ID '${webflowMemberIdToSearch}' nicht gefunden oder Fehler bei der Suche. Worker Response: ${JSON.stringify(memberSearchData)}`);
                 if (submitButton) { submitButton.disabled = false; submitButton.value = 'Zuordnung fehlgeschlagen'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Zuordnung fehlgeschlagen';}
-                return; // WICHTIG: Prozess hier abbrechen
+                return; 
             }
             airtableMemberRecordId = memberSearchData.memberRecordId;
             console.log('Mitglied gefunden. Airtable Record ID des Mitglieds:', airtableMemberRecordId);
@@ -479,26 +492,28 @@
             console.error('Netzwerkfehler oder anderer Fehler bei der Mitgliedersuche:', error);
             showCustomPopup(`Ein Fehler ist bei der Suche des Mitglieds aufgetreten: ${error.message}`, 'error', 'Fehler: Mitgliedersuche', `Exception bei Mitgliedersuche: ${error.stack}`);
             if (submitButton) { submitButton.disabled = false; submitButton.value = 'Fehler'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = 'Fehler';}
-            return; // WICHTIG: Prozess hier abbrechen
+            return;
         }
 
 
-        let airtableRecordId = null; // Für den Job-Record
+        let airtableRecordId = null; 
         let webflowItemId = null;
         let airtableJobDetails = {};
 
         try {
             for (const keyInRawForm in rawFormData) {
                 if (rawFormData.hasOwnProperty(keyInRawForm)) {
-                    const airtableKey = AIRTABLE_FIELD_MAPPINGS[keyInRawForm] || keyInRawForm;
+                    // Für 'job-adress-optional', verwende 'job-adress', wenn 'job-adress-optional' im Mapping nicht existiert
+                    let targetKey = keyInRawForm;
+                    if (keyInRawForm === 'job-adress-optional' && !AIRTABLE_FIELD_MAPPINGS[keyInRawForm] && AIRTABLE_FIELD_MAPPINGS['job-adress']) {
+                        targetKey = 'job-adress';
+                    }
+                    const airtableKey = AIRTABLE_FIELD_MAPPINGS[targetKey] || targetKey;
                     airtableJobDetails[airtableKey] = rawFormData[keyInRawForm];
                 }
             }
-            // NEU: Füge die gefundene Member Record ID zum 'job-posted-by' Feld hinzu
-            // Airtable erwartet für "Link to another record"-Felder ein Array von Record IDs.
             airtableJobDetails['job-posted-by'] = [airtableMemberRecordId];
             console.log("Airtable 'job-posted-by' wird gesetzt mit Member ID:", airtableMemberRecordId);
-
 
             const adminTestAirtableKey = AIRTABLE_FIELD_MAPPINGS['admin-test'] || 'admin-test';
             if (AIRTABLE_FIELD_MAPPINGS.hasOwnProperty('admin-test')) {
@@ -506,10 +521,9 @@
                  console.log(`Hinweis: Das Airtable-Feld '${adminTestAirtableKey}' wird auf '${airtableJobDetails[adminTestAirtableKey]}' gesetzt.`);
             }
 
-
             showCustomPopup('Daten werden in Airtable gespeichert...', 'loading', 'Airtable Speicherung');
             console.log('Sende an Airtable Worker (Create Job) - Transformierte Daten:', AIRTABLE_WORKER_URL, JSON.stringify({ jobDetails: airtableJobDetails }));
-            const airtableCreateResponse = await fetch(AIRTABLE_WORKER_URL, { // Annahme: Basis-URL ist für Job-Erstellung
+            const airtableCreateResponse = await fetch(AIRTABLE_WORKER_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ jobDetails: airtableJobDetails }) 
@@ -526,7 +540,6 @@
                 userMessage += ` Details: ${errorDetails}`;
                 let supportDetails = `Airtable Create Job Worker Status: ${airtableCreateResponse.status}. Worker Response: ${JSON.stringify(airtableCreateResponseData)}. Payload Sent: ${JSON.stringify({ jobDetails: airtableJobDetails })}`;
                 showCustomPopup(userMessage, 'error', 'Airtable Fehler', supportDetails);
-                // KEIN deleteAirtableRecord hier, da der Job-Record selbst nicht erstellt wurde.
                 if (submitButton) { submitButton.disabled = false; const retryText = 'Erneut versuchen'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = retryText; else submitButton.value = retryText;}
                 return;
             }
@@ -542,13 +555,21 @@
             console.log('Airtable Job Record erfolgreich erstellt mit ID:', airtableRecordId);
             showCustomPopup('Job erfolgreich in Airtable gespeichert. Erstelle Item in Webflow...', 'loading', 'Webflow Erstellung');
 
+            // --- Webflow Datenaufbereitung ---
             const webflowFieldData = {};
             webflowFieldData['name'] = rawFormData['job-title'] || rawFormData['projectName'] || 'Unbenannter Job';
             webflowFieldData['slug'] = airtableRecordId; // Webflow Slug wird die Airtable Job Record ID
 
+            // NEU: Airtable Job ID in Webflow 'job-id' Feld schreiben
+            if (WEBFLOW_FIELD_SLUG_MAPPINGS['airtableJobIdForWebflow']) {
+                webflowFieldData[WEBFLOW_FIELD_SLUG_MAPPINGS['airtableJobIdForWebflow']] = airtableRecordId;
+            }
+
+
             for (const formDataKey in WEBFLOW_FIELD_SLUG_MAPPINGS) {
                 const webflowSlug = WEBFLOW_FIELD_SLUG_MAPPINGS[formDataKey];
-                if (!webflowSlug || (webflowSlug.startsWith('dein_webflow_slug_') && !rawFormData.hasOwnProperty(formDataKey))) {
+                // Überspringe spezielle Mappings, die bereits oben behandelt wurden (name, slug, airtableJobIdForWebflow)
+                if (!webflowSlug || ['name', 'slug', 'airtableJobIdForWebflow'].includes(formDataKey) || (webflowSlug.startsWith('dein_webflow_slug_') && !rawFormData.hasOwnProperty(formDataKey))) {
                     continue;
                 }
 
@@ -564,10 +585,11 @@
                     }
                 }
                 
+                // KORREKTUR für Webflow Multi-Select (Land, Sprache)
                 if ((formDataKey === 'creatorLand' || formDataKey === 'creatorLang') && Array.isArray(formValue)) {
                     if (formValue.length > 0 && (webflowSlug === 'land' || webflowSlug === 'sprache')) {
-                         webflowFieldData[webflowSlug] = String(formValue[0]); 
-                         console.log(`Webflow: Sende '${String(formValue[0])}' für ${webflowSlug}`);
+                         webflowFieldData[webflowSlug] = formValue; // Sende das gesamte Array
+                         console.log(`Webflow: Sende Array für ${webflowSlug}:`, formValue);
                     }
                     continue; 
                 }
@@ -593,12 +615,12 @@
                         } else {
                             console.warn(`Keine gültigen Webflow IDs für Multi-Select '${formDataKey}' (Slug: ${webflowSlug}) nach Mapping. Werte: ${formValue.join(', ')}`);
                         }
-                    } else { 
+                    } else { // Für Multi-Option Textfelder (z.B. nutzungOptional, channels, wenn keine REFERENCE_MAPPINGS existieren)
                         webflowFieldData[webflowSlug] = formValue;
                     }
                 } else if (['startDate', 'endDate', 'jobOnline'].includes(formDataKey)) {
-                    const isoDate = formatToISODate(formValue);
-                    if (isoDate) webflowFieldData[webflowSlug] = isoDate;
+                    // jobOnline wurde bereits zu ISO formatiert. startDate/endDate auch.
+                    if (formValue) webflowFieldData[webflowSlug] = formValue; // Sende den ISO-String
                 } else if (typeof formValue === 'boolean') {
                     webflowFieldData[webflowSlug] = formValue;
                 } else if (typeof formValue === 'number') {
@@ -611,9 +633,11 @@
             }
 
             const adminTestWebflowSlug = WEBFLOW_FIELD_SLUG_MAPPINGS['admin-test'];
-            if (adminTestWebflowSlug) {
-                webflowFieldData[adminTestWebflowSlug] = true;
-                console.log(`Hinweis: Das Webflow-Feld '${adminTestWebflowSlug}' wird fest auf 'true' gesetzt.`);
+            if (adminTestWebflowSlug && rawFormData.hasOwnProperty('admin-test')) { // Nur setzen, wenn im Formular vorhanden
+                webflowFieldData[adminTestWebflowSlug] = rawFormData['admin-test'];
+            } else if (adminTestWebflowSlug) { // Standardwert, falls nicht im Formular
+                 webflowFieldData[adminTestWebflowSlug] = true; // Oder false, je nach Standardwunsch
+                 console.log(`Hinweis: Das Webflow-Feld '${adminTestWebflowSlug}' wird fest auf '${webflowFieldData[adminTestWebflowSlug]}' gesetzt, da nicht im Formular.`);
             }
 
 
@@ -638,7 +662,6 @@
                 if (errorDetails) userMessage += ` Details: ${errorDetails}`;
                 const supportDetails = `Webflow Create Worker Status: ${webflowCreateResponse.status}. Worker Response: ${JSON.stringify(webflowCreateResponseData)}. Payload Sent: ${JSON.stringify({ fields: webflowFieldData })}`;
                 showCustomPopup(userMessage, 'error', 'Webflow Fehler', supportDetails);
-                // WICHTIG: Job-Record in Airtable löschen, da Webflow-Erstellung fehlgeschlagen ist
                 deleteAirtableRecord(airtableRecordId, `Webflow creation failed: ${userMessage}`);
                 if (submitButton) { submitButton.disabled = false; const retryText = 'Erneut versuchen'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = retryText; else submitButton.value = retryText;}
                 return;
@@ -649,8 +672,6 @@
 
             if (!webflowItemId) {
                  showCustomPopup('Job in Webflow erstellt, aber ID nicht erhalten. Airtable-Aktualisierung nicht möglich.', 'success', 'Webflow Erfolg mit Hinweis', `Webflow Create Worker Erfolg, aber keine Item ID. Response: ${JSON.stringify(webflowCreateResponseData)}`);
-                // Optional: Auch hier den Airtable Job Record löschen, wenn eine Webflow ID zwingend ist.
-                // deleteAirtableRecord(airtableRecordId, "Webflow item ID not received after creation.");
                 if (submitButton) { submitButton.disabled = false; const partialSuccessText = 'Teilweise erfolgreich'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = partialSuccessText; else submitButton.value = partialSuccessText;}
                 return;
             }
@@ -658,7 +679,7 @@
             showCustomPopup('Job erfolgreich in Webflow erstellt. Aktualisiere Airtable mit Webflow ID...', 'loading', 'Airtable Aktualisierung');
 
             console.log('Sende an Airtable Worker (Update Job mit Webflow ID):', AIRTABLE_WORKER_URL + '/update', JSON.stringify({ recordId: airtableRecordId, webflowId: webflowItemId }));
-            const airtableUpdateResponse = await fetch(AIRTABLE_WORKER_URL + '/update', { // Annahme: /update ist für Job-Updates
+            const airtableUpdateResponse = await fetch(AIRTABLE_WORKER_URL + '/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ recordId: airtableRecordId, webflowId: webflowItemId })
@@ -671,7 +692,6 @@
                 let supportDetails = `Airtable Update Job Worker Status: ${airtableUpdateResponse.status}.`;
                 if (airtableUpdateResponseData) supportDetails += ` Worker Response: ${JSON.stringify(airtableUpdateResponseData)}`;
                 showCustomPopup(userMessage, 'error', 'Airtable Fehler', supportDetails);
-                // Hier könnte man überlegen, das Webflow Item zu löschen, ist aber komplexer.
                 if (submitButton) { submitButton.disabled = false; const partialSuccessText = 'Teilweise erfolgreich'; if (submitButton.tagName === 'BUTTON') submitButton.textContent = partialSuccessText; else submitButton.value = partialSuccessText;}
                 return;
             }
@@ -692,7 +712,6 @@
             const userMessage = `Ein unerwarteter Fehler ist aufgetreten: ${error.message}.`;
             const supportDetails = `Unerwarteter Frontend Fehler: ${error.message}. Stack: ${error.stack}. Raw Form Data: ${JSON.stringify(rawFormData)}. Transformed Airtable Data: ${JSON.stringify(airtableJobDetails || {})}`;
             showCustomPopup(userMessage, 'error', 'Unerwarteter Fehler', supportDetails);
-            // Wenn ein Airtable Job Record erstellt wurde, aber Webflow fehlschlug ODER ein späterer Fehler auftrat
             if (airtableRecordId && !webflowItemId) {
                 deleteAirtableRecord(airtableRecordId, `Unexpected frontend error or Webflow failure: ${error.message}`);
             }

@@ -1,10 +1,11 @@
 // form-submission-handler.js
 // Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
 // und die Orchestrierung der Speicherung in Airtable und Webflow.
-// VERSION 12: Anpassungen für Webflow:
-// - Land/Sprache: Sende kommaseparierten String.
-// - Channels/Nutzungsrechte: Sende kommaseparierten String; korrekte Slugs.
-// - job-id in Webflow wird weiterhin mit Airtable Record ID befüllt.
+// VERSION 13: Anpassungen für Webflow:
+// - job-posted-by wird mit webflowId (Webflow Member ID des Erstellers) befüllt.
+// - creator-follower verwendet den korrekten Schlüssel aus rawFormData und REFERENCE_MAPPINGS.
+// - Channels/Nutzungsrechte werden als Multi-Referenzfelder behandelt (benötigen korrekte REFERENCE_MAPPINGS).
+// - Land/Sprache senden weiterhin den ersten Wert als String (gemäß Webflow-Fehlermeldung).
 
 (function() {
     'use strict';
@@ -26,14 +27,16 @@
     const CLOSE_POPUP_ATTR = '[data-error-target="close-popup"]';
     const MAIL_ERROR_ATTR = '[data-error-target="mail-error"]';
 
-    // REFERENCE_MAPPINGS sind primär für Webflow-Referenzfelder (nicht Multi-Option-Text)
-    // Wenn Channels/Nutzungsrechte Multi-Option-Textfelder sind, benötigen sie hier keine Einträge.
+    // REFERENCE_MAPPINGS:
+    // Schlüssel: Der `data-preview-field` Wert aus dem Formular (oder der entsprechende Schlüssel in rawFormData).
+    // Wert: Ein Objekt, das Formular-Textwerte auf Webflow Item IDs mappt.
+    // WICHTIG: Für 'nutzungOptional' und 'channels' bitte die Platzhalter-IDs durch echte Webflow Item IDs ersetzen!
     const REFERENCE_MAPPINGS = {
-        'creatorFollower': {
+        'creatorFollower': { // Wird verwendet, um den Wert aus rawFormData['creatorCountOptional'] zu mappen
             '0 - 2.500': '3d869451e837ddf527fc54d0fb477ab4',
             '2.500 - 5.000': 'e2d86c9f8febf4fecd674f01beb05bf5',
             '5.000 - 10.000': '27420dd46db02b53abb3a50d4859df84',
-            '10.000 - 25.000': 'd61d9c5625c03e86d87ef854aa702265',
+            '10.000 - 25.000': 'd61d9c5625c03e86d87ef854aa702265', // Beispiel: Dieser Wert kommt aus rawFormData.creatorCountOptional
             '25.000 - 50.000': '78672a41f18d13b57c84e24ae8f9edb9',
             '50.00 - 100.000': '4ed1bbe4e792cfae473584da597445a8',
             '100.000 - 250.000': 'afb6fa102d3defaad347edae3fc8452a',
@@ -74,10 +77,10 @@
             '3': '355ef3ceb930ddbdd28458265b0a4cf0',
             '4': 'be2c319b5dccd012016df2e33408c39'
         },
-        'videoFormat': {
-            '16:9': 'deine_id_hier_16_9',
-            '4:5': 'deine_id_hier_4_5',
-            '9:16': 'deine_id_hier_9_16',
+        'videoFormat': { // Falls dies ein Referenzfeld in Webflow ist
+            '16:9': 'webflow_item_id_fuer_16_9', // Ersetze mit echten IDs
+            '4:5': 'webflow_item_id_fuer_4_5',
+            '9:16': 'webflow_item_id_fuer_9_16',
         },
         'subtitelOptional': {
             'Ja': '587b210d6015c519f05e0aeea6abf1fa',
@@ -90,10 +93,21 @@
             '12 Monate': 'e544d894fe78aaeaf83d8d5a35be5f3f',
             '6 Monate': 'b8353db272656593b627e67fb4730bd6',
             '3 Monate': '9dab07affd09299a345cf4f2322ece34'
+        },
+        // WICHTIG: Diese Mappings für nutzungOptional und channels sind nötig,
+        // wenn die entsprechenden Felder in Webflow Multi-Referenzfelder sind.
+        // Ersetze die Platzhalter-IDs mit echten Webflow Item IDs.
+        'nutzungOptional': {
+            'Werbeanzeigen': 'BITTE_WEBFLOW_ITEM_ID_FUER_WERBEANZEIGEN_EINTRAGEN',
+            'Social Media Kanäle (Instagram, TikTok, Youtube)': 'BITTE_WEBFLOW_ITEM_ID_FUER_SOCIAL_MEDIA_EINTRAGEN',
+            // ... weitere Optionen ...
+        },
+        'channels': {
+            'Instagram': 'BITTE_WEBFLOW_ITEM_ID_FUER_INSTAGRAM_EINTRAGEN',
+            'Facebook': 'BITTE_WEBFLOW_ITEM_ID_FUER_FACEBOOK_EINTRAGEN',
+            'TikTok': 'BITTE_WEBFLOW_ITEM_ID_FUER_TIKTOK_EINTRAGEN',
+            // ... weitere Kanäle ...
         }
-        // 'nutzungOptional' und 'channels' entfernt, da wir davon ausgehen,
-        // dass Webflow hier kommaseparierte Strings oder Arrays von Strings (für Multi-Option-Text) akzeptiert.
-        // Falls es Multi-Referenzfelder sind, müssen die Mappings hier wieder rein.
     };
 
     const WEBFLOW_FIELD_SLUG_MAPPINGS = {
@@ -109,11 +123,11 @@
         'job-adress': 'location',
         'previewText': 'previewtext',
         'userName': 'brand-name',
-        'memberEmail': 'contact-mail',
-        'webflowId': 'webflow-member-id',
+        'memberEmail': 'contact-mail', // Webflow Slug für die E-Mail des Erstellers
+        'webflowId': 'job-posted-by', // NEU: Webflow Slug für die Webflow Member ID des Erstellers
         'memberstackId': 'ms-member-id',
         'jobImageUpload': 'job-image',
-        'creatorFollower': 'creator-follower',
+        'creatorCountOptional': 'creator-follower', // KORRIGIERT: rawFormData.creatorCountOptional -> Webflow-Slug 'creator-follower'
         'creatorAge': 'creator-alter',
         'genderOptional': 'creator-geschlecht',
         'videoDurationOptional': 'video-dauer',
@@ -129,10 +143,9 @@
         'barterDealToggle': 'barter-deal',
         'plusJobToggle': 'plus-job',
         'admin-test': 'admin-test',
-        // KORRIGIERTE Slugs basierend auf Nutzer-Feedback
-        'nutzungOptional': 'job-posting', // Slug für Nutzungsrechte
-        'channels': 'fur-welchen-kanale-wird-der-content-produziert', // Slug für Channels
-        'airtableJobIdForWebflow': 'job-id' // Webflow Slug für die Airtable Job ID
+        'nutzungOptional': 'job-posting', // KORRIGIERT: Slug für Nutzungsrechte
+        'channels': 'fur-welchen-kanale-wird-der-content-produziert', // KORRIGIERT: Slug für Channels
+        'airtableJobIdForWebflow': 'job-id'
     };
 
     const AIRTABLE_FIELD_MAPPINGS = {
@@ -153,11 +166,11 @@
         'previewText': 'Preview Text',
         'userName': 'User Name',
         'memberEmail': 'Contact Mail',
-        'webflowId': 'Webflow Member ID',
+        'webflowId': 'Webflow Member ID', // Für Airtable
         'memberstackId': 'Member ID',
         'jobImageUpload': 'Job Image',
-        'creatorFollower': 'Creator Follower',
-        'creatorCountOptional': 'Creator Follower',
+        'creatorFollower': 'Creator Follower', // Falls das Formularfeld 'creatorFollower' heißt
+        'creatorCountOptional': 'Creator Follower', // Falls das Formularfeld 'creatorCountOptional' die Follower-Daten enthält
         'creatorAge': 'Creator Age',
         'genderOptional': 'Gender Optional',
         'videoDurationOptional': 'Video Duration Optional',
@@ -444,7 +457,7 @@
             return;
         }
         
-        const webflowMemberIdToSearch = rawFormData['webflowId'];
+        const webflowMemberIdToSearch = rawFormData['webflowId']; // Dies ist die Webflow Member ID des Erstellers
         if (!webflowMemberIdToSearch) {
             const errorMsg = 'Webflow Member ID nicht im Formular gefunden. Job kann nicht zugeordnet werden.';
             console.error(errorMsg, rawFormData);
@@ -546,7 +559,7 @@
             
             const airtableJobIdForWebflowSlug = WEBFLOW_FIELD_SLUG_MAPPINGS['airtableJobIdForWebflow'];
             if (airtableJobIdForWebflowSlug) {
-                webflowFieldData[airtableJobIdForWebflowSlug] = airtableRecordId;
+                webflowFieldData[airtableJobIdForWebflowSlug] = airtableRecordId; // Airtable Job ID für das Feld 'job-id' in Webflow
             }
 
             for (const formDataKey in WEBFLOW_FIELD_SLUG_MAPPINGS) {
@@ -570,7 +583,7 @@
                 // KORREKTUR für Webflow land/sprache: Sende kommaseparierten String
                 if ((formDataKey === 'creatorLand' || formDataKey === 'creatorLang') && Array.isArray(formValue)) {
                     if (formValue.length > 0 && (webflowSlug === 'land' || webflowSlug === 'sprache')) {
-                         webflowFieldData[webflowSlug] = formValue.join(', '); // Sende als kommaseparierten String
+                         webflowFieldData[webflowSlug] = formValue.join(', '); 
                          console.log(`Webflow: Sende kommaseparierten String für ${webflowSlug}:`, webflowFieldData[webflowSlug]);
                     } else {
                         console.log(`Webflow: Array für ${webflowSlug} ist leer, wird nicht gesendet.`);
@@ -578,13 +591,41 @@
                     continue; 
                 }
 
-                // KORREKTUR für Webflow Channels/Nutzungsrechte: Sende kommaseparierten String
+                // KORREKTUR für Webflow Channels/Nutzungsrechte:
+                // Wenn es Multi-Referenzfelder sind, müssen die Werte gemappt werden.
+                // Wenn es Textfelder sind, die kommaseparierte Strings erwarten:
                 if ((formDataKey === 'channels' || formDataKey === 'nutzungOptional') && Array.isArray(formValue)) {
-                    if (formValue.length > 0) {
-                        webflowFieldData[webflowSlug] = formValue.join(', '); // Sende als kommaseparierten String
-                        console.log(`Webflow: Sende kommaseparierten String für ${webflowSlug}:`, webflowFieldData[webflowSlug]);
-                    } else {
-                         console.log(`Webflow: Array für ${webflowSlug} ist leer, wird nicht gesendet.`);
+                     if (REFERENCE_MAPPINGS[formDataKey]) { // Prüfen, ob es Mappings für Multi-Referenz gibt
+                        const mappedIds = formValue
+                            .map(itemText => REFERENCE_MAPPINGS[formDataKey][itemText])
+                            .filter(id => id && !id.startsWith('BITTE_WEBFLOW_ITEM_ID_')); // Filtere Platzhalter
+                        if (mappedIds.length > 0) {
+                            webflowFieldData[webflowSlug] = mappedIds; // Sende Array von IDs
+                            console.log(`Webflow: Sende Array von gemappten IDs für ${webflowSlug}:`, mappedIds);
+                        } else {
+                             console.warn(`Webflow: Keine gültigen IDs für Multi-Referenzfeld ${webflowSlug} gefunden nach Mapping. Werte: ${formValue.join(', ')}`);
+                        }
+                    } else { // Fallback: Sende als kommaseparierten String (für Text- oder Multi-Option-Textfelder)
+                        if (formValue.length > 0) {
+                            webflowFieldData[webflowSlug] = formValue.join(', ');
+                            console.log(`Webflow: Sende kommaseparierten String für ${webflowSlug} (keine REFERENCE_MAPPINGS):`, webflowFieldData[webflowSlug]);
+                        } else {
+                             console.log(`Webflow: Array für ${webflowSlug} ist leer, wird nicht gesendet.`);
+                        }
+                    }
+                    continue;
+                }
+
+                // Spezifische Behandlung für creator-follower (formDataKey ist 'creatorCountOptional')
+                if (formDataKey === 'creatorCountOptional' && webflowSlug === 'creator-follower') {
+                    const followerValue = rawFormData['creatorCountOptional']; // Der String, z.B. "10.000 - 25.000"
+                    if (followerValue && REFERENCE_MAPPINGS['creatorFollower'] && REFERENCE_MAPPINGS['creatorFollower'][followerValue]) {
+                        webflowFieldData[webflowSlug] = REFERENCE_MAPPINGS['creatorFollower'][followerValue];
+                        console.log(`Webflow: Setze '${webflowSlug}' mit gemappter ID: ${webflowFieldData[webflowSlug]} für Wert '${followerValue}'`);
+                    } else if (followerValue) {
+                        console.warn(`Webflow: Kein Mapping in REFERENCE_MAPPINGS['creatorFollower'] für Wert '${followerValue}' gefunden. Feld '${webflowSlug}' wird nicht gesetzt oder als Rohwert gesendet.`);
+                        // Optional: Sende Rohwert, wenn Webflow das akzeptiert und es kein Referenzfeld ist
+                        // webflowFieldData[webflowSlug] = followerValue;
                     }
                     continue;
                 }
@@ -592,7 +633,7 @@
 
                 if (REFERENCE_MAPPINGS[formDataKey] && REFERENCE_MAPPINGS[formDataKey].hasOwnProperty(formValue) && !Array.isArray(formValue)) {
                     const mappedId = REFERENCE_MAPPINGS[formDataKey][formValue];
-                    if (mappedId && !mappedId.startsWith('webflow_id_') && !mappedId.startsWith('deine_id_hier_')) {
+                    if (mappedId && !mappedId.startsWith('webflow_id_') && !mappedId.startsWith('deine_id_hier_') && !mappedId.startsWith('BITTE_WEBFLOW_ITEM_ID_')) {
                         webflowFieldData[webflowSlug] = mappedId;
                     } else if (mappedId) { 
                         console.warn(`Platzhalter-ID für Webflow Single-Select '${formDataKey}' (Slug: ${webflowSlug}) gefunden: ${formValue}.`);
@@ -601,23 +642,10 @@
                         webflowFieldData[webflowSlug] = formValue; 
                     }
                 } else if (Array.isArray(formValue)) { 
-                    // Dieser Block sollte für Channels/Nutzungsrechte nicht mehr erreicht werden,
-                    // da sie oben als kommaseparierte Strings behandelt werden.
-                    // Falls es doch andere Array-Felder gibt, die Multi-Referenzen sind:
-                    if (REFERENCE_MAPPINGS[formDataKey]) { 
-                        const mappedIds = formValue
-                            .map(itemText => REFERENCE_MAPPINGS[formDataKey][itemText])
-                            .filter(id => id && !id.startsWith('webflow_id_') && !id.startsWith('deine_id_hier_')); 
-                        if (mappedIds.length > 0) {
-                            webflowFieldData[webflowSlug] = mappedIds;
-                        } else {
-                            console.warn(`Keine gültigen Webflow IDs für Multi-Select '${formDataKey}' (Slug: ${webflowSlug}) nach Mapping. Werte: ${formValue.join(', ')}`);
-                        }
-                    } else { 
-                        // Sollte nicht mehr eintreten für Channels/Nutzungsrechte
-                        webflowFieldData[webflowSlug] = formValue; 
-                        console.warn(`Webflow: Sende Array für unerwartetes Feld ${webflowSlug}:`, formValue);
-                    }
+                    // Sollte bereits oben für Land/Sprache/Channels/Nutzungsrechte behandelt worden sein.
+                    // Dieser Block ist ein Fallback für andere unerwartete Array-Felder.
+                    console.warn(`Webflow: Unerwartetes Array für Feld '${formDataKey}' (Slug: ${webflowSlug}) gefunden. Sende Roh-Array.`, formValue);
+                    webflowFieldData[webflowSlug] = formValue;
                 } else if (['startDate', 'endDate', 'jobOnline'].includes(formDataKey)) {
                     if (formValue) webflowFieldData[webflowSlug] = formValue;
                 } else if (typeof formValue === 'boolean') {

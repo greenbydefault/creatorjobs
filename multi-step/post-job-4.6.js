@@ -1,10 +1,7 @@
 // form-submission-handler.js
-// Dieses Skript ist verantwortlich für das Sammeln der Formulardaten
-// und die Orchestrierung der Speicherung in Airtable und Webflow.
-// VERSION 17: Anpassungen für Webflow:
-// - Das Webflow-Feld 'job-id' wird nun versucht, mit der eigenen Webflow Item ID zu befüllen.
-//   Dies geschieht durch einen zusätzlichen PATCH-Request nach der Erstellung des Items.
-//   VORAUSSETZUNG: Der Worker unter WEBFLOW_CMS_POST_WORKER_URL muss PATCH-Requests an /<item-id> unterstützen.
+// VERSION 18: Anpassungen für Webflow & Fehlerbehandlung:
+// - Wenn das PATCHen des 'job-id'-Feldes in Webflow fehlschlägt, wird der Airtable-Eintrag gelöscht.
+// - Stellt sicher, dass der Worker unter WEBFLOW_CMS_POST_WORKER_URL PATCH-Requests an /<item-id> unterstützt.
 // - 'nutzungOptional' und 'channels' werden als kommaseparierter String gesendet.
 // - Slug des Webflow Items bleibt die airtableRecordId.
 
@@ -12,7 +9,7 @@
     'use strict';
 
     // --- Konfiguration ---
-    const WEBFLOW_CMS_POST_WORKER_URL = 'https://late-meadow-00bc.oliver-258.workers.dev/'; // Basis-URL deines Workers
+    const WEBFLOW_CMS_POST_WORKER_URL = 'https://late-meadow-00bc.oliver-258.workers.dev'; // Basis-URL deines Workers (OHNE / am Ende)
     const AIRTABLE_WORKER_URL = 'https://airtable-job-post.oliver-258.workers.dev/';
     const AIRTABLE_MEMBER_SEARCH_ENDPOINT = AIRTABLE_WORKER_URL + '/search-member';
     const MAIN_FORM_ID = 'wf-form-post-job-form';
@@ -88,8 +85,8 @@
             '6 Monate': 'b8353db272656593b627e67fb4730bd6',
             '3 Monate': '9dab07affd09299a345cf4f2322ece34'
         },
-        'nutzungOptional': {}, // Nicht mehr für ID-Mapping verwendet
-        'channels': {} // Nicht mehr für ID-Mapping verwendet
+        'nutzungOptional': {},
+        'channels': {}
     };
 
     const WEBFLOW_FIELD_SLUG_MAPPINGS = {
@@ -128,7 +125,7 @@
         'admin-test': 'admin-test',
         'nutzungOptional': 'job-posting',
         'channels': 'fur-welchen-kanale-wird-der-content-produziert',
-        'airtableJobIdForWebflow': 'job-id', // Dieses Mapping wird verwendet, um den Zielfeld-Slug 'job-id' zu erhalten
+        'airtableJobIdForWebflow': 'job-id',
         'reviewsOptional': 'anzahl-der-reviews'
     };
 
@@ -150,7 +147,7 @@
         'previewText': 'Preview Text',
         'userName': 'User Name',
         'memberEmail': 'Contact Mail',
-        'webflowId': 'Webflow Member ID', // Wird in Airtable gespeichert (ID des Members)
+        'webflowId': 'Webflow Member ID',
         'memberstackId': 'Member ID',
         'jobImageUpload': 'Job Image',
         'creatorFollower': 'Creator Follower',
@@ -173,7 +170,7 @@
         'user-creatorname': 'User Creatorname',
         'startDate': 'Start Date',
         'endDate': 'End Date',
-        'webflowItemIdFieldAirtable': 'Webflow Item ID' // Name des Feldes in Airtable, das die Webflow Item ID speichert
+        'webflowItemIdFieldAirtable': 'Webflow Item ID'
     };
 
     const find = (selector, element = document) => element.querySelector(selector);
@@ -206,7 +203,7 @@
             mailIconLink.href = '#';
         }
         popup.style.display = 'flex';
-        if (type !== 'error' && type !== 'loading') { // Lade-Popups nicht automatisch schließen
+        if (type !== 'error' && type !== 'loading') {
             setTimeout(closeCustomPopup, 7000);
         }
     }
@@ -289,7 +286,7 @@
                         projectNameValue = field.value.trim();
                         formData[fieldNameKey] = projectNameValue;
                         break;
-                    case 'jobSlug': // jobSlug wird nicht mehr direkt verwendet, der Slug wird die airtableRecordId
+                    case 'jobSlug':
                         break;
                     default:
                         if (field.type === 'checkbox') {
@@ -382,7 +379,6 @@
     }
 
     async function deleteAirtableRecord(airtableRecordId, reason = 'Unknown error') {
-        // Implementierung wie gehabt
         if (!airtableRecordId) {
             console.warn('Keine Airtable Record ID zum Löschen vorhanden.');
             return;
@@ -412,7 +408,6 @@
         const form = find(`#${MAIN_FORM_ID}`);
         const submitButton = form ? form.querySelector('button[type="submit"], input[type="submit"]') : null;
         const initialSubmitButtonText = submitButton ? (submitButton.tagName === 'BUTTON' ? submitButton.textContent : submitButton.value) : 'Absenden';
-
 
         if (submitButton) {
             submitButton.disabled = true;
@@ -474,7 +469,7 @@
         let airtableRecordId = null;
         let webflowItemId = null;
         let airtableJobDetails = {};
-        let webflowFieldData = {}; // Definiere webflowFieldData hier, um im catch-Block darauf zugreifen zu können
+        let webflowFieldData = {};
 
         try {
             for (const keyInRawForm in rawFormData) {
@@ -485,7 +480,7 @@
             }
             airtableJobDetails['job-posted-by'] = [airtableMemberRecordId];
             const adminTestAirtableKey = AIRTABLE_FIELD_MAPPINGS['admin-test'] || 'admin-test';
-            if (rawFormData.hasOwnProperty('admin-test') || AIRTABLE_FIELD_MAPPINGS.hasOwnProperty('admin-test')) { // Prüfe auf rawFormData für den Test-Key
+            if (rawFormData.hasOwnProperty('admin-test') || AIRTABLE_FIELD_MAPPINGS.hasOwnProperty('admin-test')) {
                  airtableJobDetails[adminTestAirtableKey] = rawFormData['admin-test'] === undefined ? true : rawFormData['admin-test'];
             }
 
@@ -506,12 +501,8 @@
             console.log('Airtable Job Record erstellt mit ID:', airtableRecordId);
             showCustomPopup('In Airtable gespeichert. Erstelle Item in Webflow...', 'loading', 'Webflow Erstellung');
 
-            // --- Webflow Datenaufbereitung ---
             webflowFieldData['name'] = rawFormData['job-title'] || rawFormData['projectName'] || 'Unbenannter Job';
-            webflowFieldData['slug'] = airtableRecordId; // Slug bleibt airtableRecordId für Eindeutigkeit und Verknüpfung
-
-            // HINWEIS: Das Feld 'job-id' wird hier NICHT mehr mit airtableRecordId befüllt.
-            // Es wird versucht, es nach der Erstellung mit der webflowItemId zu aktualisieren.
+            webflowFieldData['slug'] = airtableRecordId;
 
             const jobPostedBySlug = WEBFLOW_FIELD_SLUG_MAPPINGS['webflowId'];
             if (jobPostedBySlug && webflowMemberIdOfTheSubmitter) {
@@ -520,7 +511,7 @@
 
             for (const formDataKey in WEBFLOW_FIELD_SLUG_MAPPINGS) {
                 const webflowSlug = WEBFLOW_FIELD_SLUG_MAPPINGS[formDataKey];
-                if (!webflowSlug || ['name', 'slug', 'webflowId', 'airtableJobIdForWebflow'].includes(formDataKey)) { // 'airtableJobIdForWebflow' (job-id) wird später behandelt
+                if (!webflowSlug || ['name', 'slug', 'webflowId', 'airtableJobIdForWebflow'].includes(formDataKey)) {
                     continue;
                 }
                 let formValue = rawFormData[formDataKey];
@@ -552,7 +543,7 @@
                     if (mappedId && !mappedId.startsWith('BITTE_WEBFLOW_ITEM_ID_') && !mappedId.startsWith('webflow_item_id_')) {
                         webflowFieldData[webflowSlug] = mappedId;
                     } else {
-                         webflowFieldData[webflowSlug] = formValue; // Fallback auf Rohwert
+                         webflowFieldData[webflowSlug] = formValue;
                     }
                 } else if (['startDate', 'endDate', 'jobOnline'].includes(formDataKey)) {
                     if (formValue) webflowFieldData[webflowSlug] = formValue;
@@ -568,7 +559,7 @@
             }
 
             console.log('Sende an Webflow Worker (Create):', JSON.stringify({ fields: webflowFieldData }));
-            const webflowCreateResponse = await fetch(WEBFLOW_CMS_POST_WORKER_URL, {
+            const webflowCreateResponse = await fetch(WEBFLOW_CMS_POST_WORKER_URL + '/', { // POST an /
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ fields: webflowFieldData })
@@ -576,98 +567,113 @@
             const webflowCreateResponseData = await webflowCreateResponse.json().catch(() => ({}));
             if (!webflowCreateResponse.ok) {
                 const errorDetails = webflowCreateResponseData.details?.map(d => `${d.param || d.field}: ${d.description || d.message}`).join('; ') || JSON.stringify(webflowCreateResponseData);
-                throw new Error(`Webflow Fehler (${webflowCreateResponse.status}): ${errorDetails}`);
+                throw new Error(`Webflow Erstellungsfehler (${webflowCreateResponse.status}): ${errorDetails}`);
             }
             webflowItemId = webflowCreateResponseData.id || webflowCreateResponseData.item?.id;
             if (!webflowItemId) {
                 throw new Error('Webflow Item ID nicht erhalten nach Erstellung.');
             }
             console.log('Webflow Item erstellt mit ID:', webflowItemId);
-            showCustomPopup('In Webflow erstellt. Aktualisiere Webflow Item...', 'loading', 'Webflow Update');
+            
 
-            // NEUER SCHRITT: Webflow Item aktualisieren, um 'job-id' mit webflowItemId zu füllen
-            const jobSlugInWebflowToUpdate = WEBFLOW_FIELD_SLUG_MAPPINGS['airtableJobIdForWebflow']; // Sollte 'job-id' sein
+            // Webflow Item aktualisieren, um 'job-id' mit webflowItemId zu füllen
+            const jobSlugInWebflowToUpdate = WEBFLOW_FIELD_SLUG_MAPPINGS['airtableJobIdForWebflow'];
             let webflowItemUpdateSuccess = false;
             if (jobSlugInWebflowToUpdate) {
+                showCustomPopup('Aktualisiere Webflow Item mit Job ID...', 'loading', 'Webflow Update');
                 console.log(`Versuche Webflow Item ${webflowItemId} zu aktualisieren: Feld '${jobSlugInWebflowToUpdate}' = ${webflowItemId}`);
                 const updatePayload = { fields: { [jobSlugInWebflowToUpdate]: webflowItemId } };
                 try {
-                    // Annahme: Worker unterstützt PATCH auf WEBFLOW_CMS_POST_WORKER_URL/:itemId
-                    const webflowItemUpdateResponse = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/${webflowItemId}`, {
+                    const webflowItemUpdateResponse = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/${webflowItemId}`, { // PATCH an /<itemId>
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(updatePayload)
                     });
                     const webflowItemUpdateResponseData = await webflowItemUpdateResponse.json().catch(() => ({}));
                     if (!webflowItemUpdateResponse.ok) {
+                        // Fehler beim Patchen wird hier als kritisch behandelt und führt zum Abbruch und Löschen des Airtable-Eintrags
                         console.error(`Fehler beim Aktualisieren des Feldes '${jobSlugInWebflowToUpdate}' im Webflow Item ${webflowItemId}:`, webflowItemUpdateResponse.status, webflowItemUpdateResponseData);
-                        // Nicht abbrechen, nur loggen und Popup-Nachricht anpassen
+                        throw new Error(`Webflow Update Fehler für '${jobSlugInWebflowToUpdate}' (${webflowItemUpdateResponse.status}): ${JSON.stringify(webflowItemUpdateResponseData.error || webflowItemUpdateResponseData)}`);
                     } else {
                         console.log(`Webflow Item ${webflowItemId} erfolgreich aktualisiert: Feld '${jobSlugInWebflowToUpdate}' gesetzt.`);
                         webflowItemUpdateSuccess = true;
                     }
                 } catch (updateError) {
-                    console.error(`Netzwerkfehler beim Aktualisieren des Feldes '${jobSlugInWebflowToUpdate}' im Webflow Item ${webflowItemId}:`, updateError);
+                     // Fehler beim Patchen (Netzwerk oder anderer Fehler) wird hier als kritisch behandelt
+                    console.error(`Netzwerkfehler/Exception beim Aktualisieren des Feldes '${jobSlugInWebflowToUpdate}' im Webflow Item ${webflowItemId}:`, updateError);
+                    throw new Error(`Webflow Update Exception für '${jobSlugInWebflowToUpdate}': ${updateError.message}`);
                 }
             } else {
-                console.warn("Kein Mapping für 'airtableJobIdForWebflow' gefunden, 'job-id' kann nicht in Webflow aktualisiert werden.");
+                console.warn("Kein Mapping für 'airtableJobIdForWebflow' gefunden, 'job-id' kann nicht in Webflow aktualisiert werden. Prozess wird fortgesetzt.");
+                webflowItemUpdateSuccess = true; // Betrachte es als Erfolg, da kein Update versucht wurde
             }
 
-            showCustomPopup('Aktualisiere Airtable mit Webflow ID...', 'loading', 'Airtable Aktualisierung');
-            const airtableUpdateResponse = await fetch(AIRTABLE_WORKER_URL + '/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ recordId: airtableRecordId, webflowId: webflowItemId }) // Speichere webflowItemId in Airtable
-            });
-            const airtableUpdateResponseData = await airtableUpdateResponse.json();
-            if (!airtableUpdateResponse.ok) {
-                throw new Error(`Airtable Update Fehler (${airtableUpdateResponse.status}): ${JSON.stringify(airtableUpdateResponseData)}`);
-            }
-            console.log('Airtable Record aktualisiert mit Webflow Item ID.');
+            // Nur wenn das Update erfolgreich war (oder nicht nötig), fahre mit Airtable Update fort
+            if (webflowItemUpdateSuccess) {
+                showCustomPopup('Aktualisiere Airtable mit Webflow ID...', 'loading', 'Airtable Aktualisierung');
+                const airtableUpdatePayload = { recordId: airtableRecordId, webflowId: webflowItemId };
+                // Füge das Feld für die Webflow Item ID hinzu, das in Airtable gespeichert werden soll
+                const airtableWebflowIdField = AIRTABLE_FIELD_MAPPINGS['webflowItemIdFieldAirtable'];
+                if (airtableWebflowIdField) {
+                    airtableUpdatePayload.fieldsToUpdate = { [airtableWebflowIdField]: webflowItemId };
+                } else {
+                    console.warn("Kein 'webflowItemIdFieldAirtable' in AIRTABLE_FIELD_MAPPINGS definiert. Webflow Item ID wird möglicherweise nicht in Airtable gespeichert.");
+                }
 
-            let successMessage = 'Job erfolgreich in Airtable und Webflow gespeichert!';
-            if (jobSlugInWebflowToUpdate && !webflowItemUpdateSuccess) {
-                successMessage = `Job gespeichert, aber '${jobSlugInWebflowToUpdate}' konnte in Webflow nicht mit der Item ID aktualisiert werden.`;
-                showCustomPopup(successMessage, 'success', 'Teilweise erfolgreich'); // Zeige spezifische Nachricht bei Teil-Erfolg
-            } else if (jobSlugInWebflowToUpdate && webflowItemUpdateSuccess) {
-                 successMessage = `Job erfolgreich gespeichert! Webflow Feld '${jobSlugInWebflowToUpdate}' wurde mit der Item ID aktualisiert.`;
-                 showCustomPopup(successMessage, 'success', 'Erfolgreich');
+                const airtableUpdateResponse = await fetch(AIRTABLE_WORKER_URL + '/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(airtableUpdatePayload)
+                });
+                const airtableUpdateResponseData = await airtableUpdateResponse.json();
+                if (!airtableUpdateResponse.ok) {
+                    // Wenn das Airtable-Update fehlschlägt, nachdem Webflow erfolgreich war, ist das ein Problem.
+                    // Hier könnte man entscheiden, das Webflow-Item zu löschen, aber das ist komplex.
+                    // Fürs Erste: Fehler loggen und Nutzer informieren.
+                    throw new Error(`Airtable Update Fehler (${airtableUpdateResponse.status}): ${JSON.stringify(airtableUpdateResponseData)}`);
+                }
+                console.log('Airtable Record aktualisiert mit Webflow Item ID.');
+                showCustomPopup('Job erfolgreich in Webflow und Airtable gespeichert!', 'success', 'Erfolgreich');
+                if (submitButton) {
+                    const finalSuccessText = 'Erfolgreich gesendet!';
+                    if (submitButton.tagName === 'BUTTON') submitButton.textContent = finalSuccessText;
+                    else submitButton.value = finalSuccessText;
+                }
             } else {
-                 showCustomPopup(successMessage, 'success', 'Erfolgreich');
-            }
-
-
-            if (submitButton) {
-                const finalSuccessText = 'Erfolgreich gesendet!';
-                if (submitButton.tagName === 'BUTTON') submitButton.textContent = finalSuccessText;
-                else submitButton.value = finalSuccessText;
-                // submitButton.disabled = false; // Button könnte hier wieder aktiviert werden oder nach Popup-Schließung
+                // Dieser Fall sollte durch das throw new Error im Patch-Block abgedeckt sein.
+                // Falls nicht, ist hier ein zusätzlicher Sicherungspunkt.
+                throw new Error("Webflow Item Update war nicht erfolgreich, Airtable wurde nicht aktualisiert.");
             }
 
         } catch (error) {
-            console.error('Unerwarteter Fehler im Hauptprozess:', error);
+            console.error('Fehler im Hauptprozess:', error);
             let userMessage = `Ein Fehler ist aufgetreten: ${error.message}.`;
             const supportDetails = `Fehler: ${error.message}. Stack: ${error.stack}. RawData: ${JSON.stringify(rawFormData)}. AirtablePayload: ${JSON.stringify(airtableJobDetails)}. WebflowPayload: ${JSON.stringify(webflowFieldData)}.`;
             showCustomPopup(userMessage, 'error', 'Fehler', supportDetails);
 
-            if (airtableRecordId && !webflowItemId) { // Wenn Airtable erstellt, aber Webflow fehlgeschlagen
-                deleteAirtableRecord(airtableRecordId, `Webflow Erstellung/Update fehlgeschlagen: ${error.message}`);
+            // WICHTIG: Lösche Airtable Record, wenn Webflow Erstellung oder das kritische Update fehlgeschlagen ist
+            if (airtableRecordId) {
+                // Lösche, wenn webflowItemId nicht gesetzt (Erstellung fehlgeschlagen) ODER
+                // wenn webflowItemId gesetzt, aber der Patch-Versuch für job-id unternommen wurde und fehlschlug.
+                // Die Bedingung 'webflowItemUpdateSuccess === false' wird durch das 'throw new Error' oben abgedeckt.
+                // Wenn der Fehler also hier ankommt und airtableRecordId existiert, sollte gelöscht werden.
+                deleteAirtableRecord(airtableRecordId, `Fehler im Webflow-Prozess: ${error.message}`);
             }
+
             if (submitButton) {
                 submitButton.disabled = false;
                 if (submitButton.tagName === 'BUTTON') submitButton.textContent = initialSubmitButtonText;
                 else submitButton.value = initialSubmitButtonText;
             }
         } finally {
-             // Sicherstellen, dass der Button-Text zurückgesetzt wird, falls er noch "Wird gesendet..." anzeigt und nicht bereits erfolgreich war
-            if (submitButton && submitButton.disabled) { // Wenn immer noch disabled (z.B. Fehler ist aufgetreten und nicht erfolgreich beendet)
+            if (submitButton && submitButton.disabled) {
                 const currentButtonText = submitButton.tagName === 'BUTTON' ? submitButton.textContent : submitButton.value;
                 if (currentButtonText === 'Wird gesendet...') {
                      if (submitButton.tagName === 'BUTTON') submitButton.textContent = initialSubmitButtonText;
                      else submitButton.value = initialSubmitButtonText;
                      submitButton.disabled = false;
                 }
-            } else if (submitButton && !submitButton.disabled) { // Wenn nicht disabled, aber Text könnte noch "Wird gesendet..." sein
+            } else if (submitButton && !submitButton.disabled) {
                  const currentButtonText = submitButton.tagName === 'BUTTON' ? submitButton.textContent : submitButton.value;
                  if (currentButtonText === 'Wird gesendet...') {
                      if (submitButton.tagName === 'BUTTON') submitButton.textContent = initialSubmitButtonText;
@@ -697,7 +703,7 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            console.log(`Form Submission Handler v17 initialisiert für: #${MAIN_FORM_ID}`);
+            console.log(`Form Submission Handler v18 initialisiert für: #${MAIN_FORM_ID}`);
         } else {
             console.warn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }

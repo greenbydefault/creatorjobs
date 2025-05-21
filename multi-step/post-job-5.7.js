@@ -4,7 +4,7 @@
 // - Stellt sicher, dass der Worker unter WEBFLOW_CMS_POST_WORKER_URL PATCH-Requests an /<item-id> unterstützt.
 // - 'nutzungOptional' und 'channels' werden als kommaseparierter String gesendet.
 // - Slug des Webflow Items bleibt die airtableRecordId.
-// - Integriert Uploadcare: 1. #uploaderctx.getAPI(), 2. Global API, 3. Scoped element (v18.uc7).
+// - Integriert Uploadcare: 1. #uploaderctx.getAPI(), 2. Global API, 3. Scoped element (v18.uc8 - User-friendly errors).
 
 (function() {
     'use strict';
@@ -255,6 +255,51 @@
         return dateObj.toISOString();
     }
 
+    // Helper function to generate user-friendly error information
+    function getFriendlyErrorFieldInfo(errorMessage) {
+        const result = { area: null, field: null, title: "Fehler bei Verarbeitung" };
+        const lowerErrorMessage = errorMessage.toLowerCase();
+
+        if (lowerErrorMessage.includes("airtable fehler")) {
+            result.area = "Datenbank (Airtable)";
+            result.title = "Datenbankfehler";
+            const airtableFieldKeywords = Object.values(AIRTABLE_FIELD_MAPPINGS).map(name => name.toLowerCase());
+            for (const fieldKeyword of airtableFieldKeywords) {
+                if (lowerErrorMessage.includes(fieldKeyword)) {
+                    const originalFieldName = Object.entries(AIRTABLE_FIELD_MAPPINGS).find(([key, val]) => val.toLowerCase() === fieldKeyword)?.[1];
+                    result.field = originalFieldName || fieldKeyword;
+                    break;
+                }
+            }
+        } else if (lowerErrorMessage.includes("webflow erstellungsfehler") || lowerErrorMessage.includes("webflow update fehler")) {
+            result.area = "Webseite (Webflow)";
+            result.title = lowerErrorMessage.includes("erstellungsfehler") ? "Fehler bei Job-Erstellung" : "Fehler bei Job-Aktualisierung";
+            const webflowSlugToFriendlyName = {
+                'name': 'Job-Titel', 'job-title': 'Job-Titel', 'job-date-end': 'Job Online Bis Datum',
+                'job-payment': 'Bezahlung', 'anzahl-gesuchte-creator': 'Anzahl gesuchte Creator',
+                'anzahl-videos-2': 'Anzahl Videos', 'anzahl-bilder-2': 'Anzahl Bilder',
+                'deine-aufgaben': 'Aufgabenbeschreibung', 'job-beschreibung': 'Job-Steckbrief',
+                'location': 'Standort', 'previewtext': 'Vorschautext', 'brand-name': 'Markenname',
+                'contact-mail': 'Kontakt E-Mail', 'job-image': 'Job Bild',
+                'creator-follower': 'Creator Follower', 'creator-alter': 'Creator Alter',
+                'creator-geschlecht': 'Creator Geschlecht', 'video-dauer': 'Videodauer',
+                'format': 'Format', 'untertitel': 'Untertitel',
+                'dauer-nutzungsrechte': 'Dauer Nutzungsrechte',
+                // Add more as needed
+            };
+            for (const slug in webflowSlugToFriendlyName) {
+                if (lowerErrorMessage.includes(`field: ${slug}`) || lowerErrorMessage.includes(`'${slug}'`) || lowerErrorMessage.includes(`"${slug}"`)) {
+                    result.field = webflowSlugToFriendlyName[slug];
+                    break;
+                }
+            }
+        } else {
+            result.title = "Unerwarteter Fehler";
+        }
+        return result;
+    }
+
+
     function collectAndFormatFormData(formElement) {
         const formData = {};
         const regularFields = findAll(`[${DATA_FIELD_ATTRIBUTE}]`, formElement);
@@ -328,17 +373,16 @@
         let uploadcareAPI = null;
         try {
             console.log(`[Uploadcare Debug] Attempting to get API via document.querySelector('#${UPLOADCARE_PROVIDER_ID}').getAPI()`);
-            const uploaderCtxEl = find(`#${UPLOADCARE_PROVIDER_ID}`); // Use defined constant
+            const uploaderCtxEl = find(`#${UPLOADCARE_PROVIDER_ID}`);
             if (uploaderCtxEl && typeof uploaderCtxEl.getAPI === 'function') {
                 uploadcareAPI = uploaderCtxEl.getAPI();
                 if (uploadcareAPI) {
                     console.log('[Uploadcare Debug] API instance retrieved via #uploaderctx.getAPI():', uploadcareAPI);
                 } else {
-                    // This case should ideally not happen if getAPI is a function but returns falsy
                     console.warn('[Uploadcare Debug] #uploaderctx.getAPI() was callable but did not return an API instance.');
                 }
             } else if (uploaderCtxEl) {
-                console.warn(`[Uploadcare Debug] Element with ID #${UPLOADCARE_PROVIDER_ID} was found, but its getAPI method is NOT a function. Type is: ${typeof uploaderCtxEl.getAPI}. Uploadcare component might not be fully initialized or the ID is on the wrong element.`);
+                console.warn(`[Uploadcare Debug] Element with ID #${UPLOADCARE_PROVIDER_ID} was found, but its getAPI method is NOT a function. Type is: ${typeof uploaderCtxEl.getAPI}.`);
             } else {
                 console.warn(`[Uploadcare Debug] Element with ID #${UPLOADCARE_PROVIDER_ID} was NOT FOUND in the document.`);
             }
@@ -353,7 +397,7 @@
                         console.warn('[Uploadcare Debug] window.UPLOADCARE_BLOCKS.get() did NOT return an API instance for ctx-name:', UPLOADCARE_CTX_NAME);
                     }
                 } else {
-                    console.error('[Uploadcare Debug] CRITICAL: window.UPLOADCARE_BLOCKS or window.UPLOADCARE_BLOCKS.get is not available. Uploadcare library might not be loaded/initialized correctly.');
+                    console.error('[Uploadcare Debug] CRITICAL: window.UPLOADCARE_BLOCKS or window.UPLOADCARE_BLOCKS.get is not available.');
                 }
             }
 
@@ -371,7 +415,6 @@
                 }
             }
 
-            // Proceed if API was obtained through any method
             if (uploadcareAPI && typeof uploadcareAPI.getOutputCollectionState === 'function') {
                 const collectionState = uploadcareAPI.getOutputCollectionState();
                 let fileUUID = null;
@@ -381,7 +424,7 @@
                     fileUUID = firstSuccessEntry.uuid || (firstSuccessEntry.fileInfo ? firstSuccessEntry.fileInfo.uuid : null);
                     console.log('Uploadcare API: Found UUID from successEntries:', fileUUID);
                 } else if (collectionState && collectionState.allEntries && collectionState.allEntries.length > 0) {
-                     const firstEntry = collectionState.allEntries.find(entry => entry.isSuccess); // Find first successful entry
+                     const firstEntry = collectionState.allEntries.find(entry => entry.isSuccess);
                     if (firstEntry) {
                         fileUUID = firstEntry.uuid || (firstEntry.fileInfo ? firstEntry.fileInfo.uuid : null);
                         console.log('Uploadcare API: Found UUID from allEntries (isSuccess=true):', fileUUID);
@@ -399,21 +442,16 @@
                     console.log('Uploadcare Image URL (from API) prepared for Airtable/Webflow:', transformedUrl);
                 } else {
                     console.warn('Uploadcare API: Could not retrieve a valid file UUID via any API method. Attempting final fallback to hidden input.');
-                    const uploadcareHiddenInput = find(`input[name="${UPLOADCARE_CTX_NAME}"]`, formElement); // Scoped to form
+                    const uploadcareHiddenInput = find(`input[name="${UPLOADCARE_CTX_NAME}"]`, formElement);
                     if (uploadcareHiddenInput && uploadcareHiddenInput.value && uploadcareHiddenInput.value.trim() !== '') {
                         let cdnLink = uploadcareHiddenInput.value.trim();
                         console.warn('Uploadcare API: Falling back to hidden input value:', cdnLink);
-                        // Basic processing for fallback
                         if (cdnLink.startsWith('https://ucarecdn.com/') && !cdnLink.endsWith('/')) {
                             cdnLink += '/';
                         } else if (!cdnLink.startsWith('https://ucarecdn.com/')) {
-                            // This might be a group UUID like "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx~N"
-                            // or just a file UUID.
-                            // If it contains '~', it's likely a group.
                             if (cdnLink.includes('~')) {
-                                // Attempt to get the base UUID from a group UUID string
                                 const groupBaseUUID = cdnLink.split('~')[0];
-                                cdnLink = `https://ucarecdn.com/${groupBaseUUID}/nth/0/`; // Try to get first file of group
+                                cdnLink = `https://ucarecdn.com/${groupBaseUUID}/nth/0/`;
                                 console.warn('Uploadcare API: Hidden input seems to be a group UUID, attempting to use first file:', cdnLink);
                             } else {
                                 cdnLink = `https://ucarecdn.com/${cdnLink}/`;
@@ -532,11 +570,10 @@
         }
         showCustomPopup('Daten werden gesammelt...', 'loading', 'Vorbereitung');
 
-        const rawFormData = testData ? testData : collectAndFormatFormData(form); // form is passed here
+        const rawFormData = testData ? testData : collectAndFormatFormData(form);
 
         if (!rawFormData['projectName'] && !rawFormData['job-title']) {
-            const errorMessage = 'Fehler: Job-Titel (projectName) fehlt.';
-            showCustomPopup(errorMessage, 'error', 'Fehler: Fehlende Daten', `Frontend Fehler: projectName oder job-title fehlt.`);
+            showCustomPopup("Bitte geben Sie einen Job-Titel an.", 'error', 'Fehlende Eingabe', 'Frontend Fehler: projectName oder job-title fehlt.');
             if (submitButton) {
                 submitButton.disabled = false;
                 if (submitButton.tagName === 'BUTTON') submitButton.textContent = initialSubmitButtonText;
@@ -547,8 +584,7 @@
 
         const webflowMemberIdOfTheSubmitter = rawFormData['webflowId'];
         if (!webflowMemberIdOfTheSubmitter) {
-            const errorMsg = 'Webflow Member ID des Job-Erstellers nicht im Formular gefunden.';
-            showCustomPopup(errorMsg, 'error', 'Fehler: Fehlende Zuordnung', `Webflow Member ID ('webflowId') fehlt.`);
+            showCustomPopup("Ihre Benutzerdaten konnten nicht korrekt zugeordnet werden. Bitte kontaktieren Sie den Support.", 'error', 'Zuordnungsfehler', "Webflow Member ID ('webflowId') fehlt.");
             if (submitButton) {
                 submitButton.disabled = false;
                 if (submitButton.tagName === 'BUTTON') submitButton.textContent = initialSubmitButtonText;
@@ -572,7 +608,7 @@
             airtableMemberRecordId = memberSearchData.memberRecordId;
             console.log('Mitglied gefunden. Airtable Record ID des Mitglieds:', airtableMemberRecordId);
         } catch (error) {
-            showCustomPopup(`Fehler bei Mitgliedersuche: ${error.message}`, 'error', 'Fehler: Mitgliedersuche');
+            showCustomPopup("Die Überprüfung Ihrer Benutzerdaten ist fehlgeschlagen. Bitte kontaktieren Sie den Support.", 'error', 'Fehler bei Benutzerprüfung', `Fehler bei Mitgliedersuche: ${error.message}`);
             if (submitButton) {
                 submitButton.disabled = false;
                 if (submitButton.tagName === 'BUTTON') submitButton.textContent = initialSubmitButtonText;
@@ -688,8 +724,7 @@
             });
             const webflowCreateResponseData = await webflowCreateResponse.json().catch(() => ({}));
             if (!webflowCreateResponse.ok) {
-                const errorDetails = webflowCreateResponseData.details?.map(d => `${d.param || d.field}: ${d.description || d.message}`).join('; ') || JSON.stringify(webflowCreateResponseData);
-                throw new Error(`Webflow Erstellungsfehler (${webflowCreateResponse.status}): ${errorDetails}`);
+                throw new Error(`Webflow Erstellungsfehler (${webflowCreateResponse.status}): ${JSON.stringify(webflowCreateResponseData.error || webflowCreateResponseData.errors || webflowCreateResponseData)}`);
             }
             webflowItemId = webflowCreateResponseData.id || webflowCreateResponseData.item?.id;
             if (!webflowItemId) {
@@ -712,7 +747,7 @@
                     const webflowItemUpdateResponseData = await webflowItemUpdateResponse.json().catch(() => ({}));
                     if (!webflowItemUpdateResponse.ok) {
                         console.error(`Fehler beim Aktualisieren des Feldes '${jobSlugInWebflowToUpdate}' im Webflow Item ${webflowItemId}:`, webflowItemUpdateResponse.status, webflowItemUpdateResponseData);
-                        throw new Error(`Webflow Update Fehler für '${jobSlugInWebflowToUpdate}' (${webflowItemUpdateResponse.status}): ${JSON.stringify(webflowItemUpdateResponseData.error || webflowItemUpdateResponseData)}`);
+                        throw new Error(`Webflow Update Fehler für '${jobSlugInWebflowToUpdate}' (${webflowItemUpdateResponse.status}): ${JSON.stringify(webflowItemUpdateResponseData.error || webflowItemUpdateResponseData.errors || webflowItemUpdateResponseData)}`);
                     } else {
                         console.log(`Webflow Item ${webflowItemId} erfolgreich aktualisiert: Feld '${jobSlugInWebflowToUpdate}' gesetzt.`);
                         webflowItemUpdateSuccess = true;
@@ -758,9 +793,22 @@
 
         } catch (error) {
             console.error('Fehler im Hauptprozess:', error);
-            let userMessage = `Ein Fehler ist aufgetreten: ${error.message}.`;
-            const supportDetails = `Fehler: ${error.message}. Stack: ${error.stack}. RawData: ${JSON.stringify(rawFormData)}. AirtablePayload: ${JSON.stringify(airtableJobDetails)}. WebflowPayload: ${JSON.stringify(webflowFieldData)}.`;
-            showCustomPopup(userMessage, 'error', 'Fehler', supportDetails);
+            const technicalSupportDetails = `Fehler: ${error.message}. Stack: ${error.stack}. RawData: ${JSON.stringify(rawFormData)}. AirtablePayload: ${JSON.stringify(airtableJobDetails)}. WebflowPayload: ${JSON.stringify(webflowFieldData)}.`;
+
+            const friendlyInfo = getFriendlyErrorFieldInfo(error.message);
+            let userDisplayMessage;
+
+            if (friendlyInfo.area) {
+                userDisplayMessage = `Es tut uns leid, ein Fehler ist im Bereich "${friendlyInfo.area}" aufgetreten.`;
+                if (friendlyInfo.field) {
+                    userDisplayMessage += ` Möglicherweise betrifft es das Feld "${friendlyInfo.field}".`;
+                }
+                userDisplayMessage += " Bitte überprüfen Sie Ihre Eingaben oder kontaktieren Sie den Support, falls der Fehler weiterhin besteht.";
+            } else {
+                // Generic message if no area could be determined by getFriendlyErrorFieldInfo
+                userDisplayMessage = "Es tut uns leid, leider ist ein unerwarteter Fehler bei der Verarbeitung Ihrer Anfrage aufgetreten. Bitte kontaktieren Sie den Support für weitere Hilfe.";
+            }
+            showCustomPopup(userDisplayMessage, 'error', friendlyInfo.title, technicalSupportDetails);
 
             if (airtableRecordId) {
                 deleteAirtableRecord(airtableRecordId, `Fehler im Webflow-Prozess: ${error.message}`);
@@ -809,14 +857,14 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            console.log(`Form Submission Handler v18.uc7 initialisiert für: #${MAIN_FORM_ID}`); // Updated version marker
+            console.log(`Form Submission Handler v18.uc8 initialisiert für: #${MAIN_FORM_ID}`);
         } else {
             console.warn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }
     });
 
     function handleFormSubmitWrapper(event) {
-        handleFormSubmit(event, null); // formElement is derived from MAIN_FORM_ID inside handleFormSubmit
+        handleFormSubmit(event, null);
     }
 
 })();

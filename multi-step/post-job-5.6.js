@@ -4,7 +4,7 @@
 // - Stellt sicher, dass der Worker unter WEBFLOW_CMS_POST_WORKER_URL PATCH-Requests an /<item-id> unterstützt.
 // - 'nutzungOptional' und 'channels' werden als kommaseparierter String gesendet.
 // - Slug des Webflow Items bleibt die airtableRecordId.
-// - Integriert Uploadcare: 1. Global API access, 2. Scoped element search (v18.uc6).
+// - Integriert Uploadcare: 1. #uploaderctx.getAPI(), 2. Global API, 3. Scoped element (v18.uc7).
 
 (function() {
     'use strict';
@@ -17,6 +17,7 @@
     const DATA_FIELD_ATTRIBUTE = 'data-preview-field';
     const SUPPORT_EMAIL = 'support@yourcompany.com'; // BITTE ERSETZEN!
     const UPLOADCARE_CTX_NAME = 'my-uploader'; // ctx-name of your Uploadcare widget
+    const UPLOADCARE_PROVIDER_ID = 'uploaderctx'; // ID of your <uc-upload-ctx-provider>
 
     const POPUP_WRAPPER_ATTR = '[data-error-target="popup-wrapper"]';
     const POPUP_TITLE_ATTR = '[data-error-target="popup-title"]';
@@ -326,35 +327,51 @@
         // --- START UPLOADCARE API INTEGRATION ---
         let uploadcareAPI = null;
         try {
-            console.log('[Uploadcare Debug] Attempting to get API via window.UPLOADCARE_BLOCKS.get()');
-            if (window.UPLOADCARE_BLOCKS && typeof window.UPLOADCARE_BLOCKS.get === 'function') {
-                uploadcareAPI = window.UPLOADCARE_BLOCKS.get(UPLOADCARE_CTX_NAME);
+            console.log(`[Uploadcare Debug] Attempting to get API via document.querySelector('#${UPLOADCARE_PROVIDER_ID}').getAPI()`);
+            const uploaderCtxEl = find(`#${UPLOADCARE_PROVIDER_ID}`); // Use defined constant
+            if (uploaderCtxEl && typeof uploaderCtxEl.getAPI === 'function') {
+                uploadcareAPI = uploaderCtxEl.getAPI();
                 if (uploadcareAPI) {
-                    console.log('[Uploadcare Debug] API instance retrieved via window.UPLOADCARE_BLOCKS.get():', uploadcareAPI);
+                    console.log('[Uploadcare Debug] API instance retrieved via #uploaderctx.getAPI():', uploadcareAPI);
                 } else {
-                    // This case means UPLOADCARE_BLOCKS.get existed but returned null/undefined for the ctx-name
-                    console.warn('[Uploadcare Debug] window.UPLOADCARE_BLOCKS.get() did NOT return an API instance for ctx-name:', UPLOADCARE_CTX_NAME);
+                    // This case should ideally not happen if getAPI is a function but returns falsy
+                    console.warn('[Uploadcare Debug] #uploaderctx.getAPI() was callable but did not return an API instance.');
                 }
+            } else if (uploaderCtxEl) {
+                console.warn(`[Uploadcare Debug] Element with ID #${UPLOADCARE_PROVIDER_ID} was found, but its getAPI method is NOT a function. Type is: ${typeof uploaderCtxEl.getAPI}. Uploadcare component might not be fully initialized or the ID is on the wrong element.`);
             } else {
-                // This case means window.UPLOADCARE_BLOCKS itself or its .get method is not defined.
-                // This is a strong indicator that the Uploadcare library is not loaded or initialized.
-                console.error('[Uploadcare Debug] CRITICAL: window.UPLOADCARE_BLOCKS or window.UPLOADCARE_BLOCKS.get is not available. Uploadcare library might not be loaded/initialized correctly.');
+                console.warn(`[Uploadcare Debug] Element with ID #${UPLOADCARE_PROVIDER_ID} was NOT FOUND in the document.`);
             }
 
             if (!uploadcareAPI) {
-                console.warn('[Uploadcare Debug] Falling back to DOM query for uploader element because window.UPLOADCARE_BLOCKS.get() failed or returned no instance.');
-                const uploaderEl = find(`uc-file-uploader-regular[ctx-name="${UPLOADCARE_CTX_NAME}"]`, formElement);
-                console.log('[Uploadcare Debug] Uploader element found via DOM query:', uploaderEl); // Log the element itself
-                if (uploaderEl && typeof uploaderEl.getAPI === 'function') {
-                    uploadcareAPI = uploaderEl.getAPI();
-                    console.log('[Uploadcare Debug] API instance retrieved via uploaderEl.getAPI():', uploadcareAPI);
-                } else if (uploaderEl) {
-                    console.error(`[Uploadcare Debug] Uploader element WAS FOUND via DOM query for ctx-name "${UPLOADCARE_CTX_NAME}", but its getAPI method is NOT a function. Type is: ${typeof uploaderEl.getAPI}. Uploadcare component might not be fully initialized.`);
+                console.log('[Uploadcare Debug] Attempting to get API via window.UPLOADCARE_BLOCKS.get() as fallback 1');
+                if (window.UPLOADCARE_BLOCKS && typeof window.UPLOADCARE_BLOCKS.get === 'function') {
+                    uploadcareAPI = window.UPLOADCARE_BLOCKS.get(UPLOADCARE_CTX_NAME);
+                    if (uploadcareAPI) {
+                        console.log('[Uploadcare Debug] API instance retrieved via window.UPLOADCARE_BLOCKS.get():', uploadcareAPI);
+                    } else {
+                        console.warn('[Uploadcare Debug] window.UPLOADCARE_BLOCKS.get() did NOT return an API instance for ctx-name:', UPLOADCARE_CTX_NAME);
+                    }
                 } else {
-                    console.error(`[Uploadcare Debug] Uploader element with ctx-name "${UPLOADCARE_CTX_NAME}" (scoped to form) was NOT FOUND via DOM query.`);
+                    console.error('[Uploadcare Debug] CRITICAL: window.UPLOADCARE_BLOCKS or window.UPLOADCARE_BLOCKS.get is not available. Uploadcare library might not be loaded/initialized correctly.');
                 }
             }
 
+            if (!uploadcareAPI) {
+                console.warn('[Uploadcare Debug] Falling back to DOM query for uploader element (uc-file-uploader-regular) as fallback 2.');
+                const uploaderEl = find(`uc-file-uploader-regular[ctx-name="${UPLOADCARE_CTX_NAME}"]`, formElement);
+                console.log('[Uploadcare Debug] Uploader element (uc-file-uploader-regular) found via DOM query:', uploaderEl);
+                if (uploaderEl && typeof uploaderEl.getAPI === 'function') {
+                    uploadcareAPI = uploaderEl.getAPI();
+                    console.log('[Uploadcare Debug] API instance retrieved via uc-file-uploader-regular.getAPI():', uploadcareAPI);
+                } else if (uploaderEl) {
+                    console.error(`[Uploadcare Debug] uc-file-uploader-regular element WAS FOUND via DOM query, but its getAPI method is NOT a function. Type is: ${typeof uploaderEl.getAPI}.`);
+                } else {
+                    console.error(`[Uploadcare Debug] uc-file-uploader-regular element with ctx-name "${UPLOADCARE_CTX_NAME}" was NOT FOUND via DOM query.`);
+                }
+            }
+
+            // Proceed if API was obtained through any method
             if (uploadcareAPI && typeof uploadcareAPI.getOutputCollectionState === 'function') {
                 const collectionState = uploadcareAPI.getOutputCollectionState();
                 let fileUUID = null;
@@ -364,12 +381,12 @@
                     fileUUID = firstSuccessEntry.uuid || (firstSuccessEntry.fileInfo ? firstSuccessEntry.fileInfo.uuid : null);
                     console.log('Uploadcare API: Found UUID from successEntries:', fileUUID);
                 } else if (collectionState && collectionState.allEntries && collectionState.allEntries.length > 0) {
-                    const firstEntry = collectionState.allEntries[0];
-                    if (firstEntry.isSuccess) {
+                     const firstEntry = collectionState.allEntries.find(entry => entry.isSuccess); // Find first successful entry
+                    if (firstEntry) {
                         fileUUID = firstEntry.uuid || (firstEntry.fileInfo ? firstEntry.fileInfo.uuid : null);
                         console.log('Uploadcare API: Found UUID from allEntries (isSuccess=true):', fileUUID);
                     } else {
-                        console.log('Uploadcare API: First entry in allEntries is not in success state.');
+                        console.log('Uploadcare API: No entry with isSuccess=true in allEntries.');
                     }
                 } else {
                     console.log('Uploadcare API: No successful or available entries found in collection state.');
@@ -381,21 +398,32 @@
                     formData['jobImageUpload'] = transformedUrl;
                     console.log('Uploadcare Image URL (from API) prepared for Airtable/Webflow:', transformedUrl);
                 } else {
-                    console.warn('Uploadcare API: Could not retrieve a valid file UUID via API. Attempting fallback to hidden input.');
-                    const uploadcareHiddenInput = find(`input[name="${UPLOADCARE_CTX_NAME}"]`, formElement);
+                    console.warn('Uploadcare API: Could not retrieve a valid file UUID via any API method. Attempting final fallback to hidden input.');
+                    const uploadcareHiddenInput = find(`input[name="${UPLOADCARE_CTX_NAME}"]`, formElement); // Scoped to form
                     if (uploadcareHiddenInput && uploadcareHiddenInput.value && uploadcareHiddenInput.value.trim() !== '') {
                         let cdnLink = uploadcareHiddenInput.value.trim();
                         console.warn('Uploadcare API: Falling back to hidden input value:', cdnLink);
+                        // Basic processing for fallback
                         if (cdnLink.startsWith('https://ucarecdn.com/') && !cdnLink.endsWith('/')) {
                             cdnLink += '/';
                         } else if (!cdnLink.startsWith('https://ucarecdn.com/')) {
-                            cdnLink = `https://ucarecdn.com/${cdnLink}/`; 
+                            // This might be a group UUID like "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx~N"
+                            // or just a file UUID.
+                            // If it contains '~', it's likely a group.
+                            if (cdnLink.includes('~')) {
+                                // Attempt to get the base UUID from a group UUID string
+                                const groupBaseUUID = cdnLink.split('~')[0];
+                                cdnLink = `https://ucarecdn.com/${groupBaseUUID}/nth/0/`; // Try to get first file of group
+                                console.warn('Uploadcare API: Hidden input seems to be a group UUID, attempting to use first file:', cdnLink);
+                            } else {
+                                cdnLink = `https://ucarecdn.com/${cdnLink}/`;
+                            }
                         }
                         const transformedUrl = `${cdnLink}-/preview/320x320/-/format/auto/-/quality/smart/`;
                         formData['jobImageUpload'] = transformedUrl;
                         console.warn('Uploadcare Image URL (from fallback input) prepared:', transformedUrl);
                     } else {
-                            console.log('Uploadcare API: Fallback hidden input also not found or has no value.');
+                        console.log('Uploadcare API: Final fallback to hidden input also failed (not found or no value).');
                     }
                 }
             } else if (uploadcareAPI) { 
@@ -407,7 +435,6 @@
             console.error('Error during Uploadcare API integration:', e);
         }
         // --- END UPLOADCARE API INTEGRATION ---
-
 
         if (formData['creatorLand'] && !Array.isArray(formData['creatorLand'])) {
             formData['creatorLand'] = [formData['creatorLand']];
@@ -782,7 +809,7 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            console.log(`Form Submission Handler v18.uc6 initialisiert für: #${MAIN_FORM_ID}`); // Updated version marker
+            console.log(`Form Submission Handler v18.uc7 initialisiert für: #${MAIN_FORM_ID}`); // Updated version marker
         } else {
             console.warn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }

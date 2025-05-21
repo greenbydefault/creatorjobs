@@ -4,7 +4,7 @@
 // - Stellt sicher, dass der Worker unter WEBFLOW_CMS_POST_WORKER_URL PATCH-Requests an /<item-id> unterstützt.
 // - 'nutzungOptional' und 'channels' werden als kommaseparierter String gesendet.
 // - Slug des Webflow Items bleibt die airtableRecordId.
-// - Integriert Uploadcare: 1. Global API access, 2. Scoped element search (v18.uc5).
+// - Integriert Uploadcare: 1. Global API access, 2. Scoped element search (v18.uc6).
 
 (function() {
     'use strict';
@@ -332,21 +332,26 @@
                 if (uploadcareAPI) {
                     console.log('[Uploadcare Debug] API instance retrieved via window.UPLOADCARE_BLOCKS.get():', uploadcareAPI);
                 } else {
-                    console.log('[Uploadcare Debug] window.UPLOADCARE_BLOCKS.get() did not return an API instance for ctx-name:', UPLOADCARE_CTX_NAME);
+                    // This case means UPLOADCARE_BLOCKS.get existed but returned null/undefined for the ctx-name
+                    console.warn('[Uploadcare Debug] window.UPLOADCARE_BLOCKS.get() did NOT return an API instance for ctx-name:', UPLOADCARE_CTX_NAME);
                 }
             } else {
-                console.log('[Uploadcare Debug] window.UPLOADCARE_BLOCKS or window.UPLOADCARE_BLOCKS.get is not available.');
+                // This case means window.UPLOADCARE_BLOCKS itself or its .get method is not defined.
+                // This is a strong indicator that the Uploadcare library is not loaded or initialized.
+                console.error('[Uploadcare Debug] CRITICAL: window.UPLOADCARE_BLOCKS or window.UPLOADCARE_BLOCKS.get is not available. Uploadcare library might not be loaded/initialized correctly.');
             }
 
             if (!uploadcareAPI) {
-                console.log('[Uploadcare Debug] Falling back to DOM query for uploader element.');
+                console.warn('[Uploadcare Debug] Falling back to DOM query for uploader element because window.UPLOADCARE_BLOCKS.get() failed or returned no instance.');
                 const uploaderEl = find(`uc-file-uploader-regular[ctx-name="${UPLOADCARE_CTX_NAME}"]`, formElement);
-                console.log('[Uploadcare Debug] Uploader element found via DOM query:', uploaderEl);
+                console.log('[Uploadcare Debug] Uploader element found via DOM query:', uploaderEl); // Log the element itself
                 if (uploaderEl && typeof uploaderEl.getAPI === 'function') {
                     uploadcareAPI = uploaderEl.getAPI();
                     console.log('[Uploadcare Debug] API instance retrieved via uploaderEl.getAPI():', uploadcareAPI);
+                } else if (uploaderEl) {
+                    console.error(`[Uploadcare Debug] Uploader element WAS FOUND via DOM query for ctx-name "${UPLOADCARE_CTX_NAME}", but its getAPI method is NOT a function. Type is: ${typeof uploaderEl.getAPI}. Uploadcare component might not be fully initialized.`);
                 } else {
-                    console.error(`[Uploadcare Debug] Uploader element with ctx-name "${UPLOADCARE_CTX_NAME}" (scoped to form) not found or getAPI method is missing.`);
+                    console.error(`[Uploadcare Debug] Uploader element with ctx-name "${UPLOADCARE_CTX_NAME}" (scoped to form) was NOT FOUND via DOM query.`);
                 }
             }
 
@@ -393,10 +398,10 @@
                             console.log('Uploadcare API: Fallback hidden input also not found or has no value.');
                     }
                 }
-            } else if (uploadcareAPI) { // API object exists but no getOutputCollectionState
-                 console.error(`Uploadcare API: API instance found, but getOutputCollectionState method is missing.`);
-            } else { // No API object found through either method
-                 console.error(`Uploadcare API: Failed to obtain API instance through all methods.`);
+            } else if (uploadcareAPI) { 
+                 console.error(`Uploadcare API: API instance was retrieved, but its getOutputCollectionState method is missing or not a function. Type is: ${typeof uploadcareAPI.getOutputCollectionState}`);
+            } else { 
+                 console.error(`Uploadcare API: Failed to obtain API instance through all available methods. Cannot process Uploadcare file.`);
             }
         } catch (e) {
             console.error('Error during Uploadcare API integration:', e);
@@ -777,7 +782,7 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            console.log(`Form Submission Handler v18.uc5 initialisiert für: #${MAIN_FORM_ID}`); // Updated version marker
+            console.log(`Form Submission Handler v18.uc6 initialisiert für: #${MAIN_FORM_ID}`); // Updated version marker
         } else {
             console.warn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }

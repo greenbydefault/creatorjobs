@@ -1,18 +1,16 @@
 // form-submission-handler.js
-// VERSION 20: Erweiterte Fehlerbehandlung: Löscht Webflow Item, wenn nach dessen Erstellung ein Fehler auftritt.
-// - Fügt eine Funktion 'deleteWebflowItem' hinzu.
-// - Im Fehlerfall wird nach dem Löschen des Airtable-Eintrags auch das Webflow-Item gelöscht, falls es bereits erstellt wurde.
-// - Stellt sicher, dass der Worker unter WEBFLOW_CMS_POST_WORKER_URL DELETE-Requests an /<item-id> unterstützt.
-// - Integration für Bild-Upload zu Airtable und Nutzung der URL in Webflow.
-// - WICHTIG: Die Funktion 'uploadFileToAirtableWorker' ist ein PLACEHOLDER und muss serverseitig implementiert werden.
+// VERSION 21: Verwendet direkt die von Webflow bereitgestellte Bild-URL.
+// - Entfernt die clientseitige Bild-Upload-Logik zum Airtable-Worker.
+// - Geht davon aus, dass das Feld 'jobImageUpload' die von Webflow generierte Bild-URL als Text enthält.
+// - Fügt detaillierteres Logging für das 'jobImageUpload'-Feld hinzu.
+// - Behält die erweiterte Fehlerbehandlung bei (Löschen von Webflow/Airtable-Einträgen im Fehlerfall).
 
 (function() {
     'use strict';
 
     // --- Konfiguration ---
-    const WEBFLOW_CMS_POST_WORKER_URL = 'https://late-meadow-00bc.oliver-258.workers.dev'; // Basis-URL deines Workers (OHNE / am Ende)
-    const AIRTABLE_WORKER_URL = 'https://airtable-job-post.oliver-258.workers.dev/'; // Basis-URL für Airtable Operationen
-    // const AIRTABLE_IMAGE_UPLOAD_WORKER_URL = AIRTABLE_WORKER_URL + 'upload-image-to-field'; // Beispiel für Bild-Upload Endpunkt
+    const WEBFLOW_CMS_POST_WORKER_URL = 'https://late-meadow-00bc.oliver-258.workers.dev';
+    const AIRTABLE_WORKER_URL = 'https://airtable-job-post.oliver-258.workers.dev/';
     const AIRTABLE_MEMBER_SEARCH_ENDPOINT = AIRTABLE_WORKER_URL + '/search-member';
     const MAIN_FORM_ID = 'wf-form-post-job-form';
     const DATA_FIELD_ATTRIBUTE = 'data-preview-field';
@@ -108,7 +106,7 @@
         'webflowId': 'job-posted-by',
         'webflowIdForTextField': 'webflow-member-id',
         'memberstackId': 'ms-member-id',
-        'jobImageUpload': 'job-image',
+        'jobImageUpload': 'job-image', // Webflow Image Field (erwartet URL)
         'creatorCountOptional': 'creator-follower',
         'creatorAge': 'creator-alter',
         'genderOptional': 'creator-geschlecht',
@@ -151,7 +149,7 @@
         'memberEmail': 'Contact Mail',
         'webflowId': 'Webflow Member ID',
         'memberstackId': 'Member ID',
-        'jobImageUpload': 'Job Image', // Airtable Attachment Field (fldbYK80nBVspv5Gw)
+        'jobImageUpload': 'Job Image', // Airtable Attachment Field ID: fldbYK80nBVspv5Gw
         'creatorFollower': 'Creator Follower',
         'creatorCountOptional': 'Creator Follower',
         'creatorAge': 'Creator Age',
@@ -267,13 +265,25 @@
             'nutzungOptional': [],
             'channels': []
         };
+
+        console.log("Starte Sammlung der Formulardaten...");
+
         regularFields.forEach(field => {
             const fieldNameKey = field.getAttribute(DATA_FIELD_ATTRIBUTE);
             let value;
-            if (field.type === 'file' && fieldNameKey === 'jobImageUpload') {
-                console.log(`Datei-Input '${fieldNameKey}' wird später verarbeitet.`);
-                return;
+
+            // Spezifische Behandlung für jobImageUpload: Erwartet eine URL
+            if (fieldNameKey === 'jobImageUpload') {
+                value = field.value ? field.value.trim() : '';
+                if (value) {
+                    formData[fieldNameKey] = value;
+                    console.log(`[DEBUG] jobImageUpload: Element gefunden. Typ: ${field.type}, Wert (URL): '${value}'`);
+                } else {
+                    console.log(`[DEBUG] jobImageUpload: Element gefunden, aber kein Wert (URL) vorhanden. Typ: ${field.type}`);
+                }
+                return; // Nächstes Feld
             }
+
             if (multiSelectFields.hasOwnProperty(fieldNameKey)) {
                 if ((field.type === 'checkbox' || field.type === 'radio') && field.checked) {
                     multiSelectFields[fieldNameKey].push(field.value.trim());
@@ -292,7 +302,7 @@
                         projectNameValue = field.value.trim();
                         formData[fieldNameKey] = projectNameValue;
                         break;
-                    case 'jobSlug':
+                    case 'jobSlug': // jobSlug wird nicht direkt gesendet
                         break;
                     default:
                         if (field.type === 'checkbox') {
@@ -311,7 +321,7 @@
                         } else if (field.type === 'date') {
                             value = field.value;
                             if (value) formData[fieldNameKey] = value;
-                        } else {
+                        } else { // Standard Textfelder
                             value = field.value.trim();
                             if (value !== '' || fieldNameKey === 'job-adress' || fieldNameKey === 'job-adress-optional') {
                                 formData[fieldNameKey] = value;
@@ -320,6 +330,7 @@
                 }
             }
         });
+
         for (const key in multiSelectFields) {
             if (multiSelectFields[key].length > 0) {
                 formData[key] = multiSelectFields[key];
@@ -400,7 +411,6 @@
         }
     }
 
-    // NEUE FUNKTION: Löscht ein Webflow Item
     async function deleteWebflowItem(itemId, reason = 'Unknown error during cleanup') {
         if (!itemId) {
             console.warn('Keine Webflow Item ID zum Löschen vorhanden.');
@@ -408,28 +418,22 @@
         }
         console.log(`Versuche Webflow Item ${itemId} zu löschen wegen: ${reason}`);
         try {
-            // Der Worker unter WEBFLOW_CMS_POST_WORKER_URL muss DELETE Anfragen an /<itemId> unterstützen
             const response = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/${itemId}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json'
-                    // Ggf. weitere Header, die dein Worker für die Authentifizierung/Autorisierung benötigt
                 }
             });
             if (response.ok) {
                 console.log(`Webflow Item ${itemId} erfolgreich gelöscht.`);
             } else {
-                // Versuche, die Fehlerdetails aus der Antwort zu lesen
                 const responseData = await response.json().catch(() => ({ error: { message: 'Antwort nicht lesbar oder kein JSON.'}}));
                 console.error(`Fehler beim Löschen von Webflow Item ${itemId}:`, response.status, responseData);
-                // Hier wird kein weiteres Popup für den Benutzer angezeigt, da dies ein sekundärer Aufräumprozess ist.
-                // Das primäre Fehlerpopup wurde bereits in handleFormSubmit angezeigt.
             }
         } catch (error) {
             console.error(`Unerwarteter Netzwerk- oder Verarbeitungsfehler beim Löschen des Webflow Items ${itemId}:`, error);
         }
     }
-
 
     async function handleFormSubmit(event, testData = null) {
         if (event && typeof event.preventDefault === 'function') {
@@ -496,56 +500,12 @@
             return;
         }
         
-        const jobImageUploadInput = find('input[type="file"][data-preview-field="jobImageUpload"]');
-        let jobImageFile = null;
-        if (jobImageUploadInput && jobImageUploadInput.files && jobImageUploadInput.files.length > 0) {
-            jobImageFile = jobImageUploadInput.files[0];
-        }
-        let airtableImageUrl = null;
-        if (jobImageFile) {
-            showCustomPopup('Bild wird zu Airtable hochgeladen...', 'loading', 'Bild-Upload');
-            try {
-                async function uploadFileToAirtableWorker(file) {
-                    console.warn(`[WICHTIG - PLACEHOLDER] Die Funktion 'uploadFileToAirtableWorker' ist nur ein Dummy.`);
-                    console.warn(`[WICHTIG - PLACEHOLDER] Du musst die Logik implementieren, um die Datei '${file.name}' an deinen Airtable Worker zu senden.`);
-                    console.warn(`[WICHTIG - PLACEHOLDER] Der Worker muss das Bild zu Airtable (Feld 'fldbYK80nBVspv5Gw') hochladen und die URL zurückgeben.`);
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    const simulatedFileName = encodeURIComponent(file.name.replace(/[^a-zA-Z0-9.]/g, '_'));
-                    const dummyUrl = `https://dl.airtable.com/.attachments/simulated_${Date.now()}/${simulatedFileName}`;
-                    console.log(`[PLACEHOLDER] Simulierte Airtable URL: ${dummyUrl}`);
-                    return { url: dummyUrl };
-                    /*
-                    const formData = new FormData();
-                    formData.append('imageFile', file); 
-                    formData.append('targetAirtableFieldId', 'fldbYK80nBVspv5Gw'); 
-                    const response = await fetch(AIRTABLE_IMAGE_UPLOAD_WORKER_URL, { 
-                        method: 'POST',
-                        body: formData,
-                    });
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({ message: 'Unbekannter Upload-Fehler' }));
-                        throw new Error(`Airtable Bild-Upload fehlgeschlagen (${response.status}): ${errorData.message || JSON.stringify(errorData)}`);
-                    }
-                    return await response.json();
-                    */
-                }
-                const uploadResult = await uploadFileToAirtableWorker(jobImageFile);
-                if (uploadResult && uploadResult.url) {
-                    airtableImageUrl = uploadResult.url;
-                    console.log('Bild erfolgreich (simuliert) zu Airtable hochgeladen. URL:', airtableImageUrl);
-                } else {
-                    throw new Error('Bild-Upload zu Airtable fehlgeschlagen oder keine URL erhalten.');
-                }
-            } catch (uploadError) {
-                console.error('Fehler beim Bild-Upload:', uploadError);
-                showCustomPopup(`Fehler beim Bild-Upload: ${uploadError.message}`, 'error', 'Fehler: Bild-Upload', `Details: ${uploadError.stack}. Stellen Sie sicher, dass der Airtable Worker korrekt implementiert ist.`);
-                if (submitButton) {
-                    submitButton.disabled = false;
-                    if (submitButton.tagName === 'BUTTON') submitButton.textContent = initialSubmitButtonText;
-                    else submitButton.value = initialSubmitButtonText;
-                }
-                return;
-            }
+        // Bild-URL aus rawFormData holen (sollte von Webflow bereitgestellt und in collectAndFormatFormData gesammelt worden sein)
+        const airtableImageUrl = rawFormData['jobImageUpload'] || null;
+        if (airtableImageUrl) {
+            console.log(`[DEBUG] Bild-URL für Airtable/Webflow verwenden: ${airtableImageUrl}`);
+        } else {
+            console.log("[DEBUG] Keine Bild-URL im Feld 'jobImageUpload' gefunden.");
         }
 
         let airtableRecordId = null;
@@ -554,26 +514,37 @@
         let webflowFieldData = {};
 
         try {
+            // Airtable Daten vorbereiten
             for (const keyInRawForm in rawFormData) {
                 if (rawFormData.hasOwnProperty(keyInRawForm)) {
-                    if (keyInRawForm === 'jobImageUpload') continue;
+                    // 'jobImageUpload' wird jetzt direkt aus rawFormData für die URL verwendet,
+                    // aber der Airtable-Schlüssel ist AIRTABLE_FIELD_MAPPINGS['jobImageUpload']
+                    if (keyInRawForm === 'jobImageUpload') continue; // Überspringen, da es unten speziell behandelt wird
+
                     const airtableKey = AIRTABLE_FIELD_MAPPINGS[keyInRawForm] || keyInRawForm;
                     airtableJobDetails[airtableKey] = rawFormData[keyInRawForm];
                 }
             }
             airtableJobDetails['job-posted-by'] = [airtableMemberRecordId];
+
             if (airtableImageUrl) {
-                const airtableImageFieldName = AIRTABLE_FIELD_MAPPINGS['jobImageUpload'];
+                const airtableImageFieldName = AIRTABLE_FIELD_MAPPINGS['jobImageUpload']; // Sollte 'Job Image' sein
                 if (airtableImageFieldName) {
+                    // Struktur für Airtable Attachment Field
                     airtableJobDetails[airtableImageFieldName] = [{ url: airtableImageUrl }];
+                     console.log(`[DEBUG] Airtable Payload für ${airtableImageFieldName}:`, airtableJobDetails[airtableImageFieldName]);
+                } else {
+                    console.warn("[DEBUG] Kein Airtable Mapping für 'jobImageUpload' gefunden.");
                 }
             }
+            
             const adminTestAirtableKey = AIRTABLE_FIELD_MAPPINGS['admin-test'] || 'admin-test';
             if (rawFormData.hasOwnProperty('admin-test') || AIRTABLE_FIELD_MAPPINGS.hasOwnProperty('admin-test')) {
                  airtableJobDetails[adminTestAirtableKey] = rawFormData['admin-test'] === undefined ? true : rawFormData['admin-test'];
             }
 
             showCustomPopup('Daten werden in Airtable gespeichert...', 'loading', 'Airtable Speicherung');
+            console.log('[DEBUG] Sende an Airtable (Create):', JSON.stringify({ jobDetails: airtableJobDetails }) );
             const airtableCreateResponse = await fetch(AIRTABLE_WORKER_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -581,6 +552,7 @@
             });
             const airtableCreateResponseData = await airtableCreateResponse.json();
             if (!airtableCreateResponse.ok) {
+                console.error('[DEBUG] Airtable Create Fehler Response Data:', airtableCreateResponseData);
                 throw new Error(`Airtable Fehler (${airtableCreateResponse.status}): ${airtableCreateResponseData.error?.message || JSON.stringify(airtableCreateResponseData)}`);
             }
             airtableRecordId = airtableCreateResponseData.records?.[0]?.id;
@@ -590,18 +562,24 @@
             console.log('Airtable Job Record erstellt mit ID:', airtableRecordId);
             showCustomPopup('In Airtable gespeichert. Erstelle Item in Webflow...', 'loading', 'Webflow Erstellung');
 
+            // Webflow Daten vorbereiten
             webflowFieldData['name'] = rawFormData['job-title'] || rawFormData['projectName'] || 'Unbenannter Job';
             webflowFieldData['slug'] = airtableRecordId;
             const jobPostedBySlug = WEBFLOW_FIELD_SLUG_MAPPINGS['webflowId'];
             if (jobPostedBySlug && webflowMemberIdOfTheSubmitter) {
                 webflowFieldData[jobPostedBySlug] = webflowMemberIdOfTheSubmitter;
             }
-            if (airtableImageUrl) {
-                const webflowImageFieldName = WEBFLOW_FIELD_SLUG_MAPPINGS['jobImageUpload'];
+
+            if (airtableImageUrl) { // Dieselbe URL von Webflow
+                const webflowImageFieldName = WEBFLOW_FIELD_SLUG_MAPPINGS['jobImageUpload']; // Sollte 'job-image' sein
                 if (webflowImageFieldName) {
                     webflowFieldData[webflowImageFieldName] = airtableImageUrl;
+                    console.log(`[DEBUG] Webflow Payload für ${webflowImageFieldName}: '${airtableImageUrl}'`);
+                } else {
+                     console.warn("[DEBUG] Kein Webflow Mapping für 'jobImageUpload' gefunden.");
                 }
             }
+
             for (const formDataKey in WEBFLOW_FIELD_SLUG_MAPPINGS) {
                 const webflowSlug = WEBFLOW_FIELD_SLUG_MAPPINGS[formDataKey];
                 if (!webflowSlug || ['name', 'slug', 'webflowId', 'airtableJobIdForWebflow', 'jobImageUpload'].includes(formDataKey)) {
@@ -739,13 +717,10 @@
             const supportDetails = `Fehler: ${error.message}. Stack: ${error.stack}. RawData: ${JSON.stringify(rawFormData)}. AirtablePayload: ${JSON.stringify(airtableJobDetails)}. WebflowPayload: ${JSON.stringify(webflowFieldData)}.`;
             showCustomPopup(userMessage, 'error', 'Fehler', supportDetails);
 
-            // WICHTIG: Aufräumen im Fehlerfall
             if (airtableRecordId) {
-                // Versuche, den Airtable-Eintrag zu löschen (await, um sicherzustellen, dass es versucht wird)
                 await deleteAirtableRecord(airtableRecordId, `Fehler im Prozess: ${error.message}`);
             }
             if (webflowItemId) {
-                // Versuche, das Webflow Item zu löschen, wenn es bereits erstellt wurde (await)
                 await deleteWebflowItem(webflowItemId, `Fehler im Prozess nach Webflow Item Erstellung: ${error.message}`);
             }
 
@@ -786,7 +761,7 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            console.log(`Form Submission Handler v20 initialisiert für: #${MAIN_FORM_ID}`);
+            console.log(`Form Submission Handler v21 initialisiert für: #${MAIN_FORM_ID}`);
         } else {
             console.warn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }

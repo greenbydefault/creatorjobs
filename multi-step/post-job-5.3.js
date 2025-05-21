@@ -4,7 +4,7 @@
 // - Stellt sicher, dass der Worker unter WEBFLOW_CMS_POST_WORKER_URL PATCH-Requests an /<item-id> unterstützt.
 // - 'nutzungOptional' und 'channels' werden als kommaseparierter String gesendet.
 // - Slug des Webflow Items bleibt die airtableRecordId.
-// - Integriert Uploadcare für 'jobImageUpload' via client-side API (v18.uc3).
+// - Integriert Uploadcare für 'jobImageUpload' via client-side API, scoped element search (v18.uc4).
 
 (function() {
     'use strict';
@@ -325,7 +325,15 @@
 
         // --- START UPLOADCARE API INTEGRATION ---
         try {
-            const uploaderEl = find(`uc-file-uploader-regular[ctx-name="${UPLOADCARE_CTX_NAME}"]`);
+            // Ensure to search within the specific formElement
+            const uploaderEl = find(`uc-file-uploader-regular[ctx-name="${UPLOADCARE_CTX_NAME}"]`, formElement);
+            
+            // Debugging logs
+            console.log('[Uploadcare Debug] Attempting to find uploader element within form:', uploaderEl);
+            if (uploaderEl) {
+                console.log('[Uploadcare Debug] typeof uploaderEl.getAPI:', typeof uploaderEl.getAPI);
+            }
+
             if (uploaderEl && typeof uploaderEl.getAPI === 'function') {
                 const uploadcareAPI = uploaderEl.getAPI();
                 if (uploadcareAPI && typeof uploadcareAPI.getOutputCollectionState === 'function') {
@@ -337,7 +345,6 @@
                         fileUUID = firstSuccessEntry.uuid || (firstSuccessEntry.fileInfo ? firstSuccessEntry.fileInfo.uuid : null);
                         console.log('Uploadcare API: Found UUID from successEntries:', fileUUID);
                     } else if (collectionState && collectionState.allEntries && collectionState.allEntries.length > 0) {
-                        // Fallback to allEntries if successEntries is empty, but check status
                         const firstEntry = collectionState.allEntries[0];
                         if (firstEntry.isSuccess) {
                            fileUUID = firstEntry.uuid || (firstEntry.fileInfo ? firstEntry.fileInfo.uuid : null);
@@ -355,18 +362,16 @@
                         formData['jobImageUpload'] = transformedUrl;
                         console.log('Uploadcare Image URL (from API) prepared for Airtable/Webflow:', transformedUrl);
                     } else {
-                        console.warn('Uploadcare API: Could not retrieve a valid file UUID.');
-                        // Attempt to use the hidden input as a fallback, as in previous versions,
-                        // though this might still provide a group URL if group-output is on.
+                        console.warn('Uploadcare API: Could not retrieve a valid file UUID via API.');
+                        // Fallback to hidden input (already scoped to formElement)
                         const uploadcareHiddenInput = find(`input[name="${UPLOADCARE_CTX_NAME}"]`, formElement);
                         if (uploadcareHiddenInput && uploadcareHiddenInput.value && uploadcareHiddenInput.value.trim() !== '') {
                             let cdnLink = uploadcareHiddenInput.value.trim();
                             console.warn('Uploadcare API: Falling back to hidden input value:', cdnLink);
-                            // Basic processing for fallback
                             if (cdnLink.startsWith('https://ucarecdn.com/') && !cdnLink.endsWith('/')) {
                                 cdnLink += '/';
                             } else if (!cdnLink.startsWith('https://ucarecdn.com/')) {
-                                cdnLink = `https://ucarecdn.com/${cdnLink}/`; // Simplistic assumption
+                                cdnLink = `https://ucarecdn.com/${cdnLink}/`; 
                             }
                             const transformedUrl = `${cdnLink}-/preview/320x320/-/format/auto/-/quality/smart/`;
                             formData['jobImageUpload'] = transformedUrl;
@@ -376,10 +381,10 @@
                         }
                     }
                 } else {
-                    console.error('Uploadcare API: getOutputCollectionState method not found on API object.');
+                    console.error(`Uploadcare API: getOutputCollectionState method not found on API object for element found in form.`);
                 }
             } else {
-                console.error(`Uploadcare API: Uploader element with ctx-name "${UPLOADCARE_CTX_NAME}" not found or getAPI method is missing.`);
+                console.error(`Uploadcare API: Uploader element with ctx-name "${UPLOADCARE_CTX_NAME}" (scoped to form) not found or getAPI method is missing.`);
             }
         } catch (e) {
             console.error('Error during Uploadcare API integration:', e);
@@ -483,7 +488,7 @@
         }
         showCustomPopup('Daten werden gesammelt...', 'loading', 'Vorbereitung');
 
-        const rawFormData = testData ? testData : collectAndFormatFormData(form);
+        const rawFormData = testData ? testData : collectAndFormatFormData(form); // form is passed here
 
         if (!rawFormData['projectName'] && !rawFormData['job-title']) {
             const errorMessage = 'Fehler: Job-Titel (projectName) fehlt.';
@@ -585,12 +590,11 @@
                     if (rawFormData['webflowId']) webflowFieldData[webflowSlug] = rawFormData['webflowId'];
                     continue;
                 }
-                // Handle jobImageUpload specifically if it was processed by Uploadcare logic
                 if (formDataKey === 'jobImageUpload' && webflowSlug === 'job-image') {
-                    if (rawFormData[formDataKey]) { // Check if Uploadcare logic populated it
+                    if (rawFormData[formDataKey]) { 
                         webflowFieldData[webflowSlug] = rawFormData[formDataKey];
                     }
-                    continue; // Skip generic processing for this key
+                    continue; 
                 }
 
                 if (formValue === undefined || formValue === null || (typeof formValue === 'string' && formValue.trim() === '')) {
@@ -633,7 +637,7 @@
             }
 
             console.log('Sende an Webflow Worker (Create):', JSON.stringify({ fields: webflowFieldData }));
-            const webflowCreateResponse = await fetch(WEBFLOW_CMS_POST_WORKER_URL + '/', { // POST an /
+            const webflowCreateResponse = await fetch(WEBFLOW_CMS_POST_WORKER_URL + '/', { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ fields: webflowFieldData })
@@ -649,8 +653,6 @@
             }
             console.log('Webflow Item erstellt mit ID:', webflowItemId);
             
-
-            // Webflow Item aktualisieren, um 'job-id' mit webflowItemId zu füllen
             const jobSlugInWebflowToUpdate = WEBFLOW_FIELD_SLUG_MAPPINGS['airtableJobIdForWebflow'];
             let webflowItemUpdateSuccess = false;
             if (jobSlugInWebflowToUpdate) {
@@ -658,7 +660,7 @@
                 console.log(`Versuche Webflow Item ${webflowItemId} zu aktualisieren: Feld '${jobSlugInWebflowToUpdate}' = ${webflowItemId}`);
                 const updatePayload = { fields: { [jobSlugInWebflowToUpdate]: webflowItemId } };
                 try {
-                    const webflowItemUpdateResponse = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/${webflowItemId}`, { // PATCH an /<itemId>
+                    const webflowItemUpdateResponse = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/${webflowItemId}`, { 
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(updatePayload)
@@ -763,14 +765,14 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            console.log(`Form Submission Handler v18.uc3 initialisiert für: #${MAIN_FORM_ID}`); // Updated version marker
+            console.log(`Form Submission Handler v18.uc4 initialisiert für: #${MAIN_FORM_ID}`); // Updated version marker
         } else {
             console.warn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }
     });
 
     function handleFormSubmitWrapper(event) {
-        handleFormSubmit(event, null);
+        handleFormSubmit(event, null); // formElement is derived from MAIN_FORM_ID inside handleFormSubmit
     }
 
 })();

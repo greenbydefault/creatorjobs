@@ -4,7 +4,7 @@
 // - Stellt sicher, dass der Worker unter WEBFLOW_CMS_POST_WORKER_URL PATCH-Requests an /<item-id> unterstützt.
 // - 'nutzungOptional' und 'channels' werden als kommaseparierter String gesendet.
 // - Slug des Webflow Items bleibt die airtableRecordId.
-// - Integriert Uploadcare für 'jobImageUpload' mit spezifischen Transformationen (v18.uc1).
+// - Integriert Uploadcare für 'jobImageUpload', korrigiert die Handhabung von Gruppen-URLs für einzelne Dateien (v18.uc2).
 
 (function() {
     'use strict';
@@ -323,31 +323,45 @@
         }
 
         // --- START UPLOADCARE INTEGRATION ---
-        // The Uploadcare input field should have the name "my-uploader" based on ctx-name="my-uploader"
         const uploadcareInput = find('input[name="my-uploader"]', formElement);
-
         if (uploadcareInput && uploadcareInput.value && uploadcareInput.value.trim() !== '') {
             let cdnLink = uploadcareInput.value.trim();
-            // The value from Uploadcare might be a full CDN link (e.g., https://ucarecdn.com/UUID/)
-            // or a group URL (e.g. https://ucarecdn.com/GROUP_UUID~N/)
-            // or just a UUID. We want to ensure it's a base URL ending with a slash
-            // before appending transformations.
+            let processedCdnLink = '';
 
-            if (cdnLink.startsWith('https://ucarecdn.com/')) {
-                // If it's a CDN link, ensure it ends with a slash
-                if (!cdnLink.endsWith('/')) {
-                    cdnLink += '/';
-                }
+            // Regex to detect Uploadcare group URLs like:
+            // https://ucarecdn.com/GROUP_UUID~COUNT/ or https://ucarecdn.com/GROUP_UUID~COUNT
+            const groupUrlRegex = /^(https:\/\/ucarecdn\.com\/)([a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}~[1-9][0-9]*)(\/)?$/i;
+            const match = cdnLink.match(groupUrlRegex);
+
+            if (match) {
+                // It's a group URL. Extract the group UUID and get the URL for the first file (index 0).
+                const groupBase = match[1]; // e.g., "https://ucarecdn.com/"
+                const groupIdentifierWithCount = match[2]; // e.g., "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx~1"
+                const groupUUID = groupIdentifierWithCount.split('~')[0];
+                processedCdnLink = `${groupBase}${groupUUID}/nth/0/`; // URL for the first file in the group
+                console.log('Uploadcare group URL detected. Using first file from group:', processedCdnLink);
+            } else if (cdnLink.startsWith('https://ucarecdn.com/')) {
+                // It's likely a direct file CDN URL. Ensure it ends with a slash.
+                processedCdnLink = cdnLink.endsWith('/') ? cdnLink : cdnLink + '/';
+            } else if (/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(cdnLink)) {
+                // It's just a file UUID. Construct the full CDN URL.
+                processedCdnLink = `https://ucarecdn.com/${cdnLink}/`;
             } else {
-                // If it's likely just a UUID (e.g., xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx or xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx~N)
-                // Prepend the base and append a slash.
-                // This also covers cases where it might be a group UUID like "UUID~1" without the full path.
-                cdnLink = `https://ucarecdn.com/${cdnLink}/`;
+                // Fallback for any other unexpected format. Try to use it as is.
+                console.warn('Uploadcare URL format not fully recognized. Attempting to use as is:', cdnLink);
+                // Ensure it has the base and a trailing slash as a best effort
+                if (cdnLink.startsWith('https://ucarecdn.com/')) {
+                    processedCdnLink = cdnLink.endsWith('/') ? cdnLink : cdnLink + '/';
+                } else {
+                    // If it's not a full URL and not a simple UUID, this might be problematic,
+                    // but we'll prepend the base and add a slash.
+                    processedCdnLink = `https://ucarecdn.com/${cdnLink}/`;
+                }
             }
             
             // Append the desired transformations
-            const transformedUrl = `${cdnLink}-/preview/320x320/-/format/auto/-/quality/smart/`;
-            formData['jobImageUpload'] = transformedUrl; // This key maps to 'Job Image' in Airtable
+            const transformedUrl = `${processedCdnLink}-/preview/320x320/-/format/auto/-/quality/smart/`;
+            formData['jobImageUpload'] = transformedUrl;
             console.log('Uploadcare Image URL prepared for Airtable/Webflow:', transformedUrl);
         } else {
             console.log('Uploadcare input (my-uploader) not found in form or has no value.');
@@ -731,7 +745,7 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            console.log(`Form Submission Handler v18.uc1 initialisiert für: #${MAIN_FORM_ID}`); // Updated version marker
+            console.log(`Form Submission Handler v18.uc2 initialisiert für: #${MAIN_FORM_ID}`); // Updated version marker
         } else {
             console.warn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }

@@ -4,7 +4,7 @@
 // - Stellt sicher, dass der Worker unter WEBFLOW_CMS_POST_WORKER_URL PATCH-Requests an /<item-id> unterstützt.
 // - 'nutzungOptional' und 'channels' werden als kommaseparierter String gesendet.
 // - Slug des Webflow Items bleibt die airtableRecordId.
-// - Integriert Uploadcare für 'jobImageUpload', korrigiert die Handhabung von Gruppen-URLs für einzelne Dateien (v18.uc2).
+// - Integriert Uploadcare für 'jobImageUpload' via client-side API (v18.uc3).
 
 (function() {
     'use strict';
@@ -16,6 +16,7 @@
     const MAIN_FORM_ID = 'wf-form-post-job-form';
     const DATA_FIELD_ATTRIBUTE = 'data-preview-field';
     const SUPPORT_EMAIL = 'support@yourcompany.com'; // BITTE ERSETZEN!
+    const UPLOADCARE_CTX_NAME = 'my-uploader'; // ctx-name of your Uploadcare widget
 
     const POPUP_WRAPPER_ATTR = '[data-error-target="popup-wrapper"]';
     const POPUP_TITLE_ATTR = '[data-error-target="popup-title"]';
@@ -322,51 +323,68 @@
             }
         }
 
-        // --- START UPLOADCARE INTEGRATION ---
-        const uploadcareInput = find('input[name="my-uploader"]', formElement);
-        if (uploadcareInput && uploadcareInput.value && uploadcareInput.value.trim() !== '') {
-            let cdnLink = uploadcareInput.value.trim();
-            let processedCdnLink = '';
+        // --- START UPLOADCARE API INTEGRATION ---
+        try {
+            const uploaderEl = find(`uc-file-uploader-regular[ctx-name="${UPLOADCARE_CTX_NAME}"]`);
+            if (uploaderEl && typeof uploaderEl.getAPI === 'function') {
+                const uploadcareAPI = uploaderEl.getAPI();
+                if (uploadcareAPI && typeof uploadcareAPI.getOutputCollectionState === 'function') {
+                    const collectionState = uploadcareAPI.getOutputCollectionState();
+                    let fileUUID = null;
 
-            // Regex to detect Uploadcare group URLs like:
-            // https://ucarecdn.com/GROUP_UUID~COUNT/ or https://ucarecdn.com/GROUP_UUID~COUNT
-            const groupUrlRegex = /^(https:\/\/ucarecdn\.com\/)([a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}~[1-9][0-9]*)(\/)?$/i;
-            const match = cdnLink.match(groupUrlRegex);
+                    if (collectionState && collectionState.successEntries && collectionState.successEntries.length > 0) {
+                        const firstSuccessEntry = collectionState.successEntries[0];
+                        fileUUID = firstSuccessEntry.uuid || (firstSuccessEntry.fileInfo ? firstSuccessEntry.fileInfo.uuid : null);
+                        console.log('Uploadcare API: Found UUID from successEntries:', fileUUID);
+                    } else if (collectionState && collectionState.allEntries && collectionState.allEntries.length > 0) {
+                        // Fallback to allEntries if successEntries is empty, but check status
+                        const firstEntry = collectionState.allEntries[0];
+                        if (firstEntry.isSuccess) {
+                           fileUUID = firstEntry.uuid || (firstEntry.fileInfo ? firstEntry.fileInfo.uuid : null);
+                           console.log('Uploadcare API: Found UUID from allEntries (isSuccess=true):', fileUUID);
+                        } else {
+                            console.log('Uploadcare API: First entry in allEntries is not in success state.');
+                        }
+                    } else {
+                        console.log('Uploadcare API: No successful or available entries found in collection state.');
+                    }
 
-            if (match) {
-                // It's a group URL. Extract the group UUID and get the URL for the first file (index 0).
-                const groupBase = match[1]; // e.g., "https://ucarecdn.com/"
-                const groupIdentifierWithCount = match[2]; // e.g., "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx~1"
-                const groupUUID = groupIdentifierWithCount.split('~')[0];
-                processedCdnLink = `${groupBase}${groupUUID}/nth/0/`; // URL for the first file in the group
-                console.log('Uploadcare group URL detected. Using first file from group:', processedCdnLink);
-            } else if (cdnLink.startsWith('https://ucarecdn.com/')) {
-                // It's likely a direct file CDN URL. Ensure it ends with a slash.
-                processedCdnLink = cdnLink.endsWith('/') ? cdnLink : cdnLink + '/';
-            } else if (/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(cdnLink)) {
-                // It's just a file UUID. Construct the full CDN URL.
-                processedCdnLink = `https://ucarecdn.com/${cdnLink}/`;
-            } else {
-                // Fallback for any other unexpected format. Try to use it as is.
-                console.warn('Uploadcare URL format not fully recognized. Attempting to use as is:', cdnLink);
-                // Ensure it has the base and a trailing slash as a best effort
-                if (cdnLink.startsWith('https://ucarecdn.com/')) {
-                    processedCdnLink = cdnLink.endsWith('/') ? cdnLink : cdnLink + '/';
+                    if (fileUUID) {
+                        const baseCdnUrl = `https://ucarecdn.com/${fileUUID}/`;
+                        const transformedUrl = `${baseCdnUrl}-/preview/320x320/-/format/auto/-/quality/smart/`;
+                        formData['jobImageUpload'] = transformedUrl;
+                        console.log('Uploadcare Image URL (from API) prepared for Airtable/Webflow:', transformedUrl);
+                    } else {
+                        console.warn('Uploadcare API: Could not retrieve a valid file UUID.');
+                        // Attempt to use the hidden input as a fallback, as in previous versions,
+                        // though this might still provide a group URL if group-output is on.
+                        const uploadcareHiddenInput = find(`input[name="${UPLOADCARE_CTX_NAME}"]`, formElement);
+                        if (uploadcareHiddenInput && uploadcareHiddenInput.value && uploadcareHiddenInput.value.trim() !== '') {
+                            let cdnLink = uploadcareHiddenInput.value.trim();
+                            console.warn('Uploadcare API: Falling back to hidden input value:', cdnLink);
+                            // Basic processing for fallback
+                            if (cdnLink.startsWith('https://ucarecdn.com/') && !cdnLink.endsWith('/')) {
+                                cdnLink += '/';
+                            } else if (!cdnLink.startsWith('https://ucarecdn.com/')) {
+                                cdnLink = `https://ucarecdn.com/${cdnLink}/`; // Simplistic assumption
+                            }
+                            const transformedUrl = `${cdnLink}-/preview/320x320/-/format/auto/-/quality/smart/`;
+                            formData['jobImageUpload'] = transformedUrl;
+                            console.warn('Uploadcare Image URL (from fallback input) prepared:', transformedUrl);
+                        } else {
+                             console.log('Uploadcare API: Fallback hidden input also not found or has no value.');
+                        }
+                    }
                 } else {
-                    // If it's not a full URL and not a simple UUID, this might be problematic,
-                    // but we'll prepend the base and add a slash.
-                    processedCdnLink = `https://ucarecdn.com/${cdnLink}/`;
+                    console.error('Uploadcare API: getOutputCollectionState method not found on API object.');
                 }
+            } else {
+                console.error(`Uploadcare API: Uploader element with ctx-name "${UPLOADCARE_CTX_NAME}" not found or getAPI method is missing.`);
             }
-            
-            // Append the desired transformations
-            const transformedUrl = `${processedCdnLink}-/preview/320x320/-/format/auto/-/quality/smart/`;
-            formData['jobImageUpload'] = transformedUrl;
-            console.log('Uploadcare Image URL prepared for Airtable/Webflow:', transformedUrl);
-        } else {
-            console.log('Uploadcare input (my-uploader) not found in form or has no value.');
+        } catch (e) {
+            console.error('Error during Uploadcare API integration:', e);
         }
-        // --- END UPLOADCARE INTEGRATION ---
+        // --- END UPLOADCARE API INTEGRATION ---
 
 
         if (formData['creatorLand'] && !Array.isArray(formData['creatorLand'])) {
@@ -745,7 +763,7 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            console.log(`Form Submission Handler v18.uc2 initialisiert für: #${MAIN_FORM_ID}`); // Updated version marker
+            console.log(`Form Submission Handler v18.uc3 initialisiert für: #${MAIN_FORM_ID}`); // Updated version marker
         } else {
             console.warn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }

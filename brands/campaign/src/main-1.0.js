@@ -46,9 +46,6 @@
                   paginationWrapper.querySelectorAll('.db-pagination-count:not(.ellipsis)').forEach(el => el.classList.add("disabled-loading"));
               }
               
-
-              // Neu sortieren und filtern basierend auf den aktuellen Filtern und der neuen Seitengröße
-              // Die Filter sind bereits in jobCacheEntry.activeFilters gespeichert.
               let itemsToDisplay = jobCacheEntry.allItems;
               if (jobCacheEntry.activeFilters.follower && jobCacheEntry.activeFilters.follower.length > 0) {
                   itemsToDisplay = itemsToDisplay.filter(item => {
@@ -58,7 +55,6 @@
                   });
               }
               
-              // Sicherstellen, dass die Funktionen geladen sind
               if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.sortApplicantsGlobally &&
                   window.WEBFLOW_API.appLogic && window.WEBFLOW_API.appLogic.loadAndDisplayApplicantsForJob) {
                   
@@ -66,12 +62,17 @@
                   const { loadAndDisplayApplicantsForJob } = window.WEBFLOW_API.appLogic;
                   const MAPPINGS = window.WEBFLOW_API.MAPPINGS;
 
-
                   jobCacheEntry.sortedAndFilteredItems = sortApplicantsGlobally(itemsToDisplay, jobCacheEntry.jobDetails, MAPPINGS);
                   
                   loadAndDisplayApplicantsForJob(jobId, openApplicantContainer, paginationWrapper, 1)
-                    .finally(() => {
-                      if (toggleDivElement) toggleDivElement.style.pointerEvents = 'auto'; // Interaktion wieder erlauben
+                    .then(() => { // Ersetzt .finally() für Erfolg und Fehler
+                        if (toggleDivElement) toggleDivElement.style.pointerEvents = 'auto';
+                    })
+                    .catch((error) => { // Stellt sicher, dass Fehler nicht verschluckt werden und Aufräumarbeiten stattfinden
+                        if (toggleDivElement) toggleDivElement.style.pointerEvents = 'auto';
+                        console.error("Fehler beim Neuladen der Bewerber nach Seitengrößenänderung:", error);
+                        // Fehler weiterwerfen, falls er an anderer Stelle behandelt werden soll
+                        // throw error; 
                     });
               } else {
                   console.error("Benötigte Funktionen für Seitengrößenänderung nicht gefunden.");
@@ -89,17 +90,12 @@
   /**
    * Initialisierungsfunktion, die nach dem Laden des DOM aufgerufen wird.
    */
-  functioninitializeApp() {
-    // Sicherstellen, dass appLogic und seine Funktionen geladen sind
+  function initializeApp() {
     if (window.WEBFLOW_API.appLogic && window.WEBFLOW_API.appLogic.initializeMyJobsDisplay) {
         initializePageSizeSelector();
         window.WEBFLOW_API.appLogic.initializeMyJobsDisplay();
     } else {
-        // Fallback oder Fehlerbehandlung, falls appLogic nicht rechtzeitig da ist
-        // Dies könnte passieren, wenn das Skript-Laden asynchron ist und die Reihenfolge nicht stimmt.
-        // Eine robustere Lösung wäre, auf ein Event zu warten oder Promises zu verwenden.
         console.error("AppLogic ist noch nicht bereit. Initialisierung verzögert oder fehlgeschlagen.");
-        // Versuche es nach einer kurzen Verzögerung erneut (einfacher Retry-Mechanismus)
         setTimeout(() => {
             if (window.WEBFLOW_API.appLogic && window.WEBFLOW_API.appLogic.initializeMyJobsDisplay) {
                 console.log("AppLogic jetzt bereit, starte Initialisierung (verzögert).");
@@ -112,13 +108,9 @@
             }
         }, 500);
     }
-    // Dynamisch hinzugefügtes CSS wurde entfernt, da Styling via Webflow erfolgen soll.
   }
 
-  // Event Listener für DOMContentLoaded
   window.addEventListener("DOMContentLoaded", initializeApp);
-
-  // Exponiere initializeApp, falls es von außen getriggert werden muss (unwahrscheinlich hier)
   window.WEBFLOW_API.initializeApp = initializeApp;
 
 })();

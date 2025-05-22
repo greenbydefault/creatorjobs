@@ -29,7 +29,7 @@
     if (!sidebarWrapper) {
       sidebarWrapper = document.createElement('div');
       sidebarWrapper.id = 'db-modal-creator-wrapper-dynamic';
-      sidebarWrapper.classList.add('db-modal-creator-wrapper'); // Ihre Webflow-Klasse für das Styling
+      sidebarWrapper.classList.add('db-modal-creator-wrapper'); 
 
 
       const sidebarControls = document.createElement('div');
@@ -41,7 +41,6 @@
       title.textContent = 'Bewerber Details';
       sidebarControls.appendChild(title);
 
-      // Zuerst die Navigationsbuttons (Vor/Zurück)
       const navButtonsWrapper = document.createElement('div');
       navButtonsWrapper.classList.add('db-modal-control-buttons'); 
 
@@ -59,9 +58,8 @@
       nextButton.title = "Nächster Bewerber";
       navButtonsWrapper.appendChild(nextButton);
       
-      sidebarControls.appendChild(navButtonsWrapper); // Navigationsbuttons zu Controls hinzufügen
+      sidebarControls.appendChild(navButtonsWrapper); 
 
-      // Dann den Schließen-Button (ggf. in eigenem Wrapper für Layout)
       const closeButtonWrapper = document.createElement('div'); 
       closeButtonWrapper.classList.add('db-modal-nav-close-wrapper'); 
       
@@ -120,6 +118,9 @@
     const headlineDiv = document.createElement('div');
     headlineDiv.classList.add('db-modal-creator-headline'); 
 
+    // NEU: Wrapper für Bild und Creator-Details
+    const imgDetailsWrapper = document.createElement('div');
+    imgDetailsWrapper.classList.add('db-modal-creator-img-wrapper');
 
     const profileImageField = applicantFieldData["image-thumbnail-small-92px"] || applicantFieldData["user-profile-img"];
     if (profileImageField) {
@@ -128,13 +129,13 @@
       img.src = typeof profileImageField === 'string' ? profileImageField : (profileImageField?.url || 'https://placehold.co/80x80/E0E0E0/BDBDBD?text=Bild');
       img.alt = applicantFieldData.name || "Bewerberbild";
       img.onerror = () => { img.src = 'https://placehold.co/80x80/E0E0E0/BDBDBD?text=Fehler'; };
-      headlineDiv.appendChild(img);
+      imgDetailsWrapper.appendChild(img); // Bild zum neuen Wrapper hinzufügen
     }
 
     const detailsDiv = document.createElement('div');
     detailsDiv.classList.add('db-modal-creator-details');
 
-    const nameSpan = document.createElement('span'); // Geändert von h3 zu span
+    const nameSpan = document.createElement('span'); 
     nameSpan.classList.add('db-modal-headline'); 
     nameSpan.textContent = applicantFieldData.name || 'Unbekannter Bewerber';
     detailsDiv.appendChild(nameSpan);
@@ -149,37 +150,34 @@
         locationInHeadlineP.textContent = "Kein Standort angegeben";
     }
     detailsDiv.appendChild(locationInHeadlineP);
-    headlineDiv.appendChild(detailsDiv);
+    imgDetailsWrapper.appendChild(detailsDiv); // Creator-Details zum neuen Wrapper hinzufügen
+    headlineDiv.appendChild(imgDetailsWrapper); // imgDetailsWrapper zur Headline hinzufügen
 
     // Wrapper für Aktionsbuttons neben den Details
     const actionsWrapper = document.createElement('div');
-    actionsWrapper.classList.add('db-modal-creator-actions'); // Eigene Klasse für das Layout der Buttons
+    actionsWrapper.classList.add('db-modal-creator-actions'); 
 
-    // "Profil ansehen" Button
     if (applicantFieldData.slug) {
         const profileLink = document.createElement('a');
         profileLink.classList.add('db-button-medium-gradient-pink');
         profileLink.textContent = 'Profil ansehen';
-        profileLink.href = `https://www.creatorjobs.com/members/${applicantFieldData.slug}`; // Passen Sie die Basis-URL bei Bedarf an
-        profileLink.target = '_blank'; // In neuem Tab öffnen
+        profileLink.href = `https://www.creatorjobs.com/members/${applicantFieldData.slug}`; 
+        profileLink.target = '_blank'; 
         profileLink.rel = 'noopener noreferrer';
         actionsWrapper.appendChild(profileLink);
     }
 
-    // "Chat starten" Button
-    // Annahme: Das Feld für die Memberstack-ID im CMS heißt 'memberstack-id' oder 'webflow-member-id'
-    // Bitte prüfen und ggf. anpassen!
     const memberstackId = applicantFieldData['memberstack-id'] || applicantFieldData['webflow-member-id']; 
     if (memberstackId) {
-        const chatButton = document.createElement('div'); // Oder <button>
+        const chatButton = document.createElement('div'); 
+        chatButton.id = 'user-chat'; // ID hinzugefügt
         chatButton.classList.add('db-button-medium-white-border');
-        chatButton.textContent = 'Chat starten'; // Text für den Button
+        chatButton.textContent = 'Chat starten'; 
         chatButton.setAttribute('data-creatorjobs-action', 'create-chat');
         chatButton.setAttribute('data-creatorjobs-target', memberstackId);
-        // Event-Listener für den Chat-Button könnte hier oder global hinzugefügt werden
         actionsWrapper.appendChild(chatButton);
     }
-    headlineDiv.appendChild(actionsWrapper); // Aktionsbuttons zur Headline hinzufügen
+    headlineDiv.appendChild(actionsWrapper); 
 
 
     contentArea.appendChild(headlineDiv);
@@ -187,7 +185,6 @@
     const additionalDetailsDiv = document.createElement('div');
     additionalDetailsDiv.classList.add('db-modal-additional-details');
 
-    // Creator Typ, Follower und Alter wurden entfernt
 
     const socialDiv = document.createElement('div');
     socialDiv.classList.add('db-modal-social-links'); 

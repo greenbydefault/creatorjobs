@@ -42,29 +42,32 @@
       sidebarControls.appendChild(title);
 
       const navAndCloseWrapper = document.createElement('div');
+      // navAndCloseWrapper Klasse für Flexbox oder Grid Layout in CSS hinzufügen, falls benötigt
+      navAndCloseWrapper.classList.add('db-modal-nav-close-wrapper');
 
 
       const navButtonsWrapper = document.createElement('div');
+      navButtonsWrapper.classList.add('db-modal-control-buttons'); // Neue Klasse hier
 
 
       const prevButton = document.createElement('div');
-      prevButton.classList.add('db-modal-prev'); // Ihre Webflow-Klasse
+      prevButton.classList.add('db-modal-prev'); 
       prevButton.id = 'sidebar-prev-applicant';
-      prevButton.textContent = '‹'; 
+      prevButton.textContent = '< Zurück'; // Angepasster Text
       prevButton.title = "Vorheriger Bewerber";
       navButtonsWrapper.appendChild(prevButton);
 
       const nextButton = document.createElement('div');
-      nextButton.classList.add('db-modal-next'); // Ihre Webflow-Klasse
+      nextButton.classList.add('db-modal-next'); 
       nextButton.id = 'sidebar-next-applicant';
-      nextButton.textContent = '›'; 
+      nextButton.textContent = 'Weiter >'; // Angepasster Text
       nextButton.title = "Nächster Bewerber";
       navButtonsWrapper.appendChild(nextButton);
       navAndCloseWrapper.appendChild(navButtonsWrapper);
       
       const closeButton = document.createElement('div');
       closeButton.id = 'sidebar-close-button';
-      closeButton.classList.add('db-modal-close-button'); // Eigene Klasse für Styling
+      closeButton.classList.add('db-modal-close-button'); 
       closeButton.textContent = '✕';
       closeButton.title = "Schließen";
       navAndCloseWrapper.appendChild(closeButton);
@@ -80,7 +83,7 @@
 
       // Event Listener
       closeButton.addEventListener('click', () => {
-        sidebarWrapper.classList.remove('is-open'); // Klasse zum Anzeigen/Verstecken
+        sidebarWrapper.classList.remove('is-open'); 
       });
 
       prevButton.addEventListener('click', () => {
@@ -103,7 +106,7 @@
     const applicantFieldData = applicantItem.fieldData;
     if (!applicantFieldData) {
         contentArea.textContent = 'Bewerberdaten nicht verfügbar.';
-        sidebarWrapper.classList.add('is-open'); // Klasse zum Anzeigen
+        sidebarWrapper.classList.add('is-open'); 
         return;
     }
 
@@ -129,10 +132,17 @@
     nameH.textContent = applicantFieldData.name || 'Unbekannter Bewerber';
     detailsDiv.appendChild(nameH);
     
-    const plusStatusP = document.createElement('p');
-    plusStatusP.classList.add('db-modal-plus-status'); // Eigene Klasse für Styling
-    plusStatusP.textContent = applicantFieldData["plus-mitglied"] ? "Plus Mitglied" : "Standard Mitglied";
-    detailsDiv.appendChild(plusStatusP);
+    // Ersetzt db-modal-plus-status durch Location
+    const city = applicantFieldData["user-city-2"] || "K.A.";
+    const bundeslandId = applicantFieldData["bundesland-option"];
+    const bundeslandName = (MAPPINGS && MAPPINGS.bundeslaender && MAPPINGS.bundeslaender[bundeslandId]) || "";
+    const locationInHeadlineP = document.createElement('p');
+    locationInHeadlineP.classList.add('is-txt-16'); // Neue Klasse für Location in Headline
+    locationInHeadlineP.textContent = `${city}${bundeslandName ? `, ${bundeslandName}` : ""}`;
+    if (locationInHeadlineP.textContent === "K.A.") { // Verstecke, wenn keine Info
+        locationInHeadlineP.textContent = "Kein Standort angegeben";
+    }
+    detailsDiv.appendChild(locationInHeadlineP);
 
 
     headlineDiv.appendChild(detailsDiv);
@@ -141,12 +151,7 @@
     const additionalDetailsDiv = document.createElement('div');
     additionalDetailsDiv.classList.add('db-modal-additional-details');
 
-    const city = applicantFieldData["user-city-2"] || "K.A.";
-    const bundeslandId = applicantFieldData["bundesland-option"];
-    const bundeslandName = (MAPPINGS && MAPPINGS.bundeslaender && MAPPINGS.bundeslaender[bundeslandId]) || "";
-    const locationP = document.createElement('p');
-    locationP.innerHTML = `<strong>Standort:</strong> ${city}${bundeslandName ? `, ${bundeslandName}` : ""}`;
-    additionalDetailsDiv.appendChild(locationP);
+    // Standort hier wurde entfernt, da er jetzt in der Headline ist.
 
     const creatorTypeId = applicantFieldData["creator-type"];
     const creatorTypeName = (MAPPINGS && MAPPINGS.creatorTypen && MAPPINGS.creatorTypen[creatorTypeId]) || "K.A.";
@@ -169,7 +174,7 @@
     additionalDetailsDiv.appendChild(ageP);
 
     const socialDiv = document.createElement('div');
-    socialDiv.classList.add('db-modal-social-links'); // Eigene Klasse für Styling
+    socialDiv.classList.add('db-modal-social-links'); 
     const socialTitle = document.createElement('h4');
     socialTitle.textContent = 'Social Media:';
     socialDiv.appendChild(socialTitle);
@@ -193,7 +198,7 @@
         const iconImg = document.createElement("img");
         iconImg.src = platform.iconUrl;
         iconImg.alt = `${platform.name} Profil`;
-        iconImg.classList.add('db-modal-social-icon'); // Eigene Klasse für Styling
+        iconImg.classList.add('db-modal-social-icon'); 
         
         socialLink.appendChild(iconImg);
         socialDiv.appendChild(socialLink);
@@ -207,6 +212,52 @@
     additionalDetailsDiv.appendChild(socialDiv);
     contentArea.appendChild(additionalDetailsDiv);
 
+    // Video Grid
+    const videoGridDiv = document.createElement('div');
+    videoGridDiv.classList.add('db-modal-creator-video-grid');
+    const videoTitle = document.createElement('h4');
+    videoTitle.textContent = 'Videos:';
+    videoGridDiv.appendChild(videoTitle);
+
+    let videosFound = false;
+    for (let i = 1; i <= 5; i++) {
+        const videoLinkField = `creator-video-link-${i}`;
+        const videoUrl = applicantFieldData[videoLinkField];
+        if (videoUrl && typeof videoUrl === 'string' && videoUrl.trim() !== '') {
+            videosFound = true;
+            const videoElement = document.createElement('video');
+            videoElement.src = window.WEBFLOW_API.utils.normalizeUrl(videoUrl); // Normalize URL
+            videoElement.controls = true;
+            videoElement.width = 200; // Beispielbreite, per CSS anpassen
+            videoElement.classList.add('db-modal-video-item'); // Klasse für Styling
+            
+            // Fallback-Text für Browser, die das Video-Tag nicht unterstützen
+            const sourceElement = document.createElement('source');
+            sourceElement.src = window.WEBFLOW_API.utils.normalizeUrl(videoUrl);
+            // Den Typ dynamisch zu bestimmen ist schwierig ohne Server-Info oder Dateiendung.
+            // Für eine robuste Lösung wäre es besser, den Mime-Type im CMS zu speichern.
+            // Hier ein einfacher Versuch basierend auf gängigen Endungen (ggf. erweitern)
+            if (videoUrl.endsWith('.mp4')) {
+                sourceElement.type = 'video/mp4';
+            } else if (videoUrl.endsWith('.webm')) {
+                sourceElement.type = 'video/webm';
+            } else if (videoUrl.endsWith('.ogg')) {
+                sourceElement.type = 'video/ogg';
+            } // Weitere Typen hinzufügen...
+            videoElement.appendChild(sourceElement);
+            videoElement.appendChild(document.createTextNode('Ihr Browser unterstützt das Video-Tag nicht.'));
+
+            videoGridDiv.appendChild(videoElement);
+        }
+    }
+    if (!videosFound) {
+        const noVideosP = document.createElement('p');
+        noVideosP.textContent = 'Keine Videos vorhanden.';
+        videoGridDiv.appendChild(noVideosP);
+    }
+    contentArea.appendChild(videoGridDiv);
+
+
     const prevBtn = document.getElementById('sidebar-prev-applicant');
     const nextBtn = document.getElementById('sidebar-next-applicant');
     if (prevBtn) {
@@ -216,7 +267,7 @@
         nextBtn.classList.toggle('disabled', currentSidebarIndex === currentSidebarApplicants.length - 1);
     }
 
-    sidebarWrapper.classList.add('is-open'); // Klasse zum Anzeigen
+    sidebarWrapper.classList.add('is-open'); 
   }
 
   window.WEBFLOW_API.ui.showCreatorSidebar = showCreatorSidebar;

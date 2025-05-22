@@ -24,6 +24,7 @@ import './apiService-1.0.js';
 import './memberService.js';
 import './scoringService.js';
 import './uiElements.js';
+import './uiManager.js'; 
 import './app.js';
 
 // Da sich alle Module an window.WEBFLOW_API anhängen, muss diese Datei nichts explizit exportieren.

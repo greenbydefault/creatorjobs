@@ -17,14 +17,15 @@
    */
   function createApplicantRowElement(applicantItemWithScoreInfo, jobFieldDataForTooltip) {
     const applicantFieldData = applicantItemWithScoreInfo.fieldData;
-    const matchInfo = applicantItemWithScoreInfo.matchInfo;
+    // const matchInfo = applicantItemWithScoreInfo.matchInfo; // MatchInfo wird nicht mehr für die Anzeige benötigt
 
     const applicantDiv = document.createElement("div");
     applicantDiv.classList.add("db-table-row", "db-table-applicant", "job-entry");
 
     applicantDiv.addEventListener('click', (event) => {
+      // Verhindert Klick auf Zeile, wenn Score-Indikator (falls noch vorhanden) oder Social Icon geklickt wird
       if (event.target.closest('a.db-application-option') || event.target.closest('.score-circle-indicator')) {
-        return; // Klick auf Link oder Score-Indikator, nicht auf Zeile selbst
+        return; 
       }
       const slug = applicantFieldData.slug;
       if (slug) {
@@ -39,12 +40,13 @@
       console.error("❌ MAPPINGS-Objekt ist nicht definiert in createApplicantRowElement.");
       const errorDiv = document.createElement("div");
       errorDiv.textContent = "Fehler: Mapping-Daten nicht verfügbar.";
-      errorDiv.style.gridColumn = "span 8"; // Damit es die ganze Breite einnimmt
+      errorDiv.style.gridColumn = "span 7"; // Angepasst, da eine Spalte weniger
       applicantDiv.appendChild(errorDiv);
       return applicantDiv;
     }
 
-    // Match Score Cell
+    // --- Match Score Cell (AUSGEBLENDET) ---
+    /*
     const scoreCellContainer = document.createElement("div");
     scoreCellContainer.classList.add("db-table-row-item");
     scoreCellContainer.style.display = "flex";
@@ -55,10 +57,10 @@
     const scoreCircle = document.createElement("div");
     scoreCircle.classList.add("score-circle-indicator"); // Für Webflow-Styling
 
-    let progressColor = "#e0e0e0"; // Standardfarbe für den Ringhintergrund oder 0 Score
-    if (scoreValue >= 80) progressColor = "#4CAF50"; // Grün
-    else if (scoreValue >= 60) progressColor = "#FFC107"; // Gelb/Orange
-    else if (scoreValue > 0) progressColor = "#FF9800"; // Orange
+    let progressColor = "#e0e0e0"; 
+    if (scoreValue >= 80) progressColor = "#4CAF50"; 
+    else if (scoreValue >= 60) progressColor = "#FFC107"; 
+    else if (scoreValue > 0) progressColor = "#FF9800"; 
     
     scoreCircle.style.width = "40px";
     scoreCircle.style.height = "40px";
@@ -67,14 +69,14 @@
     scoreCircle.style.display = "flex";
     scoreCircle.style.justifyContent = "center";
     scoreCircle.style.alignItems = "center";
-    scoreCircle.style.cursor = "default"; // Kein Tooltip mehr, also default Cursor
+    scoreCircle.style.cursor = "default"; 
     
     const degree = (scoreValue / 100) * 360;
     scoreCircle.style.background = `conic-gradient(${progressColor} ${degree}deg, #efefef ${degree}deg 360deg)`;
 
     const scoreText = document.createElement("span");
     scoreText.textContent = `${scoreValue}`;
-    scoreText.style.color = scoreValue > 0 ? "#333" : "#757575"; // Dunkler Text, etwas heller bei 0
+    scoreText.style.color = scoreValue > 0 ? "#333" : "#757575"; 
     scoreText.style.fontWeight = "bold";
     scoreText.style.fontSize = "14px";
     scoreText.style.position = "absolute";
@@ -82,6 +84,8 @@
     scoreCircle.appendChild(scoreText);
     scoreCellContainer.appendChild(scoreCircle);
     applicantDiv.appendChild(scoreCellContainer);
+    */
+    // --- Ende Match Score Cell (AUSGEBLENDET) ---
 
     // Profile Info (Bild, Name, Status)
     const profileInfoDiv = document.createElement("div");
@@ -194,15 +198,16 @@
     const headerDiv = document.createElement("div");
     headerDiv.classList.add("db-table-header", "db-table-applicant");
 
-    const columns = ["Match", "Creator", "Location", "Kategorie", "Creator Type", "Social Media", "Follower", "Alter"];
+    // "Match" aus den Spalten entfernt
+    const columns = ["Creator", "Location", "Kategorie", "Creator Type", "Social Media", "Follower", "Alter"];
     columns.forEach((colText, index) => {
       const colDiv = document.createElement("div");
       colDiv.classList.add("db-table-row-item");
-      if (index === 0) { // Match Score Spalte zentrieren
-        colDiv.style.textAlign = "center";
-      }
-      if (index === 1) { // Creator Spalte etwas breiter
-         colDiv.style.flexGrow = "1.5"; // Oder eine spezifischere Klasse verwenden
+      // Anpassung der Indizes für Styling, da "Match" entfernt wurde
+      if (index === 0) { // "Creator" ist jetzt die erste Spalte (Index 0)
+         colDiv.style.flexGrow = "1.5"; 
+         // Falls die erste Spalte zentriert sein soll (ursprünglich Match), hier anpassen oder entfernen
+         // colDiv.style.textAlign = "center"; // Entfernt, da Creator linksbündig sein sollte
       }
       const textSpan = document.createElement("span");
       textSpan.classList.add("is-txt-16", "is-txt-bold"); // Klassen prüfen/anpassen
@@ -230,7 +235,7 @@
 
     // Follower Filter
     const followerFilterDiv = document.createElement("div");
-    followerFilterDiv.classList.add("db-individual-filter-trigger"); // Webflow Klasse für Dropdown Trigger
+    followerFilterDiv.classList.add("db-individual-filter-trigger"); 
 
     const followerFilterText = document.createElement("span");
     followerFilterText.classList.add("is-txt-16");
@@ -238,29 +243,28 @@
     followerFilterDiv.appendChild(followerFilterText);
 
     const followerFilterIcon = document.createElement("img");
-    followerFilterIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/682c5e5b84cac09c56cdbebe_angle-down-small.svg"; // Pfad anpassen
-    followerFilterIcon.classList.add("db-icon-18"); // Klasse anpassen
+    followerFilterIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/682c5e5b84cac09c56cdbebe_angle-down-small.svg"; 
+    followerFilterIcon.classList.add("db-icon-18"); 
     followerFilterDiv.appendChild(followerFilterIcon);
 
     const followerDropdownList = document.createElement("div");
-    followerDropdownList.classList.add("db-filter-dropdown-list"); // Webflow Klasse für Dropdown Liste
-    followerDropdownList.style.display = "none"; // Standardmäßig versteckt
+    followerDropdownList.classList.add("db-filter-dropdown-list"); 
+    followerDropdownList.style.display = "none"; 
 
     if (MAPPINGS && MAPPINGS.followerRanges) {
         Object.entries(MAPPINGS.followerRanges).forEach(([id, rangeText]) => {
-            if (rangeText === "0") return; // "0" Follower nicht als Filteroption
+            if (rangeText === "0") return; 
 
             const optionDiv = document.createElement("div");
-            optionDiv.classList.add("db-filter-option"); // Webflow Klasse für Dropdown Option
+            optionDiv.classList.add("db-filter-option"); 
 
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
-            checkbox.classList.add("db-filter-checkbox"); // Webflow Klasse für Checkbox
+            checkbox.classList.add("db-filter-checkbox"); 
             checkbox.id = `filter-${jobId}-follower-${id}`;
             checkbox.dataset.filterValue = id;
             checkbox.dataset.filterType = "follower";
 
-            // Überprüfen, ob dieser Filter im Cache aktiv ist
             const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
             if (jobCache?.activeFilters?.follower?.includes(id)) {
                 checkbox.checked = true;
@@ -268,11 +272,10 @@
 
             const label = document.createElement("label");
             label.htmlFor = checkbox.id;
-            label.classList.add("is-txt-16"); // Klasse anpassen
+            label.classList.add("is-txt-16"); 
             label.textContent = rangeText;
 
             checkbox.addEventListener("change", async () => {
-                // Ruft applyAndReloadApplicants aus dem dataProcessing Modul auf
                 if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
                    await window.WEBFLOW_API.core.applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper);
                 } else {
@@ -290,19 +293,15 @@
     followerFilterDiv.appendChild(followerDropdownList);
     filterWrapper.appendChild(followerFilterDiv);
 
-    // Event Listener für das Öffnen/Schließen des Dropdowns
     followerFilterDiv.addEventListener("click", (e) => {
-      e.stopPropagation(); // Verhindert, dass der Klick das Dokument-Event auslöst
-      // Schließe andere Dropdowns (falls es mehrere gäbe)
+      e.stopPropagation(); 
       const allDropdowns = filterRow.querySelectorAll('.db-filter-dropdown-list');
       allDropdowns.forEach(dd => {
         if (dd !== followerDropdownList) dd.style.display = 'none';
       });
-      // Toggle aktuelles Dropdown
       followerDropdownList.style.display = followerDropdownList.style.display === "none" ? "block" : "none";
     });
 
-    // Schließen, wenn außerhalb geklickt wird
     document.addEventListener("click", (e) => {
       if (!followerFilterDiv.contains(e.target)) {
         followerDropdownList.style.display = "none";

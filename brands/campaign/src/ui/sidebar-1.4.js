@@ -62,18 +62,17 @@
       sidebarControls.appendChild(navButtonsWrapper); // Navigationsbuttons zu Controls hinzufügen
 
       // Dann den Schließen-Button (ggf. in eigenem Wrapper für Layout)
-      const closeButtonWrapper = document.createElement('div'); // Neuer Wrapper für den Schließen-Button
-      closeButtonWrapper.classList.add('db-modal-nav-close-wrapper'); // Behält die alte Klasse für Konsistenz oder neue Klasse
-                                                                    // Diese Klasse kann jetzt primär für das Layout des Schließen-Buttons verwendet werden.
+      const closeButtonWrapper = document.createElement('div'); 
+      closeButtonWrapper.classList.add('db-modal-nav-close-wrapper'); 
       
       const closeButton = document.createElement('div');
       closeButton.id = 'sidebar-close-button'; 
       closeButton.classList.add('db-modal-close-button'); 
       closeButton.textContent = '✕';
       closeButton.title = "Schließen";
-      closeButtonWrapper.appendChild(closeButton); // Schließen-Button in seinen Wrapper
+      closeButtonWrapper.appendChild(closeButton); 
 
-      sidebarControls.appendChild(closeButtonWrapper); // Schließen-Button-Wrapper zu Controls hinzufügen
+      sidebarControls.appendChild(closeButtonWrapper); 
 
       sidebarWrapper.appendChild(sidebarControls);
 
@@ -135,10 +134,10 @@
     const detailsDiv = document.createElement('div');
     detailsDiv.classList.add('db-modal-creator-details');
 
-    const nameH = document.createElement('h3'); 
-    nameH.classList.add('db-modal-headline'); 
-    nameH.textContent = applicantFieldData.name || 'Unbekannter Bewerber';
-    detailsDiv.appendChild(nameH);
+    const nameSpan = document.createElement('span'); // Geändert von h3 zu span
+    nameSpan.classList.add('db-modal-headline'); 
+    nameSpan.textContent = applicantFieldData.name || 'Unbekannter Bewerber';
+    detailsDiv.appendChild(nameSpan);
     
     const city = applicantFieldData["user-city-2"] || "K.A.";
     const bundeslandId = applicantFieldData["bundesland-option"];
@@ -150,34 +149,45 @@
         locationInHeadlineP.textContent = "Kein Standort angegeben";
     }
     detailsDiv.appendChild(locationInHeadlineP);
-
-
     headlineDiv.appendChild(detailsDiv);
+
+    // Wrapper für Aktionsbuttons neben den Details
+    const actionsWrapper = document.createElement('div');
+    actionsWrapper.classList.add('db-modal-creator-actions'); // Eigene Klasse für das Layout der Buttons
+
+    // "Profil ansehen" Button
+    if (applicantFieldData.slug) {
+        const profileLink = document.createElement('a');
+        profileLink.classList.add('db-button-medium-gradient-pink');
+        profileLink.textContent = 'Profil ansehen';
+        profileLink.href = `https://www.creatorjobs.com/members/${applicantFieldData.slug}`; // Passen Sie die Basis-URL bei Bedarf an
+        profileLink.target = '_blank'; // In neuem Tab öffnen
+        profileLink.rel = 'noopener noreferrer';
+        actionsWrapper.appendChild(profileLink);
+    }
+
+    // "Chat starten" Button
+    // Annahme: Das Feld für die Memberstack-ID im CMS heißt 'memberstack-id' oder 'webflow-member-id'
+    // Bitte prüfen und ggf. anpassen!
+    const memberstackId = applicantFieldData['memberstack-id'] || applicantFieldData['webflow-member-id']; 
+    if (memberstackId) {
+        const chatButton = document.createElement('div'); // Oder <button>
+        chatButton.classList.add('db-button-medium-white-border');
+        chatButton.textContent = 'Chat starten'; // Text für den Button
+        chatButton.setAttribute('data-creatorjobs-action', 'create-chat');
+        chatButton.setAttribute('data-creatorjobs-target', memberstackId);
+        // Event-Listener für den Chat-Button könnte hier oder global hinzugefügt werden
+        actionsWrapper.appendChild(chatButton);
+    }
+    headlineDiv.appendChild(actionsWrapper); // Aktionsbuttons zur Headline hinzufügen
+
+
     contentArea.appendChild(headlineDiv);
 
     const additionalDetailsDiv = document.createElement('div');
     additionalDetailsDiv.classList.add('db-modal-additional-details');
 
-
-    const creatorTypeId = applicantFieldData["creator-type"];
-    const creatorTypeName = (MAPPINGS && MAPPINGS.creatorTypen && MAPPINGS.creatorTypen[creatorTypeId]) || "K.A.";
-    const typeP = document.createElement('p');
-    typeP.innerHTML = `<strong>Creator Typ:</strong> ${creatorTypeName}`;
-    additionalDetailsDiv.appendChild(typeP);
-
-    const followerId = applicantFieldData["creator-follower"];
-    const followerRange = (MAPPINGS && MAPPINGS.followerRanges && MAPPINGS.followerRanges[followerId]) || "K.A.";
-    if (followerRange !== "0") { 
-        const followerP = document.createElement('p');
-        followerP.innerHTML = `<strong>Follower:</strong> ${followerRange}`;
-        additionalDetailsDiv.appendChild(followerP);
-    }
-    
-    const ageId = applicantFieldData["creator-age"];
-    const ageRange = (MAPPINGS && MAPPINGS.altersgruppen && MAPPINGS.altersgruppen[ageId]) || "K.A.";
-    const ageP = document.createElement('p');
-    ageP.innerHTML = `<strong>Alter:</strong> ${ageRange}`;
-    additionalDetailsDiv.appendChild(ageP);
+    // Creator Typ, Follower und Alter wurden entfernt
 
     const socialDiv = document.createElement('div');
     socialDiv.classList.add('db-modal-social-links'); 

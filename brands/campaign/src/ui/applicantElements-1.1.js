@@ -6,33 +6,43 @@
   // Abhängigkeiten
   const MAPPINGS = window.WEBFLOW_API.MAPPINGS;
   const { normalizeUrl } = window.WEBFLOW_API.utils;
-  // applyAndReloadApplicants wird später von dataProcessing importiert und hier als Callback verwendet
-  // loadAndDisplayApplicantsForJob wird später von appLogic importiert
-
+  // Die Funktion showCreatorSidebar wird jetzt über window.WEBFLOW_API.ui.showCreatorSidebar aufgerufen
+  
   /**
    * Erstellt ein DOM-Element für eine Bewerberzeile.
    * @param {object} applicantItemWithScoreInfo - Das Bewerberobjekt mit Match-Score-Informationen.
    * @param {object} jobFieldDataForTooltip - Felddaten des Jobs (optional, für Tooltip-Details).
+   * @param {Array} allJobApplicantsForThisJob - Die Liste aller Bewerber für diesen spezifischen Job (für Sidebar-Navigation).
+   * @param {number} currentIndexInList - Der Index dieses Bewerbers in allJobApplicantsForThisJob.
+   * @param {string} jobId - Die ID des aktuellen Jobs.
    * @returns {HTMLElement} Das DOM-Element der Bewerberzeile.
    */
-  function createApplicantRowElement(applicantItemWithScoreInfo, jobFieldDataForTooltip) {
+  function createApplicantRowElement(applicantItemWithScoreInfo, jobFieldDataForTooltip, allJobApplicantsForThisJob, currentIndexInList, jobId) {
     const applicantFieldData = applicantItemWithScoreInfo.fieldData;
-    // const matchInfo = applicantItemWithScoreInfo.matchInfo; // MatchInfo wird nicht mehr für die Anzeige benötigt
 
     const applicantDiv = document.createElement("div");
     applicantDiv.classList.add("db-table-row", "db-table-applicant", "job-entry");
+    applicantDiv.style.cursor = 'pointer'; // Zeigt an, dass die Zeile klickbar ist
 
     applicantDiv.addEventListener('click', (event) => {
-      // Verhindert Klick auf Zeile, wenn Score-Indikator (falls noch vorhanden) oder Social Icon geklickt wird
-      if (event.target.closest('a.db-application-option') || event.target.closest('.score-circle-indicator')) {
+      // Verhindert, dass der Klick auf ein Social Media Icon oder andere interaktive Elemente in der Zeile die Sidebar öffnet.
+      if (event.target.closest('a') || event.target.closest('button') || event.target.closest('input')) {
         return; 
       }
-      const slug = applicantFieldData.slug;
-      if (slug) {
-        const profileUrl = `https://www.creatorjobs.com/members/${slug}`; // Basis-URL anpassen, falls nötig
-        window.open(profileUrl, '_blank');
+      
+      // Rufe die Sidebar-Funktion aus dem globalen Namespace auf
+      if (window.WEBFLOW_API.ui && window.WEBFLOW_API.ui.showCreatorSidebar) {
+        window.WEBFLOW_API.ui.showCreatorSidebar(applicantItemWithScoreInfo, allJobApplicantsForThisJob, currentIndexInList, jobId);
       } else {
-        console.warn("Kein Slug für Bewerber gefunden, kann Profil nicht öffnen:", applicantFieldData.name);
+        console.error("showCreatorSidebar function not found on window.WEBFLOW_API.ui");
+        // Fallback, falls die Sidebar-Funktion aus irgendeinem Grund nicht da ist (sollte nicht passieren)
+        // const slug = applicantFieldData.slug;
+        // if (slug) {
+        //   const profileUrl = `https://www.creatorjobs.com/members/${slug}`;
+        //   window.open(profileUrl, '_blank');
+        // } else {
+        //   console.warn("Kein Slug für Bewerber gefunden, kann Profil nicht öffnen:", applicantFieldData.name);
+        // }
       }
     });
 
@@ -40,52 +50,10 @@
       console.error("❌ MAPPINGS-Objekt ist nicht definiert in createApplicantRowElement.");
       const errorDiv = document.createElement("div");
       errorDiv.textContent = "Fehler: Mapping-Daten nicht verfügbar.";
-      errorDiv.style.gridColumn = "span 7"; // Angepasst, da eine Spalte weniger
+      errorDiv.style.gridColumn = "span 7"; // Anzahl der Spalten anpassen, falls sich das Layout ändert
       applicantDiv.appendChild(errorDiv);
       return applicantDiv;
     }
-
-    // --- Match Score Cell (AUSGEBLENDET) ---
-    /*
-    const scoreCellContainer = document.createElement("div");
-    scoreCellContainer.classList.add("db-table-row-item");
-    scoreCellContainer.style.display = "flex";
-    scoreCellContainer.style.justifyContent = "center";
-    scoreCellContainer.style.alignItems = "center";
-
-    const scoreValue = matchInfo ? matchInfo.score : 0;
-    const scoreCircle = document.createElement("div");
-    scoreCircle.classList.add("score-circle-indicator"); // Für Webflow-Styling
-
-    let progressColor = "#e0e0e0"; 
-    if (scoreValue >= 80) progressColor = "#4CAF50"; 
-    else if (scoreValue >= 60) progressColor = "#FFC107"; 
-    else if (scoreValue > 0) progressColor = "#FF9800"; 
-    
-    scoreCircle.style.width = "40px";
-    scoreCircle.style.height = "40px";
-    scoreCircle.style.borderRadius = "50%";
-    scoreCircle.style.position = "relative";
-    scoreCircle.style.display = "flex";
-    scoreCircle.style.justifyContent = "center";
-    scoreCircle.style.alignItems = "center";
-    scoreCircle.style.cursor = "default"; 
-    
-    const degree = (scoreValue / 100) * 360;
-    scoreCircle.style.background = `conic-gradient(${progressColor} ${degree}deg, #efefef ${degree}deg 360deg)`;
-
-    const scoreText = document.createElement("span");
-    scoreText.textContent = `${scoreValue}`;
-    scoreText.style.color = scoreValue > 0 ? "#333" : "#757575"; 
-    scoreText.style.fontWeight = "bold";
-    scoreText.style.fontSize = "14px";
-    scoreText.style.position = "absolute";
-
-    scoreCircle.appendChild(scoreText);
-    scoreCellContainer.appendChild(scoreCircle);
-    applicantDiv.appendChild(scoreCellContainer);
-    */
-    // --- Ende Match Score Cell (AUSGEBLENDET) ---
 
     // Profile Info (Bild, Name, Status)
     const profileInfoDiv = document.createElement("div");
@@ -125,7 +93,7 @@
     const categoryCell = document.createElement("div");
     categoryCell.classList.add("db-table-row-item");
     const categoryTag = document.createElement("span");
-    categoryTag.classList.add("job-tag", "customer"); // Klasse anpassen, falls nötig
+    categoryTag.classList.add("job-tag", "customer"); 
     categoryTag.textContent = applicantFieldData["creator-main-categorie"] || "K.A.";
     categoryCell.appendChild(categoryTag);
     applicantDiv.appendChild(categoryCell);
@@ -134,7 +102,7 @@
     const creatorTypeCell = document.createElement("div");
     creatorTypeCell.classList.add("db-table-row-item");
     const creatorTypeTag = document.createElement("span");
-    creatorTypeTag.classList.add("job-tag", "customer"); // Klasse anpassen, falls nötig
+    creatorTypeTag.classList.add("job-tag", "customer"); 
     const creatorTypeId = applicantFieldData["creator-type"];
     creatorTypeTag.textContent = (MAPPINGS.creatorTypen && MAPPINGS.creatorTypen[creatorTypeId]) || (creatorTypeId ? creatorTypeId.substring(0,10)+'...' : "K.A.");
     creatorTypeCell.appendChild(creatorTypeTag);
@@ -150,17 +118,19 @@
     ];
     socialPlatforms.forEach(platform => {
       const platformUrlValue = applicantFieldData[platform.key];
-      const normalizedPlatformUrl = normalizeUrl(platformUrlValue); // normalizeUrl aus WEBFLOW_API.utils
+      const normalizedPlatformUrl = normalizeUrl(platformUrlValue); 
       if (normalizedPlatformUrl) {
         const socialLink = document.createElement("a");
         socialLink.href = normalizedPlatformUrl;
-        socialLink.classList.add("db-application-option", "no-icon", "w-inline-block"); // Klassen prüfen/anpassen
+        socialLink.classList.add("db-application-option", "no-icon", "w-inline-block"); 
         socialLink.target = "_blank";
         socialLink.rel = "noopener noreferrer";
+        // WICHTIG: Stoppt die Event-Propagation, damit der Klick auf das Icon nicht die Sidebar öffnet.
+        socialLink.addEventListener('click', (e) => e.stopPropagation()); 
         const iconImg = document.createElement("img");
         iconImg.src = platform.iconUrl;
         iconImg.alt = `${platform.name} Profil`;
-        iconImg.classList.add("db-icon-18"); // Klasse prüfen/anpassen
+        iconImg.classList.add("db-icon-18"); 
         socialLink.appendChild(iconImg);
         socialCell.appendChild(socialLink);
       }
@@ -171,7 +141,7 @@
     const followerCell = document.createElement("div");
     followerCell.classList.add("db-table-row-item");
     const followerTag = document.createElement("span");
-    followerTag.classList.add("job-tag", "customer"); // Klasse anpassen
+    followerTag.classList.add("job-tag", "customer"); 
     const followerId = applicantFieldData["creator-follower"];
     followerTag.textContent = (MAPPINGS.followerRanges && MAPPINGS.followerRanges[followerId]) || (followerId ? followerId.substring(0,10)+'...' : "K.A.");
     followerCell.appendChild(followerTag);
@@ -181,7 +151,7 @@
     const ageCell = document.createElement("div");
     ageCell.classList.add("db-table-row-item");
     const ageTag = document.createElement("span");
-    ageTag.classList.add("job-tag", "customer"); // Klasse anpassen
+    ageTag.classList.add("job-tag", "customer"); 
     const ageId = applicantFieldData["creator-age"];
     ageTag.textContent = (MAPPINGS.altersgruppen && MAPPINGS.altersgruppen[ageId]) || (ageId ? ageId.substring(0,10)+'...' : "K.A.");
     ageCell.appendChild(ageTag);
@@ -198,19 +168,15 @@
     const headerDiv = document.createElement("div");
     headerDiv.classList.add("db-table-header", "db-table-applicant");
 
-    // "Match" aus den Spalten entfernt
     const columns = ["Creator", "Location", "Kategorie", "Creator Type", "Social Media", "Follower", "Alter"];
     columns.forEach((colText, index) => {
       const colDiv = document.createElement("div");
       colDiv.classList.add("db-table-row-item");
-      // Anpassung der Indizes für Styling, da "Match" entfernt wurde
-      if (index === 0) { // "Creator" ist jetzt die erste Spalte (Index 0)
+      if (index === 0) { 
          colDiv.style.flexGrow = "1.5"; 
-         // Falls die erste Spalte zentriert sein soll (ursprünglich Match), hier anpassen oder entfernen
-         // colDiv.style.textAlign = "center"; // Entfernt, da Creator linksbündig sein sollte
       }
       const textSpan = document.createElement("span");
-      textSpan.classList.add("is-txt-16", "is-txt-bold"); // Klassen prüfen/anpassen
+      textSpan.classList.add("is-txt-16", "is-txt-bold"); 
       textSpan.textContent = colText;
       colDiv.appendChild(textSpan);
       headerDiv.appendChild(colDiv);
@@ -233,7 +199,6 @@
     filterWrapper.classList.add("db-table-filter-row-wrapper");
     filterRow.appendChild(filterWrapper);
 
-    // Follower Filter
     const followerFilterDiv = document.createElement("div");
     followerFilterDiv.classList.add("db-individual-filter-trigger"); 
 
@@ -289,7 +254,6 @@
         });
     }
 
-
     followerFilterDiv.appendChild(followerDropdownList);
     filterWrapper.appendChild(followerFilterDiv);
 
@@ -309,7 +273,6 @@
     });
     return filterRow;
   }
-
 
   // Exponieren der UI-Funktionen
   window.WEBFLOW_API.ui.createApplicantRowElement = createApplicantRowElement;

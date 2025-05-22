@@ -1,4 +1,3 @@
-<script>
 // (function() {
     'use strict';
 
@@ -90,4 +89,3 @@
     console.log('Chat script with event delegation initialized.');
 
 })();
-// </script>

@@ -3,13 +3,49 @@
   window.WEBFLOW_API = window.WEBFLOW_API || {};
   window.WEBFLOW_API.ui = window.WEBFLOW_API.ui || {};
 
-  // Abhängigkeiten aus dem globalen Namespace holen
-  // Stellen Sie sicher, dass mappings.js und helpers.js (für normalizeUrl) vorher geladen wurden
-  // und ihre Exporte unter window.WEBFLOW_API verfügbar sind.
-
   let currentSidebarJobId = null;
   let currentSidebarApplicants = [];
   let currentSidebarIndex = -1;
+  let overlayElement = null; // Variable für das Overlay-Element
+
+  /**
+   * Erstellt das Overlay-Element, falls es nicht existiert.
+   */
+  function ensureOverlay() {
+    if (!overlayElement) {
+      overlayElement = document.createElement('div');
+      overlayElement.id = 'db-modal-overlay';
+      // Styling für das Overlay wird über CSS in Webflow gesteuert
+      // z.B. position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.15); z-index: 999; display: none;
+      overlayElement.classList.add('db-modal-overlay-style'); // Fügen Sie diese Klasse in Ihrem CSS hinzu
+      document.body.appendChild(overlayElement);
+
+      // Optional: Klick auf Overlay schließt die Sidebar
+      overlayElement.addEventListener('click', () => {
+        const sidebarToClose = document.getElementById('db-modal-creator-wrapper-dynamic');
+        if (sidebarToClose && sidebarToClose.classList.contains('is-open')) {
+          sidebarToClose.classList.remove('is-open');
+          overlayElement.classList.remove('is-visible');
+        }
+      });
+    }
+  }
+
+  /**
+   * Zeigt oder versteckt das Overlay.
+   * @param {boolean} show - True, um das Overlay anzuzeigen, false, um es zu verstecken.
+   */
+  function toggleOverlay(show) {
+    ensureOverlay(); // Stellt sicher, dass das Overlay-Element existiert
+    if (overlayElement) {
+      if (show) {
+        overlayElement.classList.add('is-visible'); // Klasse zum Anzeigen (z.B. display: block)
+      } else {
+        overlayElement.classList.remove('is-visible'); // Klasse zum Verstecken (z.B. display: none)
+      }
+    }
+  }
+
 
   /**
    * Erstellt und zeigt die Creator-Detail-Sidebar an oder aktualisiert sie.
@@ -19,7 +55,7 @@
    * @param {string} jobId - Die ID des aktuellen Jobs.
    */
   function showCreatorSidebar(applicantItem, allJobApplicants, applicantIndex, jobId) {
-    const MAPPINGS = window.WEBFLOW_API.MAPPINGS; // Zugriff auf Mappings sicherstellen
+    const MAPPINGS = window.WEBFLOW_API.MAPPINGS; 
 
     currentSidebarJobId = jobId;
     currentSidebarApplicants = allJobApplicants;
@@ -85,6 +121,7 @@
         const wrapperToClose = document.getElementById('db-modal-creator-wrapper-dynamic');
         if (wrapperToClose) {
             wrapperToClose.classList.remove('is-open'); 
+            toggleOverlay(false); // Overlay ausblenden
         }
       });
 
@@ -111,6 +148,7 @@
         const wrapperToShow = document.getElementById('db-modal-creator-wrapper-dynamic');
         if (wrapperToShow) {
             wrapperToShow.classList.add('is-open');
+            toggleOverlay(true); // Overlay einblenden
         }
         return;
     }
@@ -118,7 +156,6 @@
     const headlineDiv = document.createElement('div');
     headlineDiv.classList.add('db-modal-creator-headline'); 
 
-    // NEU: Wrapper für Bild und Creator-Details
     const imgDetailsWrapper = document.createElement('div');
     imgDetailsWrapper.classList.add('db-modal-creator-img-wrapper');
 
@@ -129,7 +166,7 @@
       img.src = typeof profileImageField === 'string' ? profileImageField : (profileImageField?.url || 'https://placehold.co/80x80/E0E0E0/BDBDBD?text=Bild');
       img.alt = applicantFieldData.name || "Bewerberbild";
       img.onerror = () => { img.src = 'https://placehold.co/80x80/E0E0E0/BDBDBD?text=Fehler'; };
-      imgDetailsWrapper.appendChild(img); // Bild zum neuen Wrapper hinzufügen
+      imgDetailsWrapper.appendChild(img); 
     }
 
     const detailsDiv = document.createElement('div');
@@ -150,10 +187,9 @@
         locationInHeadlineP.textContent = "Kein Standort angegeben";
     }
     detailsDiv.appendChild(locationInHeadlineP);
-    imgDetailsWrapper.appendChild(detailsDiv); // Creator-Details zum neuen Wrapper hinzufügen
-    headlineDiv.appendChild(imgDetailsWrapper); // imgDetailsWrapper zur Headline hinzufügen
+    imgDetailsWrapper.appendChild(detailsDiv); 
+    headlineDiv.appendChild(imgDetailsWrapper); 
 
-    // Wrapper für Aktionsbuttons neben den Details
     const actionsWrapper = document.createElement('div');
     actionsWrapper.classList.add('db-modal-creator-actions'); 
 
@@ -170,8 +206,8 @@
     const memberstackId = applicantFieldData['memberstack-id'] || applicantFieldData['webflow-member-id']; 
     if (memberstackId) {
         const chatButton = document.createElement('div'); 
-        chatButton.id = 'user-chat'; // ID hinzugefügt
-        chatButton.classList.add('db-button-medium-white-border');
+        chatButton.id = 'user-chat'; 
+        chatButton.classList.add('db-button-medium-white-border', 'dont-shrink'); // Klasse 'dont-shrink' hinzugefügt
         chatButton.textContent = 'Chat starten'; 
         chatButton.setAttribute('data-creatorjobs-action', 'create-chat');
         chatButton.setAttribute('data-creatorjobs-target', memberstackId);
@@ -185,45 +221,12 @@
     const additionalDetailsDiv = document.createElement('div');
     additionalDetailsDiv.classList.add('db-modal-additional-details');
 
+    // Social Media Links wurden entfernt
+    // const socialDiv = document.createElement('div');
+    // ... (restlicher Social Media Code entfernt) ...
+    // additionalDetailsDiv.appendChild(socialDiv); // Nicht mehr hinzufügen
 
-    const socialDiv = document.createElement('div');
-    socialDiv.classList.add('db-modal-social-links'); 
-    const socialTitle = document.createElement('h4');
-    socialTitle.textContent = 'Social Media:';
-    socialDiv.appendChild(socialTitle);
-
-    const socialPlatforms = [
-      { key: "instagram", name: "Instagram", iconUrl: "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e8d979b71d2a7e5db3_Instagram.svg" },
-      { key: "tiktok", name: "TikTok", iconUrl: "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e99dce86c2b6ba83fe_Tiktok.svg" },
-      { key: "youtube", name: "YouTube", iconUrl: "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e9b00d0480ffe289dc_YouTube.svg" }
-    ];
-    let socialLinksFound = false;
-    socialPlatforms.forEach(platform => {
-      const platformUrlValue = applicantFieldData[platform.key];
-      const normalizedPlatformUrl = window.WEBFLOW_API.utils.normalizeUrl(platformUrlValue); 
-      if (normalizedPlatformUrl) {
-        socialLinksFound = true;
-        const socialLink = document.createElement("a");
-        socialLink.href = normalizedPlatformUrl;
-        socialLink.target = "_blank";
-        socialLink.rel = "noopener noreferrer";
-
-        const iconImg = document.createElement("img");
-        iconImg.src = platform.iconUrl;
-        iconImg.alt = `${platform.name} Profil`;
-        iconImg.classList.add('db-modal-social-icon'); 
-        
-        socialLink.appendChild(iconImg);
-        socialDiv.appendChild(socialLink);
-      }
-    });
-     if (!socialLinksFound) {
-        const noSocialP = document.createElement('p');
-        noSocialP.textContent = 'Keine Social Media Profile angegeben.';
-        socialDiv.appendChild(noSocialP);
-    }
-    additionalDetailsDiv.appendChild(socialDiv);
-    contentArea.appendChild(additionalDetailsDiv);
+    contentArea.appendChild(additionalDetailsDiv); // additionalDetailsDiv wird immer noch hinzugefügt, falls andere Details später kommen
 
     // Video Grid
     const videoGridContainer = document.createElement('div'); 
@@ -281,6 +284,7 @@
     const finalSidebarWrapper = document.getElementById('db-modal-creator-wrapper-dynamic');
     if (finalSidebarWrapper) {
         finalSidebarWrapper.classList.add('is-open'); 
+        toggleOverlay(true); // Overlay einblenden, wenn Sidebar geöffnet wird
     }
   }
 

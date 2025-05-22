@@ -10,7 +10,7 @@ import './core/cache.js';
 
 // Services, die Konfiguration und Utils verwenden
 import './services/webflowService.js';
-import './services/chatService-1.0.js'; 
+import './services/chatService-1.1.js'; 
 // Kernlogik (Scoring, Datenverarbeitung)
 import './core/matchScoring.js';
 // dataProcessing hängt von loadAndDisplayApplicantsForJob ab, das in appLogic ist.

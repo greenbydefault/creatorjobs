@@ -21,7 +21,7 @@ import './core/matchScoring.js';
 // UI Elemente
 import './ui/skeleton.js';
 // applicantElements hängt von MAPPINGS, utils, und core.applyAndReloadApplicants ab (letzteres für Callbacks)
-import './ui/applicantElements-1.1.js';
+import './ui/applicantElements-1.2.js';
 // pagination hängt von appLogic.loadAndDisplayApplicantsForJob ab (für Callbacks)
 import './ui/pagination.js';
 // jobElements hängt von vielen Dingen ab, die zur Laufzeit aufgelöst werden.
@@ -29,7 +29,7 @@ import './ui/jobElements.js';
 import './ui/sidebar-1.9.js';
 // Kernlogik, die UI-Elemente und Services verwendet
 // dataProcessing hier, da es ui.applicantElements (für Filter-Callback-Setup) und appLogic (für Reload) referenziert
-import './core/dataProcessing.js';
+import './core/dataProcessing-1.0.js';
 
 
 // Hauptanwendungslogik, die viele der obigen Module orchestriert

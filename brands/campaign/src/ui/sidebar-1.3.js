@@ -41,13 +41,9 @@
       title.textContent = 'Bewerber Details';
       sidebarControls.appendChild(title);
 
-      const navAndCloseWrapper = document.createElement('div');
-      navAndCloseWrapper.classList.add('db-modal-nav-close-wrapper');
-
-
+      // Zuerst die Navigationsbuttons (Vor/Zurück)
       const navButtonsWrapper = document.createElement('div');
       navButtonsWrapper.classList.add('db-modal-control-buttons'); 
-
 
       const prevButton = document.createElement('div');
       prevButton.classList.add('db-modal-prev'); 
@@ -62,16 +58,23 @@
       nextButton.textContent = 'Weiter >'; 
       nextButton.title = "Nächster Bewerber";
       navButtonsWrapper.appendChild(nextButton);
-      navAndCloseWrapper.appendChild(navButtonsWrapper);
+      
+      sidebarControls.appendChild(navButtonsWrapper); // Navigationsbuttons zu Controls hinzufügen
+
+      // Dann den Schließen-Button (ggf. in eigenem Wrapper für Layout)
+      const closeButtonWrapper = document.createElement('div'); // Neuer Wrapper für den Schließen-Button
+      closeButtonWrapper.classList.add('db-modal-nav-close-wrapper'); // Behält die alte Klasse für Konsistenz oder neue Klasse
+                                                                    // Diese Klasse kann jetzt primär für das Layout des Schließen-Buttons verwendet werden.
       
       const closeButton = document.createElement('div');
-      closeButton.id = 'sidebar-close-button';
+      closeButton.id = 'sidebar-close-button'; 
       closeButton.classList.add('db-modal-close-button'); 
       closeButton.textContent = '✕';
       closeButton.title = "Schließen";
-      navAndCloseWrapper.appendChild(closeButton);
+      closeButtonWrapper.appendChild(closeButton); // Schließen-Button in seinen Wrapper
 
-      sidebarControls.appendChild(navAndCloseWrapper);
+      sidebarControls.appendChild(closeButtonWrapper); // Schließen-Button-Wrapper zu Controls hinzufügen
+
       sidebarWrapper.appendChild(sidebarControls);
 
       const sidebarContent = document.createElement('div');
@@ -82,7 +85,10 @@
 
       // Event Listener
       closeButton.addEventListener('click', () => {
-        sidebarWrapper.classList.remove('is-open'); 
+        const wrapperToClose = document.getElementById('db-modal-creator-wrapper-dynamic');
+        if (wrapperToClose) {
+            wrapperToClose.classList.remove('is-open'); 
+        }
       });
 
       prevButton.addEventListener('click', () => {
@@ -105,7 +111,10 @@
     const applicantFieldData = applicantItem.fieldData;
     if (!applicantFieldData) {
         contentArea.textContent = 'Bewerberdaten nicht verfügbar.';
-        sidebarWrapper.classList.add('is-open'); 
+        const wrapperToShow = document.getElementById('db-modal-creator-wrapper-dynamic');
+        if (wrapperToShow) {
+            wrapperToShow.classList.add('is-open');
+        }
         return;
     }
 
@@ -116,7 +125,7 @@
     const profileImageField = applicantFieldData["image-thumbnail-small-92px"] || applicantFieldData["user-profile-img"];
     if (profileImageField) {
       const img = document.createElement('img');
-      img.classList.add('db-table-img'); 
+      img.classList.add('db-table-img', 'big'); 
       img.src = typeof profileImageField === 'string' ? profileImageField : (profileImageField?.url || 'https://placehold.co/80x80/E0E0E0/BDBDBD?text=Bild');
       img.alt = applicantFieldData.name || "Bewerberbild";
       img.onerror = () => { img.src = 'https://placehold.co/80x80/E0E0E0/BDBDBD?text=Fehler'; };
@@ -137,7 +146,7 @@
     const locationInHeadlineP = document.createElement('p');
     locationInHeadlineP.classList.add('is-txt-16'); 
     locationInHeadlineP.textContent = `${city}${bundeslandName ? `, ${bundeslandName}` : ""}`;
-    if (locationInHeadlineP.textContent === "K.A.") { 
+    if (locationInHeadlineP.textContent === "K.A." || locationInHeadlineP.textContent === "") { 
         locationInHeadlineP.textContent = "Kein Standort angegeben";
     }
     detailsDiv.appendChild(locationInHeadlineP);
@@ -210,11 +219,8 @@
     contentArea.appendChild(additionalDetailsDiv);
 
     // Video Grid
-    const videoGridContainer = document.createElement('div'); // Umbenannt für Klarheit
+    const videoGridContainer = document.createElement('div'); 
     videoGridContainer.classList.add('db-modal-creator-video-grid');
-    const videoTitle = document.createElement('h4');
-    videoTitle.textContent = 'Videos:';
-    videoGridContainer.appendChild(videoTitle);
 
     let videosFound = false;
     for (let i = 1; i <= 5; i++) {
@@ -223,14 +229,13 @@
         if (videoUrl && typeof videoUrl === 'string' && videoUrl.trim() !== '') {
             videosFound = true;
 
-            const videoWrapper = document.createElement('div'); // NEU: Wrapper für jedes Video
+            const videoWrapper = document.createElement('div'); 
             videoWrapper.classList.add('db-modal-video-wrapper');
 
             const videoElement = document.createElement('video');
             videoElement.src = window.WEBFLOW_API.utils.normalizeUrl(videoUrl); 
             videoElement.controls = true;
-            videoElement.preload = "metadata"; // NEU: preload Attribut
-            // videoElement.width = 200; // Entfernt, Styling über CSS
+            videoElement.preload = "metadata"; 
             videoElement.classList.add('db-modal-video-item'); 
             
             const sourceElement = document.createElement('source');
@@ -245,8 +250,8 @@
             videoElement.appendChild(sourceElement);
             videoElement.appendChild(document.createTextNode('Ihr Browser unterstützt das Video-Tag nicht.'));
 
-            videoWrapper.appendChild(videoElement); // Video in Wrapper
-            videoGridContainer.appendChild(videoWrapper); // Wrapper in Grid
+            videoWrapper.appendChild(videoElement); 
+            videoGridContainer.appendChild(videoWrapper); 
         }
     }
     if (!videosFound) {
@@ -266,7 +271,10 @@
         nextBtn.classList.toggle('disabled', currentSidebarIndex === currentSidebarApplicants.length - 1);
     }
 
-    sidebarWrapper.classList.add('is-open'); 
+    const finalSidebarWrapper = document.getElementById('db-modal-creator-wrapper-dynamic');
+    if (finalSidebarWrapper) {
+        finalSidebarWrapper.classList.add('is-open'); 
+    }
   }
 
   window.WEBFLOW_API.ui.showCreatorSidebar = showCreatorSidebar;

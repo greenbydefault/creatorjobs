@@ -26,14 +26,14 @@ import './ui/applicantElements-1.0.js';
 import './ui/pagination.js';
 // jobElements hängt von vielen Dingen ab, die zur Laufzeit aufgelöst werden.
 import './ui/jobElements.js';
-
+import './ui/sidebar.js';
 // Kernlogik, die UI-Elemente und Services verwendet
 // dataProcessing hier, da es ui.applicantElements (für Filter-Callback-Setup) und appLogic (für Reload) referenziert
 import './core/dataProcessing.js';
 
 
 // Hauptanwendungslogik, die viele der obigen Module orchestriert
-import './appLogic.js';
+import './appLogic-1.0.js';
 
 // Initialisierungsskript, das die appLogic startet
 import './main-1.0.js';

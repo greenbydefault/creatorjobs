@@ -14,18 +14,18 @@
   function ensureOverlay() {
     if (!overlayElement) {
       overlayElement = document.createElement('div');
-      overlayElement.id = 'db-modal-overlay';
-      // Styling für das Overlay wird über CSS in Webflow gesteuert
-      // z.B. position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.15); z-index: 999; display: none;
-      overlayElement.classList.add('db-modal-overlay-style'); // Fügen Sie diese Klasse in Ihrem CSS hinzu
+      overlayElement.id = 'db-modal-overlay-dynamic'; // Eindeutige ID für das Overlay
+      // Die Klasse 'db-modal-overlay' wird für das Styling in Webflow verwendet.
+      // Diese Klasse sollte z.B. position: fixed, top:0, left:0, width:100%, height:100%, background-color: rgba(0,0,0,0.15), z-index, und display:none initial setzen.
+      overlayElement.classList.add('db-modal-overlay'); 
       document.body.appendChild(overlayElement);
 
-      // Optional: Klick auf Overlay schließt die Sidebar
+      // Klick auf Overlay schließt die Sidebar und das Overlay
       overlayElement.addEventListener('click', () => {
         const sidebarToClose = document.getElementById('db-modal-creator-wrapper-dynamic');
         if (sidebarToClose && sidebarToClose.classList.contains('is-open')) {
           sidebarToClose.classList.remove('is-open');
-          overlayElement.classList.remove('is-visible');
+          toggleOverlay(false); // Overlay ausblenden
         }
       });
     }
@@ -39,7 +39,7 @@
     ensureOverlay(); // Stellt sicher, dass das Overlay-Element existiert
     if (overlayElement) {
       if (show) {
-        overlayElement.classList.add('is-visible'); // Klasse zum Anzeigen (z.B. display: block)
+        overlayElement.classList.add('is-visible'); // Klasse zum Anzeigen (z.B. display: block oder display: flex)
       } else {
         overlayElement.classList.remove('is-visible'); // Klasse zum Verstecken (z.B. display: none)
       }
@@ -193,24 +193,38 @@
     const actionsWrapper = document.createElement('div');
     actionsWrapper.classList.add('db-modal-creator-actions'); 
 
+    // "Profil ansehen" Button mit Icon
     if (applicantFieldData.slug) {
         const profileLink = document.createElement('a');
-        profileLink.classList.add('db-button-medium-gradient-pink');
-        profileLink.textContent = 'Profil ansehen';
+        profileLink.classList.add('db-button-medium-white-border'); // Geänderte Klasse
         profileLink.href = `https://www.creatorjobs.com/members/${applicantFieldData.slug}`; 
         profileLink.target = '_blank'; 
         profileLink.rel = 'noopener noreferrer';
+        profileLink.title = 'Profil ansehen'; // Tooltip für Barrierefreiheit
+
+        const profileIcon = document.createElement('img');
+        profileIcon.src = 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/66bdffde5a17773ef460244c_edit-profile.svg';
+        profileIcon.classList.add('db-icon-24');
+        profileIcon.alt = 'Profil ansehen'; // Wichtig für Barrierefreiheit
+        profileLink.appendChild(profileIcon);
         actionsWrapper.appendChild(profileLink);
     }
 
+    // "Chat starten" Button mit Icon
     const memberstackId = applicantFieldData['memberstack-id'] || applicantFieldData['webflow-member-id']; 
     if (memberstackId) {
         const chatButton = document.createElement('div'); 
         chatButton.id = 'user-chat'; 
-        chatButton.classList.add('db-button-medium-white-border', 'dont-shrink'); // Klasse 'dont-shrink' hinzugefügt
-        chatButton.textContent = 'Chat starten'; 
+        chatButton.classList.add('db-button-medium-white-border', 'dont-shrink'); 
         chatButton.setAttribute('data-creatorjobs-action', 'create-chat');
         chatButton.setAttribute('data-creatorjobs-target', memberstackId);
+        chatButton.title = 'Chat starten'; // Tooltip für Barrierefreiheit
+
+        const chatIcon = document.createElement('img');
+        chatIcon.src = 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/6645b3de7fe3addd5b0b2bcb_messages.svg';
+        chatIcon.classList.add('db-icon-24');
+        chatIcon.alt = 'Chat starten'; // Wichtig für Barrierefreiheit
+        chatButton.appendChild(chatIcon);
         actionsWrapper.appendChild(chatButton);
     }
     headlineDiv.appendChild(actionsWrapper); 
@@ -269,7 +283,7 @@
     contentArea.appendChild(videoGridContainer);
 
 
-    const prevBtn = document.getElementById('sidebar-prev-applicant'); // Korrigierte ID
+    const prevBtn = document.getElementById('sidebar-prev-applicant');
     const nextBtn = document.getElementById('sidebar-next-applicant');
     if (prevBtn) {
         prevBtn.classList.toggle('disabled', currentSidebarIndex === 0);

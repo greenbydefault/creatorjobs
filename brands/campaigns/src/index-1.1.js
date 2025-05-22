@@ -20,7 +20,7 @@
 import './config.js';
 import './state.js';
 import './utils.js';
-import './apiService.js';
+import './apiService-1.0.js';
 import './memberService.js';
 import './scoringService.js';
 import './uiElements.js';

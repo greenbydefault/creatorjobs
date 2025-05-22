@@ -15,17 +15,14 @@
     if (!overlayElement) {
       overlayElement = document.createElement('div');
       overlayElement.id = 'db-modal-overlay-dynamic'; // Eindeutige ID für das Overlay
-      // Die Klasse 'db-modal-overlay' wird für das Styling in Webflow verwendet.
-      // Diese Klasse sollte z.B. position: fixed, top:0, left:0, width:100%, height:100%, background-color: rgba(0,0,0,0.15), z-index, und display:none initial setzen.
       overlayElement.classList.add('db-modal-overlay'); 
       document.body.appendChild(overlayElement);
 
-      // Klick auf Overlay schließt die Sidebar und das Overlay
       overlayElement.addEventListener('click', () => {
         const sidebarToClose = document.getElementById('db-modal-creator-wrapper-dynamic');
         if (sidebarToClose && sidebarToClose.classList.contains('is-open')) {
           sidebarToClose.classList.remove('is-open');
-          toggleOverlay(false); // Overlay ausblenden
+          toggleOverlay(false); 
         }
       });
     }
@@ -36,14 +33,29 @@
    * @param {boolean} show - True, um das Overlay anzuzeigen, false, um es zu verstecken.
    */
   function toggleOverlay(show) {
-    ensureOverlay(); // Stellt sicher, dass das Overlay-Element existiert
+    ensureOverlay(); 
     if (overlayElement) {
       if (show) {
-        overlayElement.classList.add('is-visible'); // Klasse zum Anzeigen (z.B. display: block oder display: flex)
+        overlayElement.classList.add('is-visible'); 
       } else {
-        overlayElement.classList.remove('is-visible'); // Klasse zum Verstecken (z.B. display: none)
+        overlayElement.classList.remove('is-visible'); 
       }
     }
+  }
+
+  /**
+   * Erstellt ein einzelnes Video-Skeleton-Element.
+   * @returns {HTMLElement} Das Skeleton-Element für ein Video.
+   */
+  function createVideoSkeletonElement() {
+    const skeletonWrapper = document.createElement('div');
+    skeletonWrapper.classList.add('db-modal-video-wrapper', 'skeleton-video-wrapper'); // Zusätzliche Klasse für Skeleton-Styling
+
+    const skeletonVideo = document.createElement('div');
+    skeletonVideo.classList.add('db-modal-video-item', 'skeleton-video-item'); // Klasse für Skeleton-Styling
+    // Du kannst hier per CSS eine feste Höhe oder ein Seitenverhältnis und einen Ladeeffekt definieren
+    skeletonWrapper.appendChild(skeletonVideo);
+    return skeletonWrapper;
   }
 
 
@@ -121,7 +133,7 @@
         const wrapperToClose = document.getElementById('db-modal-creator-wrapper-dynamic');
         if (wrapperToClose) {
             wrapperToClose.classList.remove('is-open'); 
-            toggleOverlay(false); // Overlay ausblenden
+            toggleOverlay(false); 
         }
       });
 
@@ -148,7 +160,7 @@
         const wrapperToShow = document.getElementById('db-modal-creator-wrapper-dynamic');
         if (wrapperToShow) {
             wrapperToShow.classList.add('is-open');
-            toggleOverlay(true); // Overlay einblenden
+            toggleOverlay(true); 
         }
         return;
     }
@@ -193,24 +205,22 @@
     const actionsWrapper = document.createElement('div');
     actionsWrapper.classList.add('db-modal-creator-actions'); 
 
-    // "Profil ansehen" Button mit Icon
     if (applicantFieldData.slug) {
         const profileLink = document.createElement('a');
-        profileLink.classList.add('db-button-medium-white-border'); // Geänderte Klasse
+        profileLink.classList.add('db-button-medium-white-border'); 
         profileLink.href = `https://www.creatorjobs.com/members/${applicantFieldData.slug}`; 
         profileLink.target = '_blank'; 
         profileLink.rel = 'noopener noreferrer';
-        profileLink.title = 'Profil ansehen'; // Tooltip für Barrierefreiheit
+        profileLink.title = 'Profil ansehen'; 
 
         const profileIcon = document.createElement('img');
         profileIcon.src = 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/66bdffde5a17773ef460244c_edit-profile.svg';
         profileIcon.classList.add('db-icon-24');
-        profileIcon.alt = 'Profil ansehen'; // Wichtig für Barrierefreiheit
+        profileIcon.alt = 'Profil ansehen'; 
         profileLink.appendChild(profileIcon);
         actionsWrapper.appendChild(profileLink);
     }
 
-    // "Chat starten" Button mit Icon
     const memberstackId = applicantFieldData['memberstack-id'] || applicantFieldData['webflow-member-id']; 
     if (memberstackId) {
         const chatButton = document.createElement('div'); 
@@ -218,12 +228,12 @@
         chatButton.classList.add('db-button-medium-white-border', 'dont-shrink'); 
         chatButton.setAttribute('data-creatorjobs-action', 'create-chat');
         chatButton.setAttribute('data-creatorjobs-target', memberstackId);
-        chatButton.title = 'Chat starten'; // Tooltip für Barrierefreiheit
+        chatButton.title = 'Chat starten'; 
 
         const chatIcon = document.createElement('img');
         chatIcon.src = 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/6645b3de7fe3addd5b0b2bcb_messages.svg';
         chatIcon.classList.add('db-icon-24');
-        chatIcon.alt = 'Chat starten'; // Wichtig für Barrierefreiheit
+        chatIcon.alt = 'Chat starten'; 
         chatButton.appendChild(chatIcon);
         actionsWrapper.appendChild(chatButton);
     }
@@ -234,53 +244,74 @@
 
     const additionalDetailsDiv = document.createElement('div');
     additionalDetailsDiv.classList.add('db-modal-additional-details');
-
-    // Social Media Links wurden entfernt
-
     contentArea.appendChild(additionalDetailsDiv); 
 
     // Video Grid
     const videoGridContainer = document.createElement('div'); 
     videoGridContainer.classList.add('db-modal-creator-video-grid');
+    contentArea.appendChild(videoGridContainer); // Video-Grid zum Content-Bereich hinzufügen
 
-    let videosFound = false;
-    for (let i = 1; i <= 5; i++) {
-        const videoLinkField = `creator-video-link-${i}`;
-        const videoUrl = applicantFieldData[videoLinkField];
-        if (videoUrl && typeof videoUrl === 'string' && videoUrl.trim() !== '') {
-            videosFound = true;
+    // Skeleton Loader für Videos anzeigen
+    const numberOfPotentialVideos = 5; // Da wir bis zu 5 Video-Links prüfen
+    for (let i = 0; i < numberOfPotentialVideos; i++) {
+        videoGridContainer.appendChild(createVideoSkeletonElement());
+    }
 
-            const videoWrapper = document.createElement('div'); 
-            videoWrapper.classList.add('db-modal-video-wrapper');
+    // Verzögere das eigentliche Laden der Videos leicht, um dem Skeleton-Rendering Zeit zu geben (optional)
+    // Und um den Hauptthread nicht sofort zu blockieren, falls viele Videos geladen werden.
+    // In einer echten Anwendung könnte man hier auf 'requestIdleCallback' warten oder die Videos
+    // erst laden, wenn sie in den Viewport kommen (Lazy Loading).
+    // Fürs Erste reicht ein kleiner Timeout oder das direkte Laden.
 
-            const videoElement = document.createElement('video');
-            videoElement.src = window.WEBFLOW_API.utils.normalizeUrl(videoUrl); 
-            videoElement.controls = true;
-            videoElement.preload = "metadata"; 
-            videoElement.classList.add('db-modal-video-item'); 
-            
-            const sourceElement = document.createElement('source');
-            sourceElement.src = window.WEBFLOW_API.utils.normalizeUrl(videoUrl);
-            if (videoUrl.endsWith('.mp4')) {
-                sourceElement.type = 'video/mp4';
-            } else if (videoUrl.endsWith('.webm')) {
-                sourceElement.type = 'video/webm';
-            } else if (videoUrl.endsWith('.ogg')) {
-                sourceElement.type = 'video/ogg';
-            } 
-            videoElement.appendChild(sourceElement);
-            videoElement.appendChild(document.createTextNode('Ihr Browser unterstützt das Video-Tag nicht.'));
+    // Hier werden die Skeletons entfernt und durch Videos oder "Keine Videos" ersetzt.
+    // Es ist wichtig, dies nach dem Anzeigen der Skeletons zu tun.
+    // Um das "Springen" zu minimieren, sollten die Skeletons ähnliche Dimensionen haben wie die Videos.
+    
+    // Um sicherzustellen, dass die Skeletons zuerst gerendert werden, bevor sie entfernt werden,
+    // kann ein kleiner Timeout helfen, oder man arbeitet mit Promises, falls das Video-Laden asynchron ist.
+    // Da wir die Video-Elemente direkt erstellen, ist ein Timeout hier eine einfache Lösung.
+    
+    setTimeout(() => {
+        videoGridContainer.innerHTML = ''; // Entferne die Skeleton-Loader
 
-            videoWrapper.appendChild(videoElement); 
-            videoGridContainer.appendChild(videoWrapper); 
+        let videosFound = false;
+        for (let i = 1; i <= 5; i++) {
+            const videoLinkField = `creator-video-link-${i}`;
+            const videoUrl = applicantFieldData[videoLinkField];
+            if (videoUrl && typeof videoUrl === 'string' && videoUrl.trim() !== '') {
+                videosFound = true;
+
+                const videoWrapper = document.createElement('div'); 
+                videoWrapper.classList.add('db-modal-video-wrapper');
+
+                const videoElement = document.createElement('video');
+                videoElement.src = window.WEBFLOW_API.utils.normalizeUrl(videoUrl); 
+                videoElement.controls = true;
+                videoElement.preload = "metadata"; 
+                videoElement.classList.add('db-modal-video-item'); 
+                
+                const sourceElement = document.createElement('source');
+                sourceElement.src = window.WEBFLOW_API.utils.normalizeUrl(videoUrl);
+                if (videoUrl.endsWith('.mp4')) {
+                    sourceElement.type = 'video/mp4';
+                } else if (videoUrl.endsWith('.webm')) {
+                    sourceElement.type = 'video/webm';
+                } else if (videoUrl.endsWith('.ogg')) {
+                    sourceElement.type = 'video/ogg';
+                } 
+                videoElement.appendChild(sourceElement);
+                videoElement.appendChild(document.createTextNode('Ihr Browser unterstützt das Video-Tag nicht.'));
+
+                videoWrapper.appendChild(videoElement); 
+                videoGridContainer.appendChild(videoWrapper); 
+            }
         }
-    }
-    if (!videosFound) {
-        const noVideosP = document.createElement('p');
-        noVideosP.textContent = 'Keine Videos vorhanden.';
-        videoGridContainer.appendChild(noVideosP);
-    }
-    contentArea.appendChild(videoGridContainer);
+        if (!videosFound) {
+            const noVideosP = document.createElement('p');
+            noVideosP.textContent = 'Keine Videos vorhanden.';
+            videoGridContainer.appendChild(noVideosP);
+        }
+    }, 0); // Ein Timeout von 0ms reicht oft, um dem Browser Zeit für ein Reflow/Repaint zu geben.
 
 
     const prevBtn = document.getElementById('sidebar-prev-applicant');
@@ -295,7 +326,7 @@
     const finalSidebarWrapper = document.getElementById('db-modal-creator-wrapper-dynamic');
     if (finalSidebarWrapper) {
         finalSidebarWrapper.classList.add('is-open'); 
-        toggleOverlay(true); // Overlay einblenden, wenn Sidebar geöffnet wird
+        toggleOverlay(true); 
     }
   }
 

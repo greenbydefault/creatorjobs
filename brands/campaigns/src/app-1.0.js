@@ -9,7 +9,7 @@ import {
 } from './config.js';
 import * as state from './state.js'; // Import all state exports
 import { delay } from './utils.js';
-import { fetchWebflowItem, fetchAllApplicantsForJob } from './apiService.js';
+import { fetchWebflowItem, fetchAllApplicantsForJob } from './apiService-1.0.js';
 import { calculateMatchScore } from './logic/matchScoring.js';
 import { sortApplicantsGlobally } from './logic/sorting.js';
 import { renderMyJobsSkeletonLoader } from './ui/skeletonLoaders.js';

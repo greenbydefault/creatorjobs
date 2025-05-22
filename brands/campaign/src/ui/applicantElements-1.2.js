@@ -6,7 +6,6 @@
   // Abhängigkeiten
   const MAPPINGS = window.WEBFLOW_API.MAPPINGS;
   const { normalizeUrl } = window.WEBFLOW_API.utils;
-  // Die Funktion showCreatorSidebar wird jetzt über window.WEBFLOW_API.ui.showCreatorSidebar aufgerufen
   
   /**
    * Erstellt ein DOM-Element für eine Bewerberzeile.
@@ -22,27 +21,17 @@
 
     const applicantDiv = document.createElement("div");
     applicantDiv.classList.add("db-table-row", "db-table-applicant", "job-entry");
-    applicantDiv.style.cursor = 'pointer'; // Zeigt an, dass die Zeile klickbar ist
+    applicantDiv.style.cursor = 'pointer'; 
 
     applicantDiv.addEventListener('click', (event) => {
-      // Verhindert, dass der Klick auf ein Social Media Icon oder andere interaktive Elemente in der Zeile die Sidebar öffnet.
       if (event.target.closest('a') || event.target.closest('button') || event.target.closest('input')) {
         return; 
       }
       
-      // Rufe die Sidebar-Funktion aus dem globalen Namespace auf
       if (window.WEBFLOW_API.ui && window.WEBFLOW_API.ui.showCreatorSidebar) {
         window.WEBFLOW_API.ui.showCreatorSidebar(applicantItemWithScoreInfo, allJobApplicantsForThisJob, currentIndexInList, jobId);
       } else {
         console.error("showCreatorSidebar function not found on window.WEBFLOW_API.ui");
-        // Fallback, falls die Sidebar-Funktion aus irgendeinem Grund nicht da ist (sollte nicht passieren)
-        // const slug = applicantFieldData.slug;
-        // if (slug) {
-        //   const profileUrl = `https://www.creatorjobs.com/members/${slug}`;
-        //   window.open(profileUrl, '_blank');
-        // } else {
-        //   console.warn("Kein Slug für Bewerber gefunden, kann Profil nicht öffnen:", applicantFieldData.name);
-        // }
       }
     });
 
@@ -50,7 +39,7 @@
       console.error("❌ MAPPINGS-Objekt ist nicht definiert in createApplicantRowElement.");
       const errorDiv = document.createElement("div");
       errorDiv.textContent = "Fehler: Mapping-Daten nicht verfügbar.";
-      errorDiv.style.gridColumn = "span 7"; // Anzahl der Spalten anpassen, falls sich das Layout ändert
+      errorDiv.style.gridColumn = "span 7"; 
       applicantDiv.appendChild(errorDiv);
       return applicantDiv;
     }
@@ -125,7 +114,6 @@
         socialLink.classList.add("db-application-option", "no-icon", "w-inline-block"); 
         socialLink.target = "_blank";
         socialLink.rel = "noopener noreferrer";
-        // WICHTIG: Stoppt die Event-Propagation, damit der Klick auf das Icon nicht die Sidebar öffnet.
         socialLink.addEventListener('click', (e) => e.stopPropagation()); 
         const iconImg = document.createElement("img");
         iconImg.src = platform.iconUrl;
@@ -185,6 +173,105 @@
   }
 
   /**
+   * Erstellt ein einzelnes Filter-Dropdown-Element.
+   * @param {string} jobId - Die ID des aktuellen Jobs.
+   * @param {string} filterType - Der Typ des Filters (z.B. "follower", "category", "creatorType").
+   * @param {string} filterLabel - Das Label für den Filter-Trigger (z.B. "Follower").
+   * @param {object} optionsSource - Das Objekt oder Array, das die Filteroptionen enthält.
+   * @param {HTMLElement} applicantsListContainer - Der Container der Bewerberliste.
+   * @param {HTMLElement} paginationWrapper - Der Wrapper für die Paginierung.
+   * @param {boolean} isDynamicOptions - True, wenn Optionen dynamisch aus applicantData generiert werden sollen.
+   * @returns {HTMLElement} Das Filter-Dropdown-DOM-Element.
+   */
+  function createFilterDropdown(jobId, filterType, filterLabel, optionsSource, applicantsListContainer, paginationWrapper, isDynamicOptions = false) {
+    const filterDiv = document.createElement("div");
+    filterDiv.classList.add("db-individual-filter-trigger"); 
+
+    const filterText = document.createElement("span");
+    filterText.classList.add("is-txt-16");
+    filterText.textContent = filterLabel;
+    filterDiv.appendChild(filterText);
+
+    const filterIcon = document.createElement("img");
+    filterIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/682c5e5b84cac09c56cdbebe_angle-down-small.svg"; 
+    filterIcon.classList.add("db-icon-18"); 
+    filterDiv.appendChild(filterIcon);
+
+    const dropdownList = document.createElement("div");
+    dropdownList.classList.add("db-filter-dropdown-list"); 
+    dropdownList.style.display = "none"; 
+
+    let options = {};
+    if (isDynamicOptions) {
+        // Optionen dynamisch aus den Bewerberdaten generieren
+        const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
+        if (jobCache && jobCache.allItems) {
+            const uniqueValues = new Set();
+            jobCache.allItems.forEach(item => {
+                if (item.fieldData && item.fieldData[optionsSource] && !item.error) { // optionsSource ist hier der Feldname
+                    uniqueValues.add(item.fieldData[optionsSource]);
+                }
+            });
+            uniqueValues.forEach(value => {
+                options[value] = value; // Key und Value sind gleich für dynamische Optionen
+            });
+        }
+    } else {
+        options = optionsSource;
+    }
+
+    Object.entries(options).forEach(([id, text]) => {
+        if (filterType === "follower" && text === "0") return; // Spezifische Regel für Follower
+
+        const optionDiv = document.createElement("div");
+        optionDiv.classList.add("db-filter-option"); 
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.classList.add("db-filter-checkbox"); 
+        checkbox.id = `filter-${jobId}-${filterType}-${id.replace(/\s+/g, '-')}`; // ID-sicher machen
+        checkbox.dataset.filterValue = id; // Hier wird der Key (ID oder Wert selbst) gespeichert
+        checkbox.dataset.filterType = filterType;
+
+        const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
+        if (jobCache?.activeFilters?.[filterType]?.includes(id)) {
+            checkbox.checked = true;
+        }
+
+        const label = document.createElement("label");
+        label.htmlFor = checkbox.id;
+        label.classList.add("is-txt-16"); 
+        label.textContent = text;
+
+        checkbox.addEventListener("change", async () => {
+            if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
+               await window.WEBFLOW_API.core.applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper);
+            } else {
+                console.error("applyAndReloadApplicants Funktion nicht gefunden.");
+            }
+        });
+
+        optionDiv.appendChild(checkbox);
+        optionDiv.appendChild(label);
+        dropdownList.appendChild(optionDiv);
+    });
+    
+    filterDiv.appendChild(dropdownList);
+
+    filterDiv.addEventListener("click", (e) => {
+      e.stopPropagation(); 
+      // Schließe alle anderen Dropdowns in dieser Filterzeile
+      const allDropdownsInRow = filterDiv.parentElement.querySelectorAll('.db-filter-dropdown-list');
+      allDropdownsInRow.forEach(dd => {
+        if (dd !== dropdownList) dd.style.display = 'none';
+      });
+      dropdownList.style.display = dropdownList.style.display === "none" ? "block" : "none";
+    });
+    return filterDiv;
+  }
+
+
+  /**
    * Erstellt das DOM-Element für die Filterzeile (z.B. Follower-Filter).
    * @param {string} jobId - Die ID des aktuellen Jobs.
    * @param {HTMLElement} applicantsListContainer - Der Container der Bewerberliste.
@@ -196,83 +283,71 @@
     filterRow.classList.add("db-table-filter-row");
 
     const filterWrapper = document.createElement("div");
-    filterWrapper.classList.add("db-table-filter-row-wrapper");
+    filterWrapper.classList.add("db-table-filter-row-wrapper"); // Für Flexbox-Layout der Filter
     filterRow.appendChild(filterWrapper);
 
-    const followerFilterDiv = document.createElement("div");
-    followerFilterDiv.classList.add("db-individual-filter-trigger"); 
-
-    const followerFilterText = document.createElement("span");
-    followerFilterText.classList.add("is-txt-16");
-    followerFilterText.textContent = "Follower";
-    followerFilterDiv.appendChild(followerFilterText);
-
-    const followerFilterIcon = document.createElement("img");
-    followerFilterIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/682c5e5b84cac09c56cdbebe_angle-down-small.svg"; 
-    followerFilterIcon.classList.add("db-icon-18"); 
-    followerFilterDiv.appendChild(followerFilterIcon);
-
-    const followerDropdownList = document.createElement("div");
-    followerDropdownList.classList.add("db-filter-dropdown-list"); 
-    followerDropdownList.style.display = "none"; 
-
+    // Follower Filter
     if (MAPPINGS && MAPPINGS.followerRanges) {
-        Object.entries(MAPPINGS.followerRanges).forEach(([id, rangeText]) => {
-            if (rangeText === "0") return; 
-
-            const optionDiv = document.createElement("div");
-            optionDiv.classList.add("db-filter-option"); 
-
-            const checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.classList.add("db-filter-checkbox"); 
-            checkbox.id = `filter-${jobId}-follower-${id}`;
-            checkbox.dataset.filterValue = id;
-            checkbox.dataset.filterType = "follower";
-
-            const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
-            if (jobCache?.activeFilters?.follower?.includes(id)) {
-                checkbox.checked = true;
-            }
-
-            const label = document.createElement("label");
-            label.htmlFor = checkbox.id;
-            label.classList.add("is-txt-16"); 
-            label.textContent = rangeText;
-
-            checkbox.addEventListener("change", async () => {
-                if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
-                   await window.WEBFLOW_API.core.applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper);
-                } else {
-                    console.error("applyAndReloadApplicants Funktion nicht gefunden.");
-                }
-            });
-
-            optionDiv.appendChild(checkbox);
-            optionDiv.appendChild(label);
-            followerDropdownList.appendChild(optionDiv);
-        });
+        const followerFilter = createFilterDropdown(jobId, "follower", "Follower", MAPPINGS.followerRanges, applicantsListContainer, paginationWrapper);
+        filterWrapper.appendChild(followerFilter);
     }
 
-    followerFilterDiv.appendChild(followerDropdownList);
-    filterWrapper.appendChild(followerFilterDiv);
+    // Kategorie Filter (dynamisch basierend auf den Daten der Bewerber)
+    // optionsSource ist hier der Feldname 'creator-main-categorie'
+    const categoryFilter = createFilterDropdown(jobId, "category", "Kategorie", "creator-main-categorie", applicantsListContainer, paginationWrapper, true);
+    filterWrapper.appendChild(categoryFilter);
+    
+    // Creator Type Filter
+    if (MAPPINGS && MAPPINGS.creatorTypen) {
+        const creatorTypeFilter = createFilterDropdown(jobId, "creatorType", "Creator Typ", MAPPINGS.creatorTypen, applicantsListContainer, paginationWrapper);
+        filterWrapper.appendChild(creatorTypeFilter);
+    }
 
-    followerFilterDiv.addEventListener("click", (e) => {
-      e.stopPropagation(); 
-      const allDropdowns = filterRow.querySelectorAll('.db-filter-dropdown-list');
-      allDropdowns.forEach(dd => {
-        if (dd !== followerDropdownList) dd.style.display = 'none';
-      });
-      followerDropdownList.style.display = followerDropdownList.style.display === "none" ? "block" : "none";
+    // Toggle für "Nur relevante Bewerber"
+    const relevantToggleWrapper = document.createElement('div');
+    relevantToggleWrapper.classList.add('db-filter-toggle-wrapper'); // Eigene Klasse für Styling
+
+    const relevantToggleLabel = document.createElement('label');
+    relevantToggleLabel.htmlFor = `filter-${jobId}-relevantOnly`;
+    relevantToggleLabel.classList.add('is-txt-16');
+    relevantToggleLabel.textContent = 'Nur relevante Bewerber'; // Label-Text
+
+    const relevantToggleCheckbox = document.createElement('input');
+    relevantToggleCheckbox.type = 'checkbox';
+    relevantToggleCheckbox.id = `filter-${jobId}-relevantOnly`;
+    relevantToggleCheckbox.dataset.filterType = 'relevantOnly'; // Für die Filterlogik
+    relevantToggleCheckbox.classList.add('db-filter-checkbox'); // Ggf. für einheitliches Styling
+
+    const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
+    if (jobCache?.activeFilters?.relevantOnly === true) {
+        relevantToggleCheckbox.checked = true;
+    }
+    
+    relevantToggleCheckbox.addEventListener('change', async () => {
+        if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
+            await window.WEBFLOW_API.core.applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper);
+        } else {
+            console.error("applyAndReloadApplicants Funktion nicht gefunden.");
+        }
     });
 
+    relevantToggleWrapper.appendChild(relevantToggleCheckbox);
+    relevantToggleWrapper.appendChild(relevantToggleLabel); // Label nach Checkbox für übliches Layout
+    filterWrapper.appendChild(relevantToggleWrapper);
+
+
+    // Schließen der Dropdowns, wenn außerhalb geklickt wird
     document.addEventListener("click", (e) => {
-      if (!followerFilterDiv.contains(e.target)) {
-        followerDropdownList.style.display = "none";
-      }
+        if (!filterWrapper.contains(e.target)) { // Prüft, ob Klick außerhalb des gesamten FilterWrappers war
+            const allDropdownsInRow = filterWrapper.querySelectorAll('.db-filter-dropdown-list');
+            allDropdownsInRow.forEach(dd => {
+                dd.style.display = 'none';
+            });
+        }
     });
     return filterRow;
   }
+
 
   // Exponieren der UI-Funktionen
   window.WEBFLOW_API.ui.createApplicantRowElement = createApplicantRowElement;

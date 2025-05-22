@@ -222,11 +222,8 @@
     additionalDetailsDiv.classList.add('db-modal-additional-details');
 
     // Social Media Links wurden entfernt
-    // const socialDiv = document.createElement('div');
-    // ... (restlicher Social Media Code entfernt) ...
-    // additionalDetailsDiv.appendChild(socialDiv); // Nicht mehr hinzufügen
 
-    contentArea.appendChild(additionalDetailsDiv); // additionalDetailsDiv wird immer noch hinzugefügt, falls andere Details später kommen
+    contentArea.appendChild(additionalDetailsDiv); 
 
     // Video Grid
     const videoGridContainer = document.createElement('div'); 
@@ -272,7 +269,7 @@
     contentArea.appendChild(videoGridContainer);
 
 
-    const prevBtn = document.getElementById('sidebar-prev-applicant');
+    const prevBtn = document.getElementById('sidebar-prev-applicant'); // Korrigierte ID
     const nextBtn = document.getElementById('sidebar-next-applicant');
     if (prevBtn) {
         prevBtn.classList.toggle('disabled', currentSidebarIndex === 0);

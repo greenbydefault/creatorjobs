@@ -1,25 +1,33 @@
 // src/utils.js
-// This module contains general utility functions used across the application.
+(function() {
+    'use strict';
 
-/**
- * Creates a promise that resolves after a specified number of milliseconds.
- * @param {number} ms - The number of milliseconds to delay.
- * @returns {Promise<void>}
- */
-export function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+    window.WEBFLOW_API = window.WEBFLOW_API || {};
 
-/**
- * Normalizes a URL string. If the URL doesn't start with http:// or https://,
- * it prepends https://.
- * @param {string | null | undefined} url - The URL to normalize.
- * @returns {string | null} The normalized URL, or null if the input was invalid.
- */
-export function normalizeUrl(url) {
-    if (!url || typeof url !== 'string') return null;
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-        return url;
-    }
-    return `https://${url}`;
-}
+    const utils = {
+        /**
+         * Erzeugt eine Promise, die nach einer bestimmten Zeit aufgelöst wird.
+         * @param {number} ms - Die Verzögerungszeit in Millisekunden.
+         * @returns {Promise<void>}
+         */
+        delay: function(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        },
+
+        /**
+         * Normalisiert eine URL, indem sichergestellt wird, dass sie mit http:// oder https:// beginnt.
+         * @param {string | null | undefined} url - Die zu normalisierende URL.
+         * @returns {string | null} - Die normalisierte URL oder null, wenn die Eingabe ungültig ist.
+         */
+        normalizeUrl: function(url) {
+            if (!url || typeof url !== 'string') return null;
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+                return url;
+            }
+            return `https://${url}`;
+        }
+    };
+
+    window.WEBFLOW_API.utils = utils;
+
+})();

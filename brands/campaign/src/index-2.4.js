@@ -21,7 +21,7 @@ import './core/matchScoring.js';
 // UI Elemente
 import './ui/skeleton.js';
 // applicantElements hängt von MAPPINGS, utils, und core.applyAndReloadApplicants ab (letzteres für Callbacks)
-import './ui/applicantElements-1.0.js';
+import './ui/applicantElements-1.1.js';
 // pagination hängt von appLogic.loadAndDisplayApplicantsForJob ab (für Callbacks)
 import './ui/pagination.js';
 // jobElements hängt von vielen Dingen ab, die zur Laufzeit aufgelöst werden.

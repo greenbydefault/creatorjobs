@@ -42,25 +42,24 @@
       sidebarControls.appendChild(title);
 
       const navAndCloseWrapper = document.createElement('div');
-      // navAndCloseWrapper Klasse für Flexbox oder Grid Layout in CSS hinzufügen, falls benötigt
       navAndCloseWrapper.classList.add('db-modal-nav-close-wrapper');
 
 
       const navButtonsWrapper = document.createElement('div');
-      navButtonsWrapper.classList.add('db-modal-control-buttons'); // Neue Klasse hier
+      navButtonsWrapper.classList.add('db-modal-control-buttons'); 
 
 
       const prevButton = document.createElement('div');
       prevButton.classList.add('db-modal-prev'); 
       prevButton.id = 'sidebar-prev-applicant';
-      prevButton.textContent = '< Zurück'; // Angepasster Text
+      prevButton.textContent = '< Zurück'; 
       prevButton.title = "Vorheriger Bewerber";
       navButtonsWrapper.appendChild(prevButton);
 
       const nextButton = document.createElement('div');
       nextButton.classList.add('db-modal-next'); 
       nextButton.id = 'sidebar-next-applicant';
-      nextButton.textContent = 'Weiter >'; // Angepasster Text
+      nextButton.textContent = 'Weiter >'; 
       nextButton.title = "Nächster Bewerber";
       navButtonsWrapper.appendChild(nextButton);
       navAndCloseWrapper.appendChild(navButtonsWrapper);
@@ -117,7 +116,7 @@
     const profileImageField = applicantFieldData["image-thumbnail-small-92px"] || applicantFieldData["user-profile-img"];
     if (profileImageField) {
       const img = document.createElement('img');
-      img.classList.add('db-table-img'); // Ggf. anpassen: 'db-sidebar-creator-img'
+      img.classList.add('db-table-img'); 
       img.src = typeof profileImageField === 'string' ? profileImageField : (profileImageField?.url || 'https://placehold.co/80x80/E0E0E0/BDBDBD?text=Bild');
       img.alt = applicantFieldData.name || "Bewerberbild";
       img.onerror = () => { img.src = 'https://placehold.co/80x80/E0E0E0/BDBDBD?text=Fehler'; };
@@ -132,14 +131,13 @@
     nameH.textContent = applicantFieldData.name || 'Unbekannter Bewerber';
     detailsDiv.appendChild(nameH);
     
-    // Ersetzt db-modal-plus-status durch Location
     const city = applicantFieldData["user-city-2"] || "K.A.";
     const bundeslandId = applicantFieldData["bundesland-option"];
     const bundeslandName = (MAPPINGS && MAPPINGS.bundeslaender && MAPPINGS.bundeslaender[bundeslandId]) || "";
     const locationInHeadlineP = document.createElement('p');
-    locationInHeadlineP.classList.add('is-txt-16'); // Neue Klasse für Location in Headline
+    locationInHeadlineP.classList.add('is-txt-16'); 
     locationInHeadlineP.textContent = `${city}${bundeslandName ? `, ${bundeslandName}` : ""}`;
-    if (locationInHeadlineP.textContent === "K.A.") { // Verstecke, wenn keine Info
+    if (locationInHeadlineP.textContent === "K.A.") { 
         locationInHeadlineP.textContent = "Kein Standort angegeben";
     }
     detailsDiv.appendChild(locationInHeadlineP);
@@ -151,7 +149,6 @@
     const additionalDetailsDiv = document.createElement('div');
     additionalDetailsDiv.classList.add('db-modal-additional-details');
 
-    // Standort hier wurde entfernt, da er jetzt in der Headline ist.
 
     const creatorTypeId = applicantFieldData["creator-type"];
     const creatorTypeName = (MAPPINGS && MAPPINGS.creatorTypen && MAPPINGS.creatorTypen[creatorTypeId]) || "K.A.";
@@ -213,11 +210,11 @@
     contentArea.appendChild(additionalDetailsDiv);
 
     // Video Grid
-    const videoGridDiv = document.createElement('div');
-    videoGridDiv.classList.add('db-modal-creator-video-grid');
+    const videoGridContainer = document.createElement('div'); // Umbenannt für Klarheit
+    videoGridContainer.classList.add('db-modal-creator-video-grid');
     const videoTitle = document.createElement('h4');
     videoTitle.textContent = 'Videos:';
-    videoGridDiv.appendChild(videoTitle);
+    videoGridContainer.appendChild(videoTitle);
 
     let videosFound = false;
     for (let i = 1; i <= 5; i++) {
@@ -225,37 +222,39 @@
         const videoUrl = applicantFieldData[videoLinkField];
         if (videoUrl && typeof videoUrl === 'string' && videoUrl.trim() !== '') {
             videosFound = true;
+
+            const videoWrapper = document.createElement('div'); // NEU: Wrapper für jedes Video
+            videoWrapper.classList.add('db-modal-video-wrapper');
+
             const videoElement = document.createElement('video');
-            videoElement.src = window.WEBFLOW_API.utils.normalizeUrl(videoUrl); // Normalize URL
+            videoElement.src = window.WEBFLOW_API.utils.normalizeUrl(videoUrl); 
             videoElement.controls = true;
-            videoElement.width = 200; // Beispielbreite, per CSS anpassen
-            videoElement.classList.add('db-modal-video-item'); // Klasse für Styling
+            videoElement.preload = "metadata"; // NEU: preload Attribut
+            // videoElement.width = 200; // Entfernt, Styling über CSS
+            videoElement.classList.add('db-modal-video-item'); 
             
-            // Fallback-Text für Browser, die das Video-Tag nicht unterstützen
             const sourceElement = document.createElement('source');
             sourceElement.src = window.WEBFLOW_API.utils.normalizeUrl(videoUrl);
-            // Den Typ dynamisch zu bestimmen ist schwierig ohne Server-Info oder Dateiendung.
-            // Für eine robuste Lösung wäre es besser, den Mime-Type im CMS zu speichern.
-            // Hier ein einfacher Versuch basierend auf gängigen Endungen (ggf. erweitern)
             if (videoUrl.endsWith('.mp4')) {
                 sourceElement.type = 'video/mp4';
             } else if (videoUrl.endsWith('.webm')) {
                 sourceElement.type = 'video/webm';
             } else if (videoUrl.endsWith('.ogg')) {
                 sourceElement.type = 'video/ogg';
-            } // Weitere Typen hinzufügen...
+            } 
             videoElement.appendChild(sourceElement);
             videoElement.appendChild(document.createTextNode('Ihr Browser unterstützt das Video-Tag nicht.'));
 
-            videoGridDiv.appendChild(videoElement);
+            videoWrapper.appendChild(videoElement); // Video in Wrapper
+            videoGridContainer.appendChild(videoWrapper); // Wrapper in Grid
         }
     }
     if (!videosFound) {
         const noVideosP = document.createElement('p');
         noVideosP.textContent = 'Keine Videos vorhanden.';
-        videoGridDiv.appendChild(noVideosP);
+        videoGridContainer.appendChild(noVideosP);
     }
-    contentArea.appendChild(videoGridDiv);
+    contentArea.appendChild(videoGridContainer);
 
 
     const prevBtn = document.getElementById('sidebar-prev-applicant');

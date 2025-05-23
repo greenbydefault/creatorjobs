@@ -31,7 +31,7 @@ import './core/dataProcessing-1.0.js';
 
 
 // Hauptanwendungslogik, die viele der obigen Module orchestriert
-import './appLogic-1.2.js';
+import './appLogic-1.3.js';
 
 // Initialisierungsskript, das die appLogic startet
 import './main-1.1.js';

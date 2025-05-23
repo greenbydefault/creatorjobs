@@ -91,7 +91,7 @@
     const onlineBisCell = document.createElement("div");
     onlineBisCell.classList.add("db-table-row-item");
     const onlineBisTag = document.createElement("span");
-    onlineBisTag.classList.add("job-tag"); 
+    onlineBisTag.classList.add("job-tag", "customer"); // Klasse "customer" hinzugefügt
     onlineBisTag.textContent = formatDate(jobFieldData["job-date-end"]); // CMS-Feld "job-date-end" verwenden
     onlineBisCell.appendChild(onlineBisTag);
     jobHeaderDiv.appendChild(onlineBisCell);
@@ -100,7 +100,7 @@
     const paymentCell = document.createElement("div");
     paymentCell.classList.add("db-table-row-item");
     const paymentTag = document.createElement("span");
-    paymentTag.classList.add("job-tag"); 
+    paymentTag.classList.add("job-tag", "customer"); // Klasse "customer" hinzugefügt
     paymentTag.textContent = jobFieldData["job-payment"] ? `${jobFieldData["job-payment"]} €` : "K.A.";
     paymentCell.appendChild(paymentTag);
     jobHeaderDiv.appendChild(paymentCell);
@@ -109,7 +109,7 @@
     const categoryCell = document.createElement("div");
     categoryCell.classList.add("db-table-row-item");
     const categoryTag = document.createElement("span");
-    categoryTag.classList.add("job-tag"); 
+    categoryTag.classList.add("job-tag", "customer"); // Klasse "customer" hinzugefügt
     categoryTag.textContent = jobFieldData["industrie-kategorie"] || "K.A.";
     categoryCell.appendChild(categoryTag);
     jobHeaderDiv.appendChild(categoryCell);
@@ -119,7 +119,7 @@
     const applicantsCountCell = document.createElement("div");
     applicantsCountCell.classList.add("db-table-row-item");
     const applicantsCountTag = document.createElement("span");
-    applicantsCountTag.classList.add("job-tag"); 
+    applicantsCountTag.classList.add("job-tag", "customer"); // Klasse "customer" hinzugefügt
     applicantsCountTag.textContent = `${applicantIdsForThisSpecificJob.length}`;
     applicantsCountCell.appendChild(applicantsCountTag);
     jobHeaderDiv.appendChild(applicantsCountCell);
@@ -128,7 +128,7 @@
     const statusCell = document.createElement("div");
     statusCell.classList.add("db-table-row-item");
     const statusTag = document.createElement("div"); 
-    statusTag.classList.add("job-tag"); 
+    statusTag.classList.add("job-tag"); // Behält div und spezifische Hintergrundklassen
 
     const jobEndDateString = jobFieldData["job-date-end"];
     if (jobEndDateString) {
@@ -155,20 +155,28 @@
     statusCell.appendChild(statusTag);
     jobHeaderDiv.appendChild(statusCell);
     
-    // 7. Toggle-Switch "Bewerber anzeigen"
+    // 7. Toggle-Switch "Bewerber anzeigen" - NEUE STRUKTUR
     const toggleCell = document.createElement("div");
     toggleCell.classList.add("db-table-row-item", "cell-align-center"); 
 
-    const toggleWrapper = document.createElement("div");
-    toggleWrapper.classList.add("checkbox-toggle-wrapper");
+    const toggleLabelElement = document.createElement("label"); // Parent ist jetzt das Label
+    toggleLabelElement.classList.add("toggle-show-list");
+    // Das Label braucht kein 'for', wenn die Checkbox ein direktes Kind ist,
+    // aber es schadet auch nicht, wenn die ID der Checkbox gesetzt ist.
+    // toggleLabelElement.htmlFor = `toggle-applicants-${jobItem.id}`;
+
 
     const toggleCheckbox = document.createElement("input");
     toggleCheckbox.type = "checkbox";
-    toggleCheckbox.classList.add("checkbox-toggle");
+    toggleCheckbox.classList.add("checkbox-toggle"); // Behält diese Klasse für den Event-Listener
     toggleCheckbox.id = `toggle-applicants-${jobItem.id}`; 
 
-    toggleWrapper.appendChild(toggleCheckbox);
-    toggleCell.appendChild(toggleWrapper);
+    const toggleSliderSpan = document.createElement("span");
+    toggleSliderSpan.classList.add("toggle-slider-show-list");
+
+    toggleLabelElement.appendChild(toggleCheckbox);
+    toggleLabelElement.appendChild(toggleSliderSpan);
+    toggleCell.appendChild(toggleLabelElement); // Das Label wird der Zelle hinzugefügt
     jobHeaderDiv.appendChild(toggleCell);
 
 

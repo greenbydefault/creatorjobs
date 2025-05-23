@@ -41,6 +41,7 @@
     const { sortApplicantsGlobally } = window.WEBFLOW_API.core;
     // loadAndDisplayApplicantsForJob wird aus appLogic geholt
 
+    // jobFieldData hier definieren, bevor es verwendet wird
     const jobFieldData = jobItem.fieldData; 
 
     if (jobItem.error && jobItem.status !== 429 && jobItem.status !== 404) { 
@@ -51,6 +52,7 @@
         return errorP;
     }
     
+    // Überprüfung, ob jobFieldData existiert, NACHDEM es definiert wurde
     if (!jobFieldData && !jobItem.error) { 
       console.warn("Job-Item ohne fieldData übersprungen:", jobItem);
       const errorP = document.createElement('p');
@@ -58,7 +60,11 @@
       errorP.classList.add("job-entry", "visible", "error-message");
       return errorP;
     }
+    // Diese Bedingung prüft, ob es ein Fehlerobjekt ist UND jobFieldData nicht existiert (was bei Fehlerobjekten der Fall sein sollte)
      if (!jobFieldData && jobItem.error) { 
+        // Wenn es ein Fehlerobjekt ist (z.B. 404, 429), wird es von der aufrufenden Funktion (renderMyJobsList) behandelt
+        // oder hier könnte ein spezifisches Fehlerelement zurückgegeben werden, falls renderMyJobsList das nicht tut.
+        // Für den Moment geben wir null zurück, damit renderMyJobsList es überspringen kann, wenn es ein Fehler ist.
         return null; 
     }
 
@@ -67,6 +73,9 @@
     jobWrapper.classList.add("my-job-item", "job-entry"); 
     jobWrapper.dataset.jobId = jobItem.id;
 
+    // jobFieldData ist bereits oben definiert
+
+    // Job Header
     const jobHeaderDiv = document.createElement("div");
     jobHeaderDiv.classList.add("db-table-row", "db-table-my-job");
 
@@ -161,10 +170,6 @@
 
     const toggleLabelElement = document.createElement("label"); // Parent ist jetzt das Label
     toggleLabelElement.classList.add("toggle-show-list");
-    // Das Label braucht kein 'for', wenn die Checkbox ein direktes Kind ist,
-    // aber es schadet auch nicht, wenn die ID der Checkbox gesetzt ist.
-    // toggleLabelElement.htmlFor = `toggle-applicants-${jobItem.id}`;
-
 
     const toggleCheckbox = document.createElement("input");
     toggleCheckbox.type = "checkbox";
@@ -182,6 +187,9 @@
 
     jobWrapper.appendChild(jobHeaderDiv);
 
+    // Die alte "applicants-toggle-row" wird entfernt.
+
+    // Container für Bewerberliste (initial versteckt)
     const applicantsListContainer = document.createElement("div");
     applicantsListContainer.classList.add("applicants-list-container");
     applicantsListContainer.style.display = "none";
@@ -189,6 +197,7 @@
     applicantsListContainer.dataset.allApplicantsLoaded = 'false'; 
     jobWrapper.appendChild(applicantsListContainer);
 
+    // Pagination Wrapper (initial versteckt)
     let paginationWrapper = jobWrapper.querySelector(".db-table-pagination");
     if (!paginationWrapper) {
       paginationWrapper = document.createElement("div");
@@ -197,32 +206,49 @@
     }
     paginationWrapper.style.display = "none";
 
+
+    // Event Listener für den neuen Toggle-Switch
     toggleCheckbox.addEventListener("change", async () => {
       const isChecked = toggleCheckbox.checked;
+      
       if (isChecked) {
         applicantsListContainer.style.display = "block";
+        
         if (!jobDataCache[jobItem.id]) {
           jobDataCache[jobItem.id] = { activeFilters: { follower: [], category: [], creatorType: [], relevantOnly: false } };
         }
         jobDataCache[jobItem.id].jobDetails = jobFieldData; 
 
         const applicantIds = jobFieldData["bewerber"] || [];
+        // Überprüfen, ob die Rohdaten aller Bewerber geladen werden müssen
         if (!jobDataCache[jobItem.id].allItems || jobDataCache[jobItem.id].allItems.length !== applicantIds.length || applicantsListContainer.dataset.allApplicantsLoaded === 'false') {
-          applicantsListContainer.innerHTML = ''; 
-          const loadingAllMsg = document.createElement("p");
-          loadingAllMsg.classList.add("applicants-message");
-          loadingAllMsg.textContent = "Lade alle Bewerberdaten für Sortierung und Filterung...";
-          applicantsListContainer.appendChild(loadingAllMsg);
+          applicantsListContainer.innerHTML = ''; // Alten Inhalt leeren (wichtig vor dem Spinner)
+          
+          // Spinner für initiales Laden hinzufügen
+          const initialLoadSpinner = document.createElement("div");
+          initialLoadSpinner.classList.add("spinner-table-small");
+          // Optional: Zentrierungs-Styling, falls nicht global in CSS
+          initialLoadSpinner.style.margin = "20px auto";
+          initialLoadSpinner.style.display = "block";
+          applicantsListContainer.appendChild(initialLoadSpinner);
+
+          // Alte Textnachricht wurde entfernt
+          // const loadingAllMsg = document.createElement("p");
+          // loadingAllMsg.classList.add("applicants-message");
+          // loadingAllMsg.textContent = "Lade alle Bewerberdaten für Sortierung und Filterung...";
+          // applicantsListContainer.appendChild(loadingAllMsg);
 
           const fetchedItems = await fetchAllApplicantsForJob(jobItem.id, applicantIds);
-          loadingAllMsg.remove();
+          initialLoadSpinner.remove(); // Spinner entfernen nach dem Laden
           jobDataCache[jobItem.id].allItems = fetchedItems;
           applicantsListContainer.dataset.allApplicantsLoaded = 'true';
         }
         
+        // Wende aktuelle Filter an und zeige die erste Seite an
         if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
             await window.WEBFLOW_API.core.applyAndReloadApplicants(jobItem.id, applicantsListContainer, paginationWrapper);
         } else {
+            // Fallback, falls applyAndReloadApplicants nicht verfügbar ist (sollte nicht passieren)
             jobDataCache[jobItem.id].sortedAndFilteredItems = sortApplicantsGlobally(
                 jobDataCache[jobItem.id].allItems, 
                 jobDataCache[jobItem.id].jobDetails
@@ -235,6 +261,7 @@
             }
         }
       } else {
+        // Bereich einklappen
         applicantsListContainer.style.display = "none";
         if(paginationWrapper) paginationWrapper.style.display = "none";
       }

@@ -3,23 +3,14 @@
   window.WEBFLOW_API = window.WEBFLOW_API || {};
   window.WEBFLOW_API.appLogic = window.WEBFLOW_API.appLogic || {};
 
-  // Abhängigkeiten aus dem globalen Namespace
-  // ... (andere Abhängigkeiten wie zuvor)
-
-  /**
-   * Bestimmt den Status eines Jobs basierend auf dem Enddatum.
-   * @param {object} jobFieldData - Die Felddaten des Jobs.
-   * @returns {string} "Aktiv", "Beendet" oder "Unbekannt".
-   */
   function getJobStatus(jobFieldData) {
     const jobEndDateString = jobFieldData["job-date-end"];
     if (jobEndDateString) {
       try {
         const jobEndDate = new Date(jobEndDateString);
-        jobEndDate.setHours(23, 59, 59, 999); // Ende des Tages für den Vergleich
+        jobEndDate.setHours(23, 59, 59, 999); 
         const today = new Date();
-        today.setHours(0, 0, 0, 0); // Anfang des heutigen Tages
-
+        today.setHours(0, 0, 0, 0); 
         if (jobEndDate >= today) {
           return "Aktiv";
         } else {
@@ -33,16 +24,11 @@
     return "Unbekannt";
   }
 
-
-  /**
-   * Lädt und zeigt die Bewerber für einen bestimmten Job an, inklusive Filter, Header und Paginierung.
-   * (Diese Funktion bleibt größtenteils unverändert)
-   */
   async function loadAndDisplayApplicantsForJob(jobId, applicantsListContainer, paginationWrapper, pageNumber = 1) {
     console.log(`DEBUG: loadAndDisplayApplicantsForJob START - Job ID: ${jobId}, Page: ${pageNumber}`);
     
     const { jobDataCache, currentApplicantPageSize } = window.WEBFLOW_API.cache;
-    const { createFilterRowElement, createApplicantTableHeaderElement, createApplicantRowElement, renderPaginationControls } = window.WEBFLOW_API.ui;
+    const { createFilterRowElement, createApplicantTableHeaderElement, createApplicantRowElement, renderPaginationControls, renderActiveFilterBadgesUI } = window.WEBFLOW_API.ui; // renderActiveFilterBadgesUI hinzugefügt
     
     const mainToggleButton = document.querySelector(`.my-job-item[data-job-id="${jobId}"] .checkbox-toggle`); 
     if (mainToggleButton && mainToggleButton.disabled) { 
@@ -50,18 +36,26 @@
     }
     if (mainToggleButton) mainToggleButton.disabled = true;
 
-
-    if (!applicantsListContainer.querySelector(".db-table-filter-row")) {
-      const filterRowElement = createFilterRowElement(jobId, applicantsListContainer, paginationWrapper);
-      applicantsListContainer.insertBefore(filterRowElement, applicantsListContainer.firstChild);
+    // Sicherstellen, dass die Filter-UI-Elemente vorhanden sind, bevor Badges gerendert werden
+    let filterRow = applicantsListContainer.querySelector(".db-table-filter-row");
+    if (!filterRow) {
+      // Erstelle die gesamte Filterzeile, wenn sie nicht existiert.
+      // createFilterRowElement fügt auch den Container für die Badges hinzu.
+      const newFilterRow = createFilterRowElement(jobId, applicantsListContainer, paginationWrapper);
+      applicantsListContainer.insertBefore(newFilterRow, applicantsListContainer.firstChild);
+      filterRow = newFilterRow; // Aktualisiere die Referenz
     }
+    
+    // Den Container für die Badges finden (wird in createFilterRowElement erstellt)
+    const activeFiltersDisplayContainer = filterRow.querySelector(".db-active-filters-display");
+
 
     if (!applicantsListContainer.querySelector(".db-table-header.db-table-applicant")) {
       const headerElement = createApplicantTableHeaderElement();
-      const filterRow = applicantsListContainer.querySelector(".db-table-filter-row");
-      if (filterRow && filterRow.nextSibling) {
-        applicantsListContainer.insertBefore(headerElement, filterRow.nextSibling);
-      } else if (filterRow) {
+      const currentFilterRow = applicantsListContainer.querySelector(".db-table-filter-row"); // Holen der aktuellen Filterzeile
+      if (currentFilterRow && currentFilterRow.nextSibling) {
+        applicantsListContainer.insertBefore(headerElement, currentFilterRow.nextSibling);
+      } else if (currentFilterRow) {
         applicantsListContainer.appendChild(headerElement);
       } else {
         applicantsListContainer.insertBefore(headerElement, applicantsListContainer.firstChild);
@@ -174,14 +168,17 @@
     }
 
     await renderPaginationControls(jobId, allSortedAndFilteredItems, applicantsContentElement, paginationWrapper, pageNumber, totalPages);
+    
+    // NEU: Aktive Filter-Badges rendern/aktualisieren
+    if (activeFiltersDisplayContainer && renderActiveFilterBadgesUI) {
+        renderActiveFilterBadgesUI(jobId, activeFiltersDisplayContainer, applicantsListContainer, paginationWrapper);
+    } else {
+        console.warn("Container für aktive Filter-Badges nicht gefunden oder renderActiveFilterBadgesUI nicht verfügbar.");
+    }
+
     if (mainToggleButton) mainToggleButton.disabled = false; 
   }
 
-
-  /**
-   * Rendert die Liste der Jobs des aktuellen Nutzers.
-   * @param {object[]} jobItemsToRender - Array von Job-Item-Objekten, die gerendert werden sollen.
-   */
   function renderMyJobsList(jobItemsToRender) { 
     const { createJobEntryElement } = window.WEBFLOW_API.ui;
     const container = document.getElementById("jobs-list");
@@ -199,7 +196,6 @@
             msg.remove();
         }
     });
-
 
     if (jobItemsToRender.length === 0) {
       if (!container.querySelector(".info-message")) { 
@@ -269,9 +265,6 @@
     });
   }
 
-  /**
-   * Filtert und rendert die Job-Liste basierend auf den aktiven Status-Filtern und dem Suchbegriff.
-   */
   function filterAndRenderJobs() {
     const cache = window.WEBFLOW_API.cache;
     if (!cache || !cache.allMyJobsData_MJ) {
@@ -283,7 +276,6 @@
     const showActive = document.getElementById('job-status-active')?.checked;
     const showDone = document.getElementById('job-status-done')?.checked;
     
-    // NEU: Suchbegriff auslesen
     const searchInput = document.getElementById('filter-search');
     const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : "";
 
@@ -294,7 +286,6 @@
 
         const status = getJobStatus(jobItem.fieldData); 
 
-        // Status-Filter
         let statusMatch = false;
         if (showActive && showDone) {
             statusMatch = true; 
@@ -303,11 +294,10 @@
         } else if (showDone) {
             statusMatch = (status === "Beendet");
         } else if (!showActive && !showDone) {
-             statusMatch = true; // Wenn keine Status-Checkbox aktiv ist, alle Status anzeigen
+             statusMatch = true; 
         }
         if (!statusMatch) return false;
 
-        // NEU: Suchfilter nach Job-Name
         if (searchTerm) {
             const jobName = jobItem.fieldData.name ? jobItem.fieldData.name.toLowerCase() : "";
             if (!jobName.includes(searchTerm)) {
@@ -315,16 +305,12 @@
             }
         }
         
-        return true; // Job entspricht allen aktiven Filtern
+        return true; 
     });
 
     renderMyJobsList(filteredJobs);
   }
 
-
-  /**
-   * Hauptfunktion zum Abrufen und Anzeigen der Jobs und deren Bewerber.
-   */
   async function initializeMyJobsDisplay() {
     if (!window.WEBFLOW_API.config) {
         console.error("❌ Konfigurationsmodul nicht geladen. Breche initializeMyJobsDisplay ab.");
@@ -475,7 +461,6 @@
   }
 
 
-  // Exponieren der Hauptlogikfunktionen
   window.WEBFLOW_API.appLogic.loadAndDisplayApplicantsForJob = loadAndDisplayApplicantsForJob;
   window.WEBFLOW_API.appLogic.filterAndRenderJobs = filterAndRenderJobs; 
   window.WEBFLOW_API.appLogic.initializeMyJobsDisplay = initializeMyJobsDisplay;

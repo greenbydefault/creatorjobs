@@ -36,7 +36,6 @@
 
   /**
    * Lädt und zeigt die Bewerber für einen bestimmten Job an, inklusive Filter, Header und Paginierung.
-   * (Diese Funktion bleibt größtenteils unverändert, wie in der vorherigen Version von appLogic.js)
    */
   async function loadAndDisplayApplicantsForJob(jobId, applicantsListContainer, paginationWrapper, pageNumber = 1) {
     console.log(`DEBUG: loadAndDisplayApplicantsForJob START - Job ID: ${jobId}, Page: ${pageNumber}`);
@@ -44,9 +43,9 @@
     const { jobDataCache, currentApplicantPageSize } = window.WEBFLOW_API.cache;
     const { createFilterRowElement, createApplicantTableHeaderElement, createApplicantRowElement, renderPaginationControls } = window.WEBFLOW_API.ui;
     
-    const mainToggleButton = document.querySelector(`.my-job-item[data-job-id="${jobId}"] .checkbox-toggle`); // Angepasst an neuen Toggle
-    if (mainToggleButton && mainToggleButton.disabled) { // Verhindere Interaktion, wenn Toggle bereits lädt
-        // return; // Oder eine andere Logik, um Mehrfachklicks zu behandeln
+    const mainToggleButton = document.querySelector(`.my-job-item[data-job-id="${jobId}"] .checkbox-toggle`); 
+    if (mainToggleButton && mainToggleButton.disabled) { 
+        // return; 
     }
     if (mainToggleButton) mainToggleButton.disabled = true;
 
@@ -85,15 +84,29 @@
     applicantsContentElement.innerHTML = ''; 
     applicantsListContainer.dataset.currentPage = pageNumber;
 
-    const loadingMessage = document.createElement("p");
-    loadingMessage.classList.add("applicants-message");
-    loadingMessage.textContent = `Lade Bewerber (Seite ${pageNumber})...`;
-    applicantsContentElement.appendChild(loadingMessage);
+    // NEU: Spinner hinzufügen
+    const spinnerDiv = document.createElement("div");
+    spinnerDiv.classList.add("spinner-table-small"); 
+    // Optional: Zentrierung des Spinners, falls nicht durch CSS global geregelt
+    spinnerDiv.style.margin = "20px auto"; 
+    spinnerDiv.style.display = "block"; 
+    applicantsContentElement.appendChild(spinnerDiv);
+
+    // Die alte Textnachricht kann entfernt oder als Fallback beibehalten werden, falls der Spinner nicht lädt
+    // const loadingMessage = document.createElement("p");
+    // loadingMessage.classList.add("applicants-message");
+    // loadingMessage.textContent = `Lade Bewerber (Seite ${pageNumber})...`;
+    // applicantsContentElement.appendChild(loadingMessage);
 
     const jobCache = jobDataCache[jobId];
     if (!jobCache || !jobCache.sortedAndFilteredItems) {
       console.error(`DEBUG: Keine sortierten/gefilterten Daten im Cache für Job ${jobId}.`);
-      loadingMessage.textContent = 'Fehler: Bewerberdaten konnten nicht geladen werden (Cache-Problem).';
+      // Spinner entfernen und Fehlermeldung anzeigen
+      spinnerDiv.remove(); 
+      const errorText = document.createElement("p");
+      errorText.classList.add("applicants-message");
+      errorText.textContent = 'Fehler: Bewerberdaten konnten nicht geladen werden (Cache-Problem).';
+      applicantsContentElement.appendChild(errorText);
       if (mainToggleButton) mainToggleButton.disabled = false;
       return;
     }
@@ -108,7 +121,8 @@
     const offset = (pageNumber - 1) * currentApplicantPageSize;
     const pageItems = allSortedAndFilteredItems.slice(offset, offset + currentApplicantPageSize);
     
-    loadingMessage.remove(); 
+    spinnerDiv.remove(); // Spinner entfernen, bevor Items gerendert werden
+    // loadingMessage.remove(); 
 
     let validApplicantsRenderedOnThisPage = 0;
     if (pageItems.length > 0) {
@@ -177,7 +191,7 @@
    * Rendert die Liste der Jobs des aktuellen Nutzers.
    * @param {object[]} jobItemsToRender - Array von Job-Item-Objekten, die gerendert werden sollen.
    */
-  function renderMyJobsList(jobItemsToRender) { // Parameter umbenannt für Klarheit
+  function renderMyJobsList(jobItemsToRender) { 
     const { createJobEntryElement } = window.WEBFLOW_API.ui;
     const container = document.getElementById("jobs-list");
     if (!container) {
@@ -185,21 +199,19 @@
       return;
     }
 
-    // Entferne nur alte Job-Items (Elemente mit der Klasse .my-job-item)
     const existingJobItems = container.querySelectorAll(".my-job-item");
     existingJobItems.forEach(item => item.remove());
 
-    // Entferne auch alte Nachrichten (Fehler, Info), die nicht der Header sind
     const messages = container.querySelectorAll(".job-entry:not(.db-table-header)");
     messages.forEach(msg => {
-        if (!msg.classList.contains("my-job-item")) { // Nur entfernen, wenn es kein Job-Item ist
+        if (!msg.classList.contains("my-job-item")) { 
             msg.remove();
         }
     });
 
 
     if (jobItemsToRender.length === 0) {
-      if (!container.querySelector(".info-message")) { // Verhindere doppelte Nachrichten
+      if (!container.querySelector(".info-message")) { 
         const noJobsMsg = document.createElement("p");
         noJobsMsg.textContent = "Keine Jobs entsprechen den aktuellen Filterkriterien.";
         noJobsMsg.classList.add("job-entry", "visible", "info-message"); 
@@ -209,7 +221,7 @@
     }
 
     const fragment = document.createDocumentFragment();
-    let globalRateLimitMessageShown = false; // Diese Logik bleibt für API-Fehler beim Job-Abruf
+    let globalRateLimitMessageShown = false; 
 
     jobItemsToRender.forEach(jobItem => {
       if (jobItem.error && jobItem.status === 429) {
@@ -220,7 +232,7 @@
           globalRateLimitInfo.textContent = "Hinweis: Einige Jobdaten konnten aufgrund von API-Anfragelimits nicht geladen werden. Die betroffenen Jobs werden nicht angezeigt.";
           globalRateLimitInfo.classList.add("job-entry", "visible", "error-message");
           if (container.firstChild && !container.firstChild.classList.contains("db-table-header")) {
-            container.insertBefore(globalRateLimitInfo, container.firstChild.nextSibling); // Nach dem Header einfügen
+            container.insertBefore(globalRateLimitInfo, container.firstChild.nextSibling); 
           } else if (container.firstChild && container.firstChild.classList.contains("db-table-header")){
              container.insertBefore(globalRateLimitInfo, container.firstChild.nextSibling);
           }
@@ -273,7 +285,7 @@
     const cache = window.WEBFLOW_API.cache;
     if (!cache || !cache.allMyJobsData_MJ) {
         console.warn("Keine Job-Rohdaten im Cache zum Filtern vorhanden.");
-        renderMyJobsList([]); // Leere Liste rendern
+        renderMyJobsList([]); 
         return;
     }
 
@@ -283,12 +295,12 @@
     console.log(`Filter-Status: Aktiv=${showActive}, Beendet=${showDone}`);
 
     let filteredJobs = cache.allMyJobsData_MJ.filter(jobItem => {
-        if (jobItem.error || !jobItem.fieldData) return false; // Fehlerhafte oder unvollständige Jobs überspringen
+        if (jobItem.error || !jobItem.fieldData) return false; 
 
-        const status = getJobStatus(jobItem.fieldData); // "Aktiv" oder "Beendet"
+        const status = getJobStatus(jobItem.fieldData); 
 
         if (showActive && showDone) {
-            return true; // Beide ausgewählt, alle anzeigen
+            return true; 
         }
         if (showActive) {
             return status === "Aktiv";
@@ -297,9 +309,9 @@
             return status === "Beendet";
         }
         if (!showActive && !showDone) {
-             return true; // Keiner ausgewählt, auch alle anzeigen (oder keine, je nach gewünschter Logik)
+             return true; 
         }
-        return false; // Sollte nicht erreicht werden
+        return false; 
     });
 
     renderMyJobsList(filteredJobs);
@@ -351,12 +363,11 @@
       return;
     }
     
-    // Header einmalig erstellen und hinzufügen, falls noch nicht vorhanden
     if (!container.querySelector(".db-table-header.db-table-my-jobs")) {
         const myJobsHeader = createMyJobsTableHeaderElement();
         container.appendChild(myJobsHeader);
     }
-    renderMyJobsSkeletonLoader(container, SKELETON_JOBS_COUNT_MJ); // Skeletons nach dem Header einfügen
+    renderMyJobsSkeletonLoader(container, SKELETON_JOBS_COUNT_MJ); 
 
     try {
       if (typeof window.$memberstackDom === 'undefined') {
@@ -377,7 +388,6 @@
 
       if (!cache.currentWebflowMemberId_MJ) {
         console.error("❌ Kein 'webflow-member-id' im Memberstack-Profil gefunden.");
-        // Skeletons entfernen und Fehlermeldung anzeigen
         container.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
         container.innerHTML += "<p class='error-message job-entry visible'>Benutzer-Identifikation via Memberstack fehlgeschlagen. Deine Jobs können nicht geladen werden.</p>";
         return;
@@ -409,7 +419,7 @@
       }
       if (!currentUserItem.fieldData && !(currentUserItem.error)) { 
         console.error("❌ Benutzerdaten des aktuellen Users (fieldData) nicht gefunden, obwohl User existiert.", currentUserItem);
-        filterAndRenderJobs(); // Zeigt "Keine Jobs..." Nachricht, da allMyJobsData_MJ leer ist
+        filterAndRenderJobs(); 
         return;
       }
 
@@ -417,7 +427,7 @@
       console.log(`User hat ${postedJobIds.length} Jobs im Feld 'posted-jobs'.`);
 
       if (postedJobIds.length === 0) {
-        filterAndRenderJobs(); // Zeigt "Keine Jobs..." Nachricht
+        filterAndRenderJobs(); 
         return;
       }
 
@@ -448,9 +458,8 @@
       });
       console.log("-----------------------------------------------------");
       
-      // Skeletons entfernen, bevor die gefilterten Jobs gerendert werden
       container.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
-      filterAndRenderJobs(); // Jobs initial filtern und rendern
+      filterAndRenderJobs(); 
 
     } catch (error) {
       console.error("❌ Schwerwiegender Fehler in initializeMyJobsDisplay:", error);
@@ -464,8 +473,7 @@
 
   // Exponieren der Hauptlogikfunktionen
   window.WEBFLOW_API.appLogic.loadAndDisplayApplicantsForJob = loadAndDisplayApplicantsForJob;
-  // window.WEBFLOW_API.appLogic.renderMyJobsList = renderMyJobsList; // Wird jetzt intern von filterAndRenderJobs verwendet
-  window.WEBFLOW_API.appLogic.filterAndRenderJobs = filterAndRenderJobs; // Neue Funktion exponieren
+  window.WEBFLOW_API.appLogic.filterAndRenderJobs = filterAndRenderJobs; 
   window.WEBFLOW_API.appLogic.initializeMyJobsDisplay = initializeMyJobsDisplay;
 
 })();

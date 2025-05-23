@@ -36,6 +36,7 @@
 
   /**
    * Lädt und zeigt die Bewerber für einen bestimmten Job an, inklusive Filter, Header und Paginierung.
+   * (Diese Funktion bleibt größtenteils unverändert)
    */
   async function loadAndDisplayApplicantsForJob(jobId, applicantsListContainer, paginationWrapper, pageNumber = 1) {
     console.log(`DEBUG: loadAndDisplayApplicantsForJob START - Job ID: ${jobId}, Page: ${pageNumber}`);
@@ -84,24 +85,15 @@
     applicantsContentElement.innerHTML = ''; 
     applicantsListContainer.dataset.currentPage = pageNumber;
 
-    // NEU: Spinner hinzufügen
     const spinnerDiv = document.createElement("div");
     spinnerDiv.classList.add("spinner-table-small"); 
-    // Optional: Zentrierung des Spinners, falls nicht durch CSS global geregelt
     spinnerDiv.style.margin = "20px auto"; 
     spinnerDiv.style.display = "block"; 
     applicantsContentElement.appendChild(spinnerDiv);
 
-    // Die alte Textnachricht kann entfernt oder als Fallback beibehalten werden, falls der Spinner nicht lädt
-    // const loadingMessage = document.createElement("p");
-    // loadingMessage.classList.add("applicants-message");
-    // loadingMessage.textContent = `Lade Bewerber (Seite ${pageNumber})...`;
-    // applicantsContentElement.appendChild(loadingMessage);
-
     const jobCache = jobDataCache[jobId];
     if (!jobCache || !jobCache.sortedAndFilteredItems) {
       console.error(`DEBUG: Keine sortierten/gefilterten Daten im Cache für Job ${jobId}.`);
-      // Spinner entfernen und Fehlermeldung anzeigen
       spinnerDiv.remove(); 
       const errorText = document.createElement("p");
       errorText.classList.add("applicants-message");
@@ -121,8 +113,7 @@
     const offset = (pageNumber - 1) * currentApplicantPageSize;
     const pageItems = allSortedAndFilteredItems.slice(offset, offset + currentApplicantPageSize);
     
-    spinnerDiv.remove(); // Spinner entfernen, bevor Items gerendert werden
-    // loadingMessage.remove(); 
+    spinnerDiv.remove(); 
 
     let validApplicantsRenderedOnThisPage = 0;
     if (pageItems.length > 0) {
@@ -279,7 +270,7 @@
   }
 
   /**
-   * Filtert und rendert die Job-Liste basierend auf den aktiven Status-Filtern.
+   * Filtert und rendert die Job-Liste basierend auf den aktiven Status-Filtern und dem Suchbegriff.
    */
   function filterAndRenderJobs() {
     const cache = window.WEBFLOW_API.cache;
@@ -291,27 +282,40 @@
 
     const showActive = document.getElementById('job-status-active')?.checked;
     const showDone = document.getElementById('job-status-done')?.checked;
+    
+    // NEU: Suchbegriff auslesen
+    const searchInput = document.getElementById('filter-search');
+    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : "";
 
-    console.log(`Filter-Status: Aktiv=${showActive}, Beendet=${showDone}`);
+    console.log(`Filter-Status: Aktiv=${showActive}, Beendet=${showDone}, Suche='${searchTerm}'`);
 
     let filteredJobs = cache.allMyJobsData_MJ.filter(jobItem => {
         if (jobItem.error || !jobItem.fieldData) return false; 
 
         const status = getJobStatus(jobItem.fieldData); 
 
+        // Status-Filter
+        let statusMatch = false;
         if (showActive && showDone) {
-            return true; 
+            statusMatch = true; 
+        } else if (showActive) {
+            statusMatch = (status === "Aktiv");
+        } else if (showDone) {
+            statusMatch = (status === "Beendet");
+        } else if (!showActive && !showDone) {
+             statusMatch = true; // Wenn keine Status-Checkbox aktiv ist, alle Status anzeigen
         }
-        if (showActive) {
-            return status === "Aktiv";
+        if (!statusMatch) return false;
+
+        // NEU: Suchfilter nach Job-Name
+        if (searchTerm) {
+            const jobName = jobItem.fieldData.name ? jobItem.fieldData.name.toLowerCase() : "";
+            if (!jobName.includes(searchTerm)) {
+                return false;
+            }
         }
-        if (showDone) {
-            return status === "Beendet";
-        }
-        if (!showActive && !showDone) {
-             return true; 
-        }
-        return false; 
+        
+        return true; // Job entspricht allen aktiven Filtern
     });
 
     renderMyJobsList(filteredJobs);

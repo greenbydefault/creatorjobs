@@ -29,8 +29,10 @@
             if(creatorSidebarToClose) creatorSidebarToClose.classList.remove('creator-sidebar-shifted');
         }
         
-        if (creatorSidebarToClose && creatorSidebarToClose.classList.contains('is-open')) anySidebarIsOpen = true;
-        if (notesSidebarToClose && notesSidebarToClose.classList.contains('is-open')) anySidebarIsOpen = true;
+        // Check if any sidebar is still open after attempting to close them
+        const isCreatorStillOpen = creatorSidebarToClose && creatorSidebarToClose.classList.contains('is-open');
+        const isNotesStillOpen = notesSidebarToClose && notesSidebarToClose.classList.contains('is-open');
+        anySidebarIsOpen = isCreatorStillOpen || isNotesStillOpen;
 
         if (!anySidebarIsOpen) {
             toggleOverlay(false); 
@@ -233,28 +235,9 @@
         actionsWrapper.appendChild(chatButton);
     }
 
-    // Notiz-Button hinzufügen
-    const noteButton = document.createElement('div'); 
-    noteButton.classList.add('db-button-medium-white-border', 'db-note-button'); 
-    noteButton.title = 'Notiz hinzufügen/ansehen';
-
-    const noteIcon = document.createElement('img');
-    noteIcon.src = 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/68303f3386647aef733e5d39_note.svg';
-    noteIcon.classList.add('db-icon-24');
-    noteIcon.alt = 'Notiz';
-    noteButton.appendChild(noteIcon);
-    actionsWrapper.appendChild(noteButton);
-
-    noteButton.addEventListener('click', (e) => {
-        e.stopPropagation(); 
-        if (window.WEBFLOW_API.ui.showNotesSidebar) {
-            const applicantId = applicantItem.id; // Annahme: applicantItem hat eine 'id'
-            const applicantName = applicantFieldData.name || 'Bewerber';
-            window.WEBFLOW_API.ui.showNotesSidebar(applicantId, applicantName);
-        } else {
-            console.error('showNotesSidebar function not found.');
-        }
-    });
+    // Notiz-Button wurde entfernt
+    // const noteButton = document.createElement('div'); 
+    // ... (Code für Notiz-Button und Event-Listener entfernt) ...
 
     headlineDiv.appendChild(actionsWrapper); 
     contentArea.appendChild(headlineDiv);

@@ -6,72 +6,66 @@
   let currentSidebarJobId = null;
   let currentSidebarApplicants = [];
   let currentSidebarIndex = -1;
-  let overlayElement = null; // Variable für das Overlay-Element
+  let overlayElement = null; 
 
-  /**
-   * Erstellt das Overlay-Element, falls es nicht existiert.
-   */
   function ensureOverlay() {
     if (!overlayElement) {
       overlayElement = document.createElement('div');
-      overlayElement.id = 'db-modal-overlay-dynamic'; // Eindeutige ID für das Overlay
+      overlayElement.id = 'db-modal-overlay-dynamic'; 
       overlayElement.classList.add('db-modal-overlay'); 
       document.body.appendChild(overlayElement);
 
       overlayElement.addEventListener('click', () => {
-        const sidebarToClose = document.getElementById('db-modal-creator-wrapper-dynamic');
-        if (sidebarToClose && sidebarToClose.classList.contains('is-open')) {
-          sidebarToClose.classList.remove('is-open');
-          toggleOverlay(false); 
+        const creatorSidebarToClose = document.getElementById('db-modal-creator-wrapper-dynamic');
+        const notesSidebarToClose = document.getElementById('db-modal-note-wrapper-dynamic');
+        let anySidebarIsOpen = false;
+
+        if (creatorSidebarToClose && creatorSidebarToClose.classList.contains('is-open')) {
+          creatorSidebarToClose.classList.remove('is-open');
+          creatorSidebarToClose.classList.remove('creator-sidebar-shifted');
+        }
+        if (notesSidebarToClose && notesSidebarToClose.classList.contains('is-open')) {
+            notesSidebarToClose.classList.remove('is-open');
+            if(creatorSidebarToClose) creatorSidebarToClose.classList.remove('creator-sidebar-shifted');
+        }
+        
+        if (creatorSidebarToClose && creatorSidebarToClose.classList.contains('is-open')) anySidebarIsOpen = true;
+        if (notesSidebarToClose && notesSidebarToClose.classList.contains('is-open')) anySidebarIsOpen = true;
+
+        if (!anySidebarIsOpen) {
+            toggleOverlay(false); 
         }
       });
     }
   }
 
-  /**
-   * Zeigt oder versteckt das Overlay.
-   * @param {boolean} show - True, um das Overlay anzuzeigen, false, um es zu verstecken.
-   */
   function toggleOverlay(show) {
     ensureOverlay(); 
     if (overlayElement) {
       if (show) {
         overlayElement.classList.add('is-visible'); 
       } else {
-        overlayElement.classList.remove('is-visible'); 
+        const creatorSidebar = document.getElementById('db-modal-creator-wrapper-dynamic');
+        const notesSidebar = document.getElementById('db-modal-note-wrapper-dynamic');
+        const isCreatorOpen = creatorSidebar && creatorSidebar.classList.contains('is-open');
+        const isNotesOpen = notesSidebar && notesSidebar.classList.contains('is-open');
+        
+        if (!isCreatorOpen && !isNotesOpen) {
+             overlayElement.classList.remove('is-visible'); 
+        }
       }
     }
   }
-
-  /**
-   * Erstellt ein einzelnes Video-Skeleton-Element.
-   * @returns {HTMLElement} Das Skeleton-Element für ein Video.
-   */
-  function createVideoSkeletonElement() {
-    const skeletonWrapper = document.createElement('div');
-    skeletonWrapper.classList.add('db-modal-video-wrapper', 'skeleton-video-wrapper'); // Zusätzliche Klasse für Skeleton-Styling
-
-    const skeletonVideo = document.createElement('div');
-    skeletonVideo.classList.add('db-modal-video-item', 'skeleton-video-item'); // Klasse für Skeleton-Styling
-    // Du kannst hier per CSS eine feste Höhe oder ein Seitenverhältnis und einen Ladeeffekt definieren
-    skeletonWrapper.appendChild(skeletonVideo);
-    return skeletonWrapper;
-  }
+  window.WEBFLOW_API.ui.toggleOverlay = toggleOverlay;
 
 
-  /**
-   * Erstellt und zeigt die Creator-Detail-Sidebar an oder aktualisiert sie.
-   * @param {object} applicantItem - Das anzuzeigende Bewerberobjekt.
-   * @param {Array} allJobApplicants - Die vollständige (gefilterte/sortierte) Liste der Bewerber für den aktuellen Job.
-   * @param {number} applicantIndex - Der Index des aktuellen Bewerbers in allJobApplicants.
-   * @param {string} jobId - Die ID des aktuellen Jobs.
-   */
   function showCreatorSidebar(applicantItem, allJobApplicants, applicantIndex, jobId) {
     const MAPPINGS = window.WEBFLOW_API.MAPPINGS; 
 
     currentSidebarJobId = jobId;
     currentSidebarApplicants = allJobApplicants;
     currentSidebarIndex = applicantIndex;
+    const applicantFieldData = applicantItem.fieldData; 
 
     let sidebarWrapper = document.getElementById('db-modal-creator-wrapper-dynamic');
     if (!sidebarWrapper) {
@@ -79,10 +73,8 @@
       sidebarWrapper.id = 'db-modal-creator-wrapper-dynamic';
       sidebarWrapper.classList.add('db-modal-creator-wrapper'); 
 
-
       const sidebarControls = document.createElement('div');
       sidebarControls.classList.add('db-modal-creator-controls');
-
 
       const title = document.createElement('span');
       title.classList.add('is-txt-16', 'is-txt-medium');
@@ -119,7 +111,6 @@
       closeButtonWrapper.appendChild(closeButton); 
 
       sidebarControls.appendChild(closeButtonWrapper); 
-
       sidebarWrapper.appendChild(sidebarControls);
 
       const sidebarContent = document.createElement('div');
@@ -128,11 +119,11 @@
       sidebarWrapper.appendChild(sidebarContent);
       document.body.appendChild(sidebarWrapper);
 
-      // Event Listener
       closeButton.addEventListener('click', () => {
         const wrapperToClose = document.getElementById('db-modal-creator-wrapper-dynamic');
         if (wrapperToClose) {
             wrapperToClose.classList.remove('is-open'); 
+            wrapperToClose.classList.remove('creator-sidebar-shifted'); 
             toggleOverlay(false); 
         }
       });
@@ -150,16 +141,20 @@
       });
     }
 
-    // Inhalt der Sidebar aktualisieren
     const contentArea = document.getElementById('sidebar-creator-content-dynamic');
     contentArea.innerHTML = ''; 
 
-    const applicantFieldData = applicantItem.fieldData;
-    if (!applicantFieldData) {
+    if (!applicantFieldData) { 
         contentArea.textContent = 'Bewerberdaten nicht verfügbar.';
         const wrapperToShow = document.getElementById('db-modal-creator-wrapper-dynamic');
         if (wrapperToShow) {
             wrapperToShow.classList.add('is-open');
+            const notesSidebar = document.getElementById('db-modal-note-wrapper-dynamic');
+            if (notesSidebar && notesSidebar.classList.contains('is-open')) {
+                wrapperToShow.classList.add('creator-sidebar-shifted');
+            } else {
+                wrapperToShow.classList.remove('creator-sidebar-shifted');
+            }
             toggleOverlay(true); 
         }
         return;
@@ -237,42 +232,52 @@
         chatButton.appendChild(chatIcon);
         actionsWrapper.appendChild(chatButton);
     }
+
+    // Notiz-Button hinzufügen
+    const noteButton = document.createElement('div'); 
+    noteButton.classList.add('db-button-medium-white-border', 'db-note-button'); 
+    noteButton.title = 'Notiz hinzufügen/ansehen';
+
+    const noteIcon = document.createElement('img');
+    noteIcon.src = 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/68303f3386647aef733e5d39_note.svg';
+    noteIcon.classList.add('db-icon-24');
+    noteIcon.alt = 'Notiz';
+    noteButton.appendChild(noteIcon);
+    actionsWrapper.appendChild(noteButton);
+
+    noteButton.addEventListener('click', (e) => {
+        e.stopPropagation(); 
+        if (window.WEBFLOW_API.ui.showNotesSidebar) {
+            const applicantId = applicantItem.id; // Annahme: applicantItem hat eine 'id'
+            const applicantName = applicantFieldData.name || 'Bewerber';
+            window.WEBFLOW_API.ui.showNotesSidebar(applicantId, applicantName);
+        } else {
+            console.error('showNotesSidebar function not found.');
+        }
+    });
+
     headlineDiv.appendChild(actionsWrapper); 
-
-
     contentArea.appendChild(headlineDiv);
 
     const additionalDetailsDiv = document.createElement('div');
     additionalDetailsDiv.classList.add('db-modal-additional-details');
     contentArea.appendChild(additionalDetailsDiv); 
 
-    // Video Grid
     const videoGridContainer = document.createElement('div'); 
     videoGridContainer.classList.add('db-modal-creator-video-grid');
-    contentArea.appendChild(videoGridContainer); // Video-Grid zum Content-Bereich hinzufügen
+    contentArea.appendChild(videoGridContainer); 
 
-    // Skeleton Loader für Videos anzeigen
-    const numberOfPotentialVideos = 5; // Da wir bis zu 5 Video-Links prüfen
+    const numberOfPotentialVideos = 5; 
     for (let i = 0; i < numberOfPotentialVideos; i++) {
-        videoGridContainer.appendChild(createVideoSkeletonElement());
+        if (window.WEBFLOW_API.ui.createVideoSkeletonElement) { 
+            videoGridContainer.appendChild(window.WEBFLOW_API.ui.createVideoSkeletonElement());
+        } else if (window.createVideoSkeletonElement) { 
+             videoGridContainer.appendChild(window.createVideoSkeletonElement());
+        }
     }
-
-    // Verzögere das eigentliche Laden der Videos leicht, um dem Skeleton-Rendering Zeit zu geben (optional)
-    // Und um den Hauptthread nicht sofort zu blockieren, falls viele Videos geladen werden.
-    // In einer echten Anwendung könnte man hier auf 'requestIdleCallback' warten oder die Videos
-    // erst laden, wenn sie in den Viewport kommen (Lazy Loading).
-    // Fürs Erste reicht ein kleiner Timeout oder das direkte Laden.
-
-    // Hier werden die Skeletons entfernt und durch Videos oder "Keine Videos" ersetzt.
-    // Es ist wichtig, dies nach dem Anzeigen der Skeletons zu tun.
-    // Um das "Springen" zu minimieren, sollten die Skeletons ähnliche Dimensionen haben wie die Videos.
-    
-    // Um sicherzustellen, dass die Skeletons zuerst gerendert werden, bevor sie entfernt werden,
-    // kann ein kleiner Timeout helfen, oder man arbeitet mit Promises, falls das Video-Laden asynchron ist.
-    // Da wir die Video-Elemente direkt erstellen, ist ein Timeout hier eine einfache Lösung.
     
     setTimeout(() => {
-        videoGridContainer.innerHTML = ''; // Entferne die Skeleton-Loader
+        videoGridContainer.innerHTML = ''; 
 
         let videosFound = false;
         for (let i = 1; i <= 5; i++) {
@@ -311,7 +316,7 @@
             noVideosP.textContent = 'Keine Videos vorhanden.';
             videoGridContainer.appendChild(noVideosP);
         }
-    }, 0); // Ein Timeout von 0ms reicht oft, um dem Browser Zeit für ein Reflow/Repaint zu geben.
+    }, 0); 
 
 
     const prevBtn = document.getElementById('sidebar-prev-applicant');
@@ -323,13 +328,30 @@
         nextBtn.classList.toggle('disabled', currentSidebarIndex === currentSidebarApplicants.length - 1);
     }
 
-    const finalSidebarWrapper = document.getElementById('db-modal-creator-wrapper-dynamic');
-    if (finalSidebarWrapper) {
-        finalSidebarWrapper.classList.add('is-open'); 
+    const finalCreatorSidebarWrapper = document.getElementById('db-modal-creator-wrapper-dynamic');
+    if (finalCreatorSidebarWrapper) {
+        finalCreatorSidebarWrapper.classList.add('is-open'); 
+        const notesSidebar = document.getElementById('db-modal-note-wrapper-dynamic');
+        if (notesSidebar && notesSidebar.classList.contains('is-open')) {
+            finalCreatorSidebarWrapper.classList.add('creator-sidebar-shifted');
+        } else {
+            finalCreatorSidebarWrapper.classList.remove('creator-sidebar-shifted');
+        }
         toggleOverlay(true); 
     }
   }
+  
+  if (!window.WEBFLOW_API.ui.createVideoSkeletonElement) {
+    window.WEBFLOW_API.ui.createVideoSkeletonElement = function() {
+        const skeletonWrapper = document.createElement('div');
+        skeletonWrapper.classList.add('db-modal-video-wrapper', 'skeleton-video-wrapper');
+        const skeletonVideo = document.createElement('div');
+        skeletonVideo.classList.add('db-modal-video-item', 'skeleton-video-item');
+        skeletonWrapper.appendChild(skeletonVideo);
+        return skeletonWrapper;
+    };
+  }
 
-  window.WEBFLOW_API.ui.showCreatorSidebar = showCreatorSidebar;
+  window.WEBFLOW_API.ui.showCreatorSidebar = showCreatorSidebar; 
 
 })();

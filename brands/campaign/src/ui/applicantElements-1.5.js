@@ -149,12 +149,10 @@
     return headerDiv;
   }
 
-  /**
-   * Erstellt ein einzelnes "Badge" für einen aktiven Filter.
-   */
   function createActiveFilterBadgeUI(jobId, filterType, filterValue, filterText, applicantsListContainer, paginationWrapper) {
     const badgeWrapper = document.createElement("div");
-    badgeWrapper.classList.add("db-table-filter-wrapper", "active-filter-badge"); // Zusätzliche Klasse für Styling
+    // Jedes Badge bekommt die Klasse "db-table-filter-wrapper" und "active-filter-badge"
+    badgeWrapper.classList.add("db-table-filter-wrapper", "active-filter-badge"); 
 
     const filterNameSpan = document.createElement("span");
     filterNameSpan.classList.add("is-txt-16");
@@ -163,23 +161,19 @@
 
     const removeIcon = document.createElement("img");
     removeIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/68304c51fb2c1a32a1f2ef77_xmark.svg";
-    removeIcon.classList.add("db-icon-18", "remove-filter-icon"); // Zusätzliche Klasse für Styling/Cursor
+    removeIcon.classList.add("db-icon-18", "remove-filter-icon"); 
     removeIcon.alt = "Filter entfernen";
     removeIcon.style.cursor = "pointer";
     removeIcon.style.marginLeft = "5px";
 
     removeIcon.addEventListener('click', async () => {
-        // Finde die korrespondierende Checkbox im Dropdown
         const checkboxId = `filter-${jobId}-${filterType}-${filterValue.replace(/\s+/g, '-')}`;
         const checkbox = document.getElementById(checkboxId);
         if (checkbox && checkbox.checked) {
             checkbox.checked = false;
-            // Triggere das 'change'-Event, um die Filterlogik auszulösen
             const changeEvent = new Event('change', { bubbles: true });
             checkbox.dispatchEvent(changeEvent);
         } else {
-            // Fallback, falls Checkbox nicht gefunden oder nicht mehr aktiv ist (sollte nicht passieren)
-            // Manuell Filter aus Cache entfernen und neu laden (weniger ideal, da es die Checkbox nicht deselektiert)
             console.warn(`Checkbox für Filter ${filterType}: ${filterValue} nicht gefunden oder nicht aktiv.`);
             const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
             if (jobCache && jobCache.activeFilters && jobCache.activeFilters[filterType]) {
@@ -198,61 +192,68 @@
     return badgeWrapper;
   }
 
-  /**
-   * Rendert die Badges für alle aktiven Filter.
-   */
   function renderActiveFilterBadgesUI(jobId, badgesContainer, applicantsListContainer, paginationWrapper) {
-    badgesContainer.innerHTML = ''; // Alte Badges entfernen
+    badgesContainer.innerHTML = ''; 
     const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
     if (!jobCache || !jobCache.activeFilters) return;
 
     const activeFilters = jobCache.activeFilters;
 
-    // Follower-Filter Badges
     activeFilters.follower?.forEach(value => {
         const text = MAPPINGS.followerRanges?.[value] || value;
         const badge = createActiveFilterBadgeUI(jobId, 'follower', value, text, applicantsListContainer, paginationWrapper);
         badgesContainer.appendChild(badge);
     });
 
-    // Kategorie-Filter Badges
     activeFilters.category?.forEach(value => {
-        // Für dynamische Kategorien ist der Wert = Text
         const badge = createActiveFilterBadgeUI(jobId, 'category', value, value, applicantsListContainer, paginationWrapper);
         badgesContainer.appendChild(badge);
     });
 
-    // Creator Typ-Filter Badges
     activeFilters.creatorType?.forEach(value => {
         const text = MAPPINGS.creatorTypen?.[value] || value;
         const badge = createActiveFilterBadgeUI(jobId, 'creatorType', value, text, applicantsListContainer, paginationWrapper);
         badgesContainer.appendChild(badge);
     });
     
-    // "Nur relevante Bewerber" ist ein Toggle und wird hier nicht als Badge angezeigt.
-    // Man könnte es aber als Text-Badge anzeigen, wenn es aktiv ist.
     if (activeFilters.relevantOnly) {
+        // Für den "Nur Relevante" Toggle wird ein Badge mit der Klasse "db-table-filter-wrapper" erstellt
         const relevantBadgeWrapper = document.createElement("div");
         relevantBadgeWrapper.classList.add("db-table-filter-wrapper", "active-filter-badge");
         const relevantTextSpan = document.createElement("span");
         relevantTextSpan.classList.add("is-txt-16");
         relevantTextSpan.textContent = "Nur Relevante";
         relevantBadgeWrapper.appendChild(relevantTextSpan);
-        // Hier kein X-Icon, da es ein Toggle ist und über die Checkbox gesteuert wird.
-        // Man könnte ein X hinzufügen, das die Checkbox deselektiert.
+        
+        // X-Icon zum Entfernen des "Nur Relevante" Filters
+        const removeRelevantIcon = document.createElement("img");
+        removeRelevantIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/68304c51fb2c1a32a1f2ef77_xmark.svg";
+        removeRelevantIcon.classList.add("db-icon-18", "remove-filter-icon");
+        removeRelevantIcon.alt = "Filter 'Nur Relevante' entfernen";
+        removeRelevantIcon.style.cursor = "pointer";
+        removeRelevantIcon.style.marginLeft = "5px";
+
+        removeRelevantIcon.addEventListener('click', async () => {
+            const relevantToggleCheckbox = document.getElementById(`filter-${jobId}-relevantOnly`);
+            if (relevantToggleCheckbox && relevantToggleCheckbox.checked) {
+                relevantToggleCheckbox.checked = false;
+                const changeEvent = new Event('change', { bubbles: true });
+                relevantToggleCheckbox.dispatchEvent(changeEvent);
+            }
+        });
+        relevantBadgeWrapper.appendChild(removeRelevantIcon);
         badgesContainer.appendChild(relevantBadgeWrapper);
     }
   }
-  // Exponiere die Funktion, damit sie von appLogic aufgerufen werden kann
   window.WEBFLOW_API.ui.renderActiveFilterBadgesUI = renderActiveFilterBadgesUI;
 
 
   function createFilterDropdown(jobId, filterType, filterLabel, optionsSource, applicantsListContainer, paginationWrapper, isDynamicOptions = false) {
     const filterParentDiv = document.createElement("div"); 
-    filterParentDiv.classList.add("db-table-filter");
+    filterParentDiv.classList.add("db-table-filter"); // Dies ist das Parent-Element für jeden einzelnen Filter-Dropdown
 
     const filterTriggerWrapper = document.createElement("div"); 
-    filterTriggerWrapper.classList.add("db-table-filter-wrapper");
+    filterTriggerWrapper.classList.add("db-table-filter-wrapper"); // Wrapper für Text und Icon des Triggers
 
     const filterTextSpan = document.createElement("span"); 
     filterTextSpan.classList.add("is-txt-16");
@@ -340,10 +341,10 @@
 
       if (!currentDropdownList) return;
 
-      const allFilterParents = filterParentDiv.parentElement.querySelectorAll('.db-table-filter');
-      allFilterParents.forEach(otherFilterParent => {
-          const otherDropdown = otherFilterParent.querySelector('.db-filter-dropdown-list');
-          if (otherDropdown && otherDropdown !== currentDropdownList) {
+      // Schließe alle anderen Dropdowns, die Geschwister des aktuellen .db-table-filter sind
+      const allFilterDropdownTriggers = filterParentDiv.parentElement.querySelectorAll('.db-table-filter .db-filter-dropdown-list');
+      allFilterDropdownTriggers.forEach(otherDropdown => {
+          if (otherDropdown !== currentDropdownList) {
               otherDropdown.style.display = 'none';
           }
       });
@@ -352,36 +353,39 @@
     return filterParentDiv; 
   }
 
+  /**
+   * Erstellt das DOM-Element für die gesamte Filterzeile.
+   */
   function createFilterRowElement(jobId, applicantsListContainer, paginationWrapper) {
-    const filterRow = document.createElement("div");
-    filterRow.classList.add("db-table-filter-row"); // Haupt-Wrapper für die gesamte Filterzeile
+    const filterRowElement = document.createElement("div"); // Das äußerste Element der gesamten Filterzeile
+    filterRowElement.classList.add("db-table-filter-row"); 
 
-    const filterDropdownsWrapper = document.createElement("div"); // Wrapper für die Dropdowns
-    filterDropdownsWrapper.classList.add("db-table-filter-dropdowns-wrapper"); // Für Flexbox-Layout der Filter-Dropdowns
-    filterRow.appendChild(filterDropdownsWrapper);
+    // Wrapper für die Filter-Dropdowns und den Toggle-Switch
+    const controlsWrapper = document.createElement("div"); 
+    controlsWrapper.classList.add("db-table-filter-row-wrapper"); // Dein gewünschter Parent für die Filter-Controls
+    filterRowElement.appendChild(controlsWrapper);
 
-    // Container für aktive Filter-Badges (NEU)
-    const activeFiltersDisplay = document.createElement("div");
-    activeFiltersDisplay.classList.add("db-active-filters-display"); // Eigene Klasse für Styling
-    // Dieser Container wird NACH den Dropdowns in die filterRow eingefügt, oder wo du ihn haben möchtest.
-    // Für "neben dem filter 'db-table-filter-row-wrapper' div":
-    // Da db-table-filter-row-wrapper jetzt filterDropdownsWrapper ist, kommt es daneben.
-    filterRow.appendChild(activeFiltersDisplay); 
+    // Container für aktive Filter-Badges (als Geschwister zum controlsWrapper)
+    const activeFiltersDisplayContainer = document.createElement("div");
+    activeFiltersDisplayContainer.classList.add("db-active-filters-display"); 
+    filterRowElement.appendChild(activeFiltersDisplayContainer); 
 
 
+    // Erstelle und füge die Filter-Dropdowns zum controlsWrapper hinzu
     if (MAPPINGS && MAPPINGS.followerRanges) {
         const followerFilterElement = createFilterDropdown(jobId, "follower", "Follower", MAPPINGS.followerRanges, applicantsListContainer, paginationWrapper);
-        filterDropdownsWrapper.appendChild(followerFilterElement);
+        controlsWrapper.appendChild(followerFilterElement); // Zum controlsWrapper hinzufügen
     }
 
     const categoryFilterElement = createFilterDropdown(jobId, "category", "Kategorie", "creator-main-categorie", applicantsListContainer, paginationWrapper, true);
-    filterDropdownsWrapper.appendChild(categoryFilterElement);
+    controlsWrapper.appendChild(categoryFilterElement); // Zum controlsWrapper hinzufügen
     
     if (MAPPINGS && MAPPINGS.creatorTypen) {
         const creatorTypeFilterElement = createFilterDropdown(jobId, "creatorType", "Creator Typ", MAPPINGS.creatorTypen, applicantsListContainer, paginationWrapper);
-        filterDropdownsWrapper.appendChild(creatorTypeFilterElement);
+        controlsWrapper.appendChild(creatorTypeFilterElement); // Zum controlsWrapper hinzufügen
     }
 
+    // Erstelle und füge den "Nur relevante Bewerber"-Toggle zum controlsWrapper hinzu
     const relevantToggleWrapper = document.createElement('div');
     relevantToggleWrapper.classList.add('db-filter-toggle-wrapper'); 
 
@@ -411,18 +415,21 @@
 
     relevantToggleWrapper.appendChild(relevantToggleCheckbox);
     relevantToggleWrapper.appendChild(relevantToggleLabel); 
-    filterDropdownsWrapper.appendChild(relevantToggleWrapper); // Toggle zu den anderen Filtern
+    controlsWrapper.appendChild(relevantToggleWrapper); // Toggle zum controlsWrapper hinzufügen
 
 
+    // Schließen der Dropdowns, wenn außerhalb geklickt wird
     document.addEventListener("click", (e) => {
-        if (!filterDropdownsWrapper.contains(e.target.closest('.db-table-filter')) && !e.target.closest('.db-filter-toggle-wrapper')) {
-            const allDropdownLists = filterDropdownsWrapper.querySelectorAll('.db-filter-dropdown-list');
+        // Prüft, ob der Klick außerhalb *jedes* .db-table-filter Elements (Dropdown-Trigger + Liste) war
+        // UND auch außerhalb des Toggle-Wrappers
+        if (!e.target.closest('.db-table-filter') && !e.target.closest('.db-filter-toggle-wrapper')) {
+            const allDropdownLists = controlsWrapper.querySelectorAll('.db-filter-dropdown-list');
             allDropdownLists.forEach(dd => {
                 dd.style.display = 'none';
             });
         }
     });
-    return filterRow;
+    return filterRowElement;
   }
 
 

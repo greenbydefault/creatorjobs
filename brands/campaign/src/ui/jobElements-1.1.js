@@ -19,6 +19,9 @@
     const { sortApplicantsGlobally } = window.WEBFLOW_API.core;
     // loadAndDisplayApplicantsForJob wird aus appLogic geholt
 
+    // jobFieldData hier definieren, bevor es verwendet wird
+    const jobFieldData = jobItem.fieldData; 
+
     if (jobItem.error && jobItem.status !== 429 && jobItem.status !== 404) { 
         console.warn(`Job (ID: ${jobItem.id || 'unbekannt'}) konnte nicht geladen werden: ${jobItem.message}. Er wird nicht gerendert.`);
         const errorP = document.createElement('p');
@@ -27,14 +30,19 @@
         return errorP;
     }
     
-    if (!jobItem.fieldData && !jobItem.error) { 
+    // Überprüfung, ob jobFieldData existiert, NACHDEM es definiert wurde
+    if (!jobFieldData && !jobItem.error) { 
       console.warn("Job-Item ohne fieldData übersprungen:", jobItem);
       const errorP = document.createElement('p');
       errorP.textContent = `Jobdaten für ${jobItem.id || 'unbekannt'} sind unvollständig.`;
       errorP.classList.add("job-entry", "visible", "error-message");
       return errorP;
     }
+    // Diese Bedingung prüft, ob es ein Fehlerobjekt ist UND jobFieldData nicht existiert (was bei Fehlerobjekten der Fall sein sollte)
      if (!jobFieldData && jobItem.error) { 
+        // Wenn es ein Fehlerobjekt ist (z.B. 404, 429), wird es von der aufrufenden Funktion (renderMyJobsList) behandelt
+        // oder hier könnte ein spezifisches Fehlerelement zurückgegeben werden, falls renderMyJobsList das nicht tut.
+        // Für den Moment geben wir null zurück, damit renderMyJobsList es überspringen kann, wenn es ein Fehler ist.
         return null; 
     }
 
@@ -43,7 +51,7 @@
     jobWrapper.classList.add("my-job-item", "job-entry"); 
     jobWrapper.dataset.jobId = jobItem.id;
 
-    const jobFieldData = jobItem.fieldData; // Sicherstellen, dass jobFieldData hier definiert ist
+    // jobFieldData ist bereits oben definiert
 
     // Job Header
     const jobHeaderDiv = document.createElement("div");

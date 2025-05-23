@@ -34,7 +34,7 @@ import './core/dataProcessing-1.0.js';
 import './appLogic-1.3.js';
 
 // Initialisierungsskript, das die appLogic startet
-import './main-1.1.js';
+import './main-1.2.js';
 
 // Nach dem Import aller Module sind die Funktionen und Variablen
 // unter window.WEBFLOW_API verfügbar.

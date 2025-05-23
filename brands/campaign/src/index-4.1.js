@@ -25,7 +25,7 @@ import './ui/applicantElements-1.3.js';
 // pagination hängt von appLogic.loadAndDisplayApplicantsForJob ab (für Callbacks)
 import './ui/pagination.js';
 // jobElements hängt von vielen Dingen ab, die zur Laufzeit aufgelöst werden.
-import './ui/jobElements-1.1.js';
+import './ui/jobElements-1.2.js';
 import './ui/sidebar-1.9.js';
 // Kernlogik, die UI-Elemente und Services verwendet
 // dataProcessing hier, da es ui.applicantElements (für Filter-Callback-Setup) und appLogic (für Reload) referenziert

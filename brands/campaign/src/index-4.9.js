@@ -20,7 +20,7 @@ import './core/matchScoring.js';
 
 // UI Elemente
 import './ui/skeleton.js';
-import './ui/applicantElements-1.3.js';
+import './ui/applicantElements-1.4.js';
 import './ui/pagination.js';
 import './ui/jobElements-1.5.js';
 import './ui/sidebar-2.1.js';
@@ -31,7 +31,7 @@ import './core/dataProcessing-1.0.js';
 
 
 // Hauptanwendungslogik, die viele der obigen Module orchestriert
-import './appLogic-1.3.js';
+import './appLogic-1.4.js';
 
 // Initialisierungsskript, das die appLogic startet
 import './main-1.2.js';

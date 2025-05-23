@@ -20,7 +20,7 @@ import './core/matchScoring.js';
 
 // UI Elemente
 import './ui/skeleton.js';
-import './ui/applicantElements-1.4.js';
+import './ui/applicantElements-1.5.js';
 import './ui/pagination.js';
 import './ui/jobElements-1.5.js';
 import './ui/sidebar-2.1.js';

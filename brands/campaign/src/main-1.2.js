@@ -4,7 +4,6 @@
 
   /**
    * Initialisiert den Seitengrößen-Selektor für die Bewerberliste.
-   * (Diese Funktion bleibt größtenteils unverändert)
    */
   function initializePageSizeSelector() {
     const cache = window.WEBFLOW_API.cache; 
@@ -30,7 +29,7 @@
             const jobCacheEntry = cache.jobDataCache[jobId];
             const jobWrapper = openApplicantContainer.closest('.my-job-item');
             const paginationWrapper = jobWrapper ? jobWrapper.querySelector(".db-table-pagination") : null;
-            const toggleDivElement = jobWrapper ? jobWrapper.querySelector(".checkbox-toggle") : null; // Angepasst an neuen Toggle
+            const toggleDivElement = jobWrapper ? jobWrapper.querySelector(".checkbox-toggle") : null; 
 
             if (jobCacheEntry && jobCacheEntry.allItems && paginationWrapper && toggleDivElement && jobCacheEntry.jobDetails) {
               console.log(`DEBUG: Lade Job ${jobId} mit neuer Seitengröße ${cache.currentApplicantPageSize} neu (Seite 1).`);
@@ -65,11 +64,14 @@
                      });
                   }
                   if (jobCacheEntry.activeFilters.relevantOnly === true) {
-                      if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.isApplicantRelevant) { // Prüfen ob Funktion existiert
+                      // Stelle sicher, dass die Funktion isApplicantRelevant existiert
+                      if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.isApplicantRelevant) { 
                           itemsToDisplay = itemsToDisplay.filter(item => {
                               if (item.error || !item.fieldData) return false;
                               return window.WEBFLOW_API.core.isApplicantRelevant(item.fieldData);
                           });
+                      } else {
+                          console.warn("isApplicantRelevant function not found in core module for page size change filtering.");
                       }
                   }
               }
@@ -79,7 +81,7 @@
                   
                   const { sortApplicantsGlobally } = window.WEBFLOW_API.core;
                   const { loadAndDisplayApplicantsForJob } = window.WEBFLOW_API.appLogic;
-                  const MAPPINGS = window.WEBFLOW_API.MAPPINGS;
+                  const MAPPINGS = window.WEBFLOW_API.MAPPINGS; // MAPPINGS wird in sortApplicantsGlobally benötigt
 
 
                   jobCacheEntry.sortedAndFilteredItems = sortApplicantsGlobally(itemsToDisplay, jobCacheEntry.jobDetails, MAPPINGS);
@@ -96,6 +98,9 @@
                   console.error("Benötigte Funktionen für Seitengrößenänderung nicht gefunden.");
                   if (toggleDivElement) toggleDivElement.disabled = false;
               }
+            } else {
+                 if (toggleDivElement) toggleDivElement.disabled = false; // Sicherstellen, dass der Toggle nicht blockiert bleibt
+                 console.warn("Einige Elemente für die Seitengrößenänderung fehlen.", jobCacheEntry, paginationWrapper, toggleDivElement);
             }
           }
         }
@@ -106,15 +111,16 @@
   }
 
   /**
-   * Initialisiert die Event-Listener für die Job-Status-Filter.
+   * Initialisiert die Event-Listener für die Job-Status-Filter UND den Live-Suchfilter.
    */
-  function initializeJobStatusFilters() {
+  function initializeJobFilters() {
     const activeCheckbox = document.getElementById('job-status-active');
     const doneCheckbox = document.getElementById('job-status-done');
+    const searchInput = document.getElementById('filter-search'); // Suchfeld
 
     function handleFilterChange() {
         if (window.WEBFLOW_API.appLogic && window.WEBFLOW_API.appLogic.filterAndRenderJobs) {
-            console.log("Job-Status-Filter geändert, rufe filterAndRenderJobs auf.");
+            console.log("Job-Filter geändert, rufe filterAndRenderJobs auf.");
             window.WEBFLOW_API.appLogic.filterAndRenderJobs();
         } else {
             console.error("filterAndRenderJobs Funktion nicht im appLogic Modul gefunden.");
@@ -132,34 +138,57 @@
     } else {
         console.warn("Checkbox 'job-status-done' nicht gefunden.");
     }
+
+    if (searchInput) {
+        searchInput.addEventListener('input', handleFilterChange); 
+    } else {
+        console.warn("Suchfeld 'filter-search' nicht gefunden.");
+    }
   }
 
   /**
    * Initialisierungsfunktion, die nach dem Laden des DOM aufgerufen wird.
    */
   function initializeApp() {
-    if (window.WEBFLOW_API.appLogic && window.WEBFLOW_API.appLogic.initializeMyJobsDisplay) {
+    // Sicherstellen, dass alle benötigten Module geladen sind, bevor Initialisierungsfunktionen aufgerufen werden
+    if (window.WEBFLOW_API &&
+        window.WEBFLOW_API.appLogic && window.WEBFLOW_API.appLogic.initializeMyJobsDisplay &&
+        window.WEBFLOW_API.cache && // Prüfe auf Cache für initializePageSizeSelector
+        window.WEBFLOW_API.appLogic.filterAndRenderJobs) { // Prüfe auf filterAndRenderJobs für initializeJobFilters
+        
         initializePageSizeSelector();
-        initializeJobStatusFilters(); // NEU: Job-Status-Filter initialisieren
-        window.WEBFLOW_API.appLogic.initializeMyJobsDisplay(); // Lädt und zeigt die Jobs initial an (ggf. schon gefiltert)
+        initializeJobFilters(); 
+        window.WEBFLOW_API.appLogic.initializeMyJobsDisplay(); 
     } else {
-        console.error("AppLogic ist noch nicht bereit. Initialisierung verzögert oder fehlgeschlagen.");
+        console.error("AppLogic oder andere Kernmodule sind noch nicht bereit. Initialisierung verzögert oder fehlgeschlagen.");
+        // Fallback mit Timeout, um zu versuchen, die Initialisierung später auszuführen
         setTimeout(() => {
-            if (window.WEBFLOW_API.appLogic && window.WEBFLOW_API.appLogic.initializeMyJobsDisplay) {
+            if (window.WEBFLOW_API &&
+                window.WEBFLOW_API.appLogic && window.WEBFLOW_API.appLogic.initializeMyJobsDisplay &&
+                window.WEBFLOW_API.cache &&
+                window.WEBFLOW_API.appLogic.filterAndRenderJobs) {
+                
                 console.log("AppLogic jetzt bereit, starte Initialisierung (verzögert).");
                 initializePageSizeSelector();
-                initializeJobStatusFilters();
+                initializeJobFilters();
                 window.WEBFLOW_API.appLogic.initializeMyJobsDisplay();
             } else {
                 console.error("AppLogic auch nach Verzögerung nicht bereit. Gib auf.");
                 const container = document.getElementById("jobs-list");
                 if (container) container.innerHTML = "<p class='error-message job-entry visible'>Fehler beim Initialisieren der Anwendung. Wichtige Komponenten fehlen.</p>";
             }
-        }, 500);
+        }, 1000); // Erhöhter Timeout für mehr Puffer
     }
   }
 
-  window.addEventListener("DOMContentLoaded", initializeApp);
-  window.WEBFLOW_API.initializeApp = initializeApp;
+  // Event Listener für DOMContentLoaded oder window.onload für robustere Ausführung
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeApp);
+  } else {
+    // DOM bereits geladen
+    initializeApp();
+  }
+  
+  window.WEBFLOW_API.initializeApp = initializeApp; // Für eventuelle externe Aufrufe oder Debugging
 
 })();

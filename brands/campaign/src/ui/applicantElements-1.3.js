@@ -173,7 +173,7 @@
   }
 
   /**
-   * Erstellt ein einzelnes Filter-Dropdown-Element.
+   * Erstellt ein einzelnes Filter-Dropdown-Element gemäß der neuen Struktur.
    * @param {string} jobId - Die ID des aktuellen Jobs.
    * @param {string} filterType - Der Typ des Filters (z.B. "follower", "category", "creatorType").
    * @param {string} filterLabel - Das Label für den Filter-Trigger (z.B. "Follower").
@@ -181,21 +181,26 @@
    * @param {HTMLElement} applicantsListContainer - Der Container der Bewerberliste.
    * @param {HTMLElement} paginationWrapper - Der Wrapper für die Paginierung.
    * @param {boolean} isDynamicOptions - True, wenn Optionen dynamisch aus applicantData generiert werden sollen.
-   * @returns {HTMLElement} Das Filter-Dropdown-DOM-Element.
+   * @returns {HTMLElement} Das Filter-Dropdown-DOM-Element (das Parent-Element 'db-table-filter').
    */
   function createFilterDropdown(jobId, filterType, filterLabel, optionsSource, applicantsListContainer, paginationWrapper, isDynamicOptions = false) {
-    const filterDiv = document.createElement("div");
-    filterDiv.classList.add("db-individual-filter-trigger"); 
+    const filterParentDiv = document.createElement("div"); // NEU: Parent-Element für das gesamte Filter-Dropdown
+    filterParentDiv.classList.add("db-table-filter");
 
-    const filterText = document.createElement("span");
-    filterText.classList.add("is-txt-16");
-    filterText.textContent = filterLabel;
-    filterDiv.appendChild(filterText);
+    const filterTriggerWrapper = document.createElement("div"); // Wrapper für Text und Icon
+    filterTriggerWrapper.classList.add("db-table-filter-wrapper");
+
+    const filterTextSpan = document.createElement("span"); // Text als Span
+    filterTextSpan.classList.add("is-txt-16");
+    filterTextSpan.textContent = filterLabel;
+    filterTriggerWrapper.appendChild(filterTextSpan);
 
     const filterIcon = document.createElement("img");
     filterIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/682c5e5b84cac09c56cdbebe_angle-down-small.svg"; 
-    filterIcon.classList.add("db-icon-18"); 
-    filterDiv.appendChild(filterIcon);
+    filterIcon.classList.add("db-icon-18"); // Ggf. anpassen
+    filterTriggerWrapper.appendChild(filterIcon);
+    
+    filterParentDiv.appendChild(filterTriggerWrapper); // Trigger-Wrapper zum Parent hinzufügen
 
     const dropdownList = document.createElement("div");
     dropdownList.classList.add("db-filter-dropdown-list"); 
@@ -203,17 +208,16 @@
 
     let options = {};
     if (isDynamicOptions) {
-        // Optionen dynamisch aus den Bewerberdaten generieren
         const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
         if (jobCache && jobCache.allItems) {
             const uniqueValues = new Set();
             jobCache.allItems.forEach(item => {
-                if (item.fieldData && item.fieldData[optionsSource] && !item.error) { // optionsSource ist hier der Feldname
+                if (item.fieldData && item.fieldData[optionsSource] && !item.error) { 
                     uniqueValues.add(item.fieldData[optionsSource]);
                 }
             });
             uniqueValues.forEach(value => {
-                options[value] = value; // Key und Value sind gleich für dynamische Optionen
+                options[value] = value; 
             });
         }
     } else {
@@ -221,7 +225,7 @@
     }
 
     Object.entries(options).forEach(([id, text]) => {
-        if (filterType === "follower" && text === "0") return; // Spezifische Regel für Follower
+        if (filterType === "follower" && text === "0") return; 
 
         const optionDiv = document.createElement("div");
         optionDiv.classList.add("db-filter-option"); 
@@ -229,8 +233,8 @@
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.classList.add("db-filter-checkbox"); 
-        checkbox.id = `filter-${jobId}-${filterType}-${id.replace(/\s+/g, '-')}`; // ID-sicher machen
-        checkbox.dataset.filterValue = id; // Hier wird der Key (ID oder Wert selbst) gespeichert
+        checkbox.id = `filter-${jobId}-${filterType}-${id.replace(/\s+/g, '-')}`;
+        checkbox.dataset.filterValue = id; 
         checkbox.dataset.filterType = filterType;
 
         const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
@@ -238,12 +242,23 @@
             checkbox.checked = true;
         }
 
-        const label = document.createElement("label");
-        label.htmlFor = checkbox.id;
-        label.classList.add("is-txt-16"); 
-        label.textContent = text;
-
+        const optionTextSpan = document.createElement("span"); // NEU: Text als Span
+        optionTextSpan.classList.add("is-txt-16"); 
+        optionTextSpan.textContent = text;
+        
+        // Klick auf das gesamte optionDiv soll die Checkbox togglen (verbessert UX)
+        optionDiv.addEventListener('click', (e) => {
+            // Verhindere, dass ein Klick auf die Checkbox selbst das Event doppelt auslöst
+            if (e.target !== checkbox) {
+                checkbox.checked = !checkbox.checked;
+                // Manuell das 'change'-Event auslösen, damit der Filter angewendet wird
+                const changeEvent = new Event('change', { bubbles: true });
+                checkbox.dispatchEvent(changeEvent);
+            }
+        });
+        
         checkbox.addEventListener("change", async () => {
+            // applyAndReloadApplicants wird aufgerufen, wenn sich der Zustand der Checkbox ändert
             if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
                await window.WEBFLOW_API.core.applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper);
             } else {
@@ -252,27 +267,37 @@
         });
 
         optionDiv.appendChild(checkbox);
-        optionDiv.appendChild(label);
+        optionDiv.appendChild(optionTextSpan); // Span statt Label
         dropdownList.appendChild(optionDiv);
     });
     
-    filterDiv.appendChild(dropdownList);
+    filterParentDiv.appendChild(dropdownList); // Dropdown-Liste zum Parent hinzufügen
 
-    filterDiv.addEventListener("click", (e) => {
+    // Event Listener zum Öffnen/Schließen des spezifischen Dropdowns
+    filterTriggerWrapper.addEventListener("click", (e) => {
       e.stopPropagation(); 
-      // Schließe alle anderen Dropdowns in dieser Filterzeile
-      const allDropdownsInRow = filterDiv.parentElement.querySelectorAll('.db-filter-dropdown-list');
-      allDropdownsInRow.forEach(dd => {
-        if (dd !== dropdownList) dd.style.display = 'none';
+      const parentFilterElement = e.currentTarget.closest('.db-table-filter');
+      const currentDropdownList = parentFilterElement ? parentFilterElement.querySelector('.db-filter-dropdown-list') : null;
+
+      if (!currentDropdownList) return;
+
+      // Schließe alle anderen Dropdowns in der Filterzeile
+      const allFilterParents = filterParentDiv.parentElement.querySelectorAll('.db-table-filter');
+      allFilterParents.forEach(otherFilterParent => {
+          const otherDropdown = otherFilterParent.querySelector('.db-filter-dropdown-list');
+          if (otherDropdown && otherDropdown !== currentDropdownList) {
+              otherDropdown.style.display = 'none';
+          }
       });
-      dropdownList.style.display = dropdownList.style.display === "none" ? "block" : "none";
+      // Toggle das aktuelle Dropdown
+      currentDropdownList.style.display = currentDropdownList.style.display === "none" ? "block" : "none";
     });
-    return filterDiv;
+    return filterParentDiv; // Das Parent-Element zurückgeben
   }
 
 
   /**
-   * Erstellt das DOM-Element für die Filterzeile (z.B. Follower-Filter).
+   * Erstellt das DOM-Element für die Filterzeile.
    * @param {string} jobId - Die ID des aktuellen Jobs.
    * @param {HTMLElement} applicantsListContainer - Der Container der Bewerberliste.
    * @param {HTMLElement} paginationWrapper - Der Wrapper für die Paginierung.
@@ -282,41 +307,40 @@
     const filterRow = document.createElement("div");
     filterRow.classList.add("db-table-filter-row");
 
-    const filterWrapper = document.createElement("div");
-    filterWrapper.classList.add("db-table-filter-row-wrapper"); // Für Flexbox-Layout der Filter
+    const filterWrapper = document.createElement("div"); // Dieser Wrapper enthält alle Filter-Elemente
+    filterWrapper.classList.add("db-table-filter-row-wrapper"); 
     filterRow.appendChild(filterWrapper);
 
     // Follower Filter
     if (MAPPINGS && MAPPINGS.followerRanges) {
-        const followerFilter = createFilterDropdown(jobId, "follower", "Follower", MAPPINGS.followerRanges, applicantsListContainer, paginationWrapper);
-        filterWrapper.appendChild(followerFilter);
+        const followerFilterElement = createFilterDropdown(jobId, "follower", "Follower", MAPPINGS.followerRanges, applicantsListContainer, paginationWrapper);
+        filterWrapper.appendChild(followerFilterElement);
     }
 
-    // Kategorie Filter (dynamisch basierend auf den Daten der Bewerber)
-    // optionsSource ist hier der Feldname 'creator-main-categorie'
-    const categoryFilter = createFilterDropdown(jobId, "category", "Kategorie", "creator-main-categorie", applicantsListContainer, paginationWrapper, true);
-    filterWrapper.appendChild(categoryFilter);
+    // Kategorie Filter
+    const categoryFilterElement = createFilterDropdown(jobId, "category", "Kategorie", "creator-main-categorie", applicantsListContainer, paginationWrapper, true);
+    filterWrapper.appendChild(categoryFilterElement);
     
     // Creator Type Filter
     if (MAPPINGS && MAPPINGS.creatorTypen) {
-        const creatorTypeFilter = createFilterDropdown(jobId, "creatorType", "Creator Typ", MAPPINGS.creatorTypen, applicantsListContainer, paginationWrapper);
-        filterWrapper.appendChild(creatorTypeFilter);
+        const creatorTypeFilterElement = createFilterDropdown(jobId, "creatorType", "Creator Typ", MAPPINGS.creatorTypen, applicantsListContainer, paginationWrapper);
+        filterWrapper.appendChild(creatorTypeFilterElement);
     }
 
     // Toggle für "Nur relevante Bewerber"
     const relevantToggleWrapper = document.createElement('div');
-    relevantToggleWrapper.classList.add('db-filter-toggle-wrapper'); // Eigene Klasse für Styling
-
-    const relevantToggleLabel = document.createElement('label');
-    relevantToggleLabel.htmlFor = `filter-${jobId}-relevantOnly`;
-    relevantToggleLabel.classList.add('is-txt-16');
-    relevantToggleLabel.textContent = 'Nur relevante Bewerber'; // Label-Text
+    relevantToggleWrapper.classList.add('db-filter-toggle-wrapper'); // Eigene Klasse für Styling des Toggles
 
     const relevantToggleCheckbox = document.createElement('input');
     relevantToggleCheckbox.type = 'checkbox';
     relevantToggleCheckbox.id = `filter-${jobId}-relevantOnly`;
-    relevantToggleCheckbox.dataset.filterType = 'relevantOnly'; // Für die Filterlogik
-    relevantToggleCheckbox.classList.add('db-filter-checkbox'); // Ggf. für einheitliches Styling
+    relevantToggleCheckbox.dataset.filterType = 'relevantOnly'; 
+    relevantToggleCheckbox.classList.add('db-filter-checkbox'); 
+
+    const relevantToggleLabel = document.createElement('label');
+    relevantToggleLabel.htmlFor = relevantToggleCheckbox.id; // Korrekte Verknüpfung
+    relevantToggleLabel.classList.add('is-txt-16');
+    relevantToggleLabel.textContent = 'Nur relevante Bewerber'; 
 
     const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
     if (jobCache?.activeFilters?.relevantOnly === true) {
@@ -332,15 +356,16 @@
     });
 
     relevantToggleWrapper.appendChild(relevantToggleCheckbox);
-    relevantToggleWrapper.appendChild(relevantToggleLabel); // Label nach Checkbox für übliches Layout
+    relevantToggleWrapper.appendChild(relevantToggleLabel); 
     filterWrapper.appendChild(relevantToggleWrapper);
 
 
     // Schließen der Dropdowns, wenn außerhalb geklickt wird
     document.addEventListener("click", (e) => {
-        if (!filterWrapper.contains(e.target)) { // Prüft, ob Klick außerhalb des gesamten FilterWrappers war
-            const allDropdownsInRow = filterWrapper.querySelectorAll('.db-filter-dropdown-list');
-            allDropdownsInRow.forEach(dd => {
+        // Prüft, ob der Klick außerhalb *jedes* .db-table-filter Elements war
+        if (!e.target.closest('.db-table-filter') && !e.target.closest('.db-filter-toggle-wrapper')) {
+            const allDropdownLists = filterWrapper.querySelectorAll('.db-filter-dropdown-list');
+            allDropdownLists.forEach(dd => {
                 dd.style.display = 'none';
             });
         }

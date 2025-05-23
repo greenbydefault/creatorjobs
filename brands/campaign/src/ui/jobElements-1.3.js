@@ -7,6 +7,28 @@
   // MAPPINGS, jobDataCache, fetchAllApplicantsForJob, sortApplicantsGlobally, loadAndDisplayApplicantsForJob
 
   /**
+   * Formatiert ein Datum in das Format DD.MM.YYYY.
+   * @param {string | Date} dateInput - Das Eingabedatum (String oder Date-Objekt).
+   * @returns {string} Das formatierte Datum oder "K.A." bei ungültiger Eingabe.
+   */
+  function formatDate(dateInput) {
+    if (!dateInput) return "K.A.";
+    try {
+      const date = new Date(dateInput);
+      // Setze die Uhrzeit auf Mitternacht, um nur das Datum zu vergleichen
+      date.setHours(0, 0, 0, 0);
+      if (isNaN(date.getTime())) return "K.A."; // Ungültiges Datum
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0'); // Monate sind 0-basiert
+      const year = date.getFullYear();
+      return `${day}.${month}.${year}`;
+    } catch (e) {
+      console.warn("Fehler beim Formatieren des Datums:", dateInput, e);
+      return "K.A.";
+    }
+  }
+
+  /**
    * Erstellt und gibt das DOM-Fragment für einen einzelnen Job-Eintrag zurück.
    * Inklusive Header, Toggle-Switch und Container für Bewerber.
    * @param {object} jobItem - Das Job-Item-Objekt von Webflow.
@@ -19,7 +41,6 @@
     const { sortApplicantsGlobally } = window.WEBFLOW_API.core;
     // loadAndDisplayApplicantsForJob wird aus appLogic geholt
 
-    // jobFieldData hier definieren, bevor es verwendet wird
     const jobFieldData = jobItem.fieldData; 
 
     if (jobItem.error && jobItem.status !== 429 && jobItem.status !== 404) { 
@@ -30,7 +51,6 @@
         return errorP;
     }
     
-    // Überprüfung, ob jobFieldData existiert, NACHDEM es definiert wurde
     if (!jobFieldData && !jobItem.error) { 
       console.warn("Job-Item ohne fieldData übersprungen:", jobItem);
       const errorP = document.createElement('p');
@@ -38,11 +58,7 @@
       errorP.classList.add("job-entry", "visible", "error-message");
       return errorP;
     }
-    // Diese Bedingung prüft, ob es ein Fehlerobjekt ist UND jobFieldData nicht existiert (was bei Fehlerobjekten der Fall sein sollte)
      if (!jobFieldData && jobItem.error) { 
-        // Wenn es ein Fehlerobjekt ist (z.B. 404, 429), wird es von der aufrufenden Funktion (renderMyJobsList) behandelt
-        // oder hier könnte ein spezifisches Fehlerelement zurückgegeben werden, falls renderMyJobsList das nicht tut.
-        // Für den Moment geben wir null zurück, damit renderMyJobsList es überspringen kann, wenn es ein Fehler ist.
         return null; 
     }
 
@@ -51,12 +67,10 @@
     jobWrapper.classList.add("my-job-item", "job-entry"); 
     jobWrapper.dataset.jobId = jobItem.id;
 
-    // jobFieldData ist bereits oben definiert
-
-    // Job Header
     const jobHeaderDiv = document.createElement("div");
     jobHeaderDiv.classList.add("db-table-row", "db-table-my-job");
 
+    // 1. Kampagne (Job-Name und Bild)
     const jobInfoDataCell = document.createElement("div");
     jobInfoDataCell.classList.add("db-table-row-item", "justify-left");
     if (jobFieldData["job-image"]?.url || jobFieldData["job-image"]) {
@@ -73,35 +87,77 @@
     jobInfoDataCell.appendChild(jobNameSpan);
     jobHeaderDiv.appendChild(jobInfoDataCell);
 
+    // 2. Online bis
+    const onlineBisCell = document.createElement("div");
+    onlineBisCell.classList.add("db-table-row-item");
+    const onlineBisTag = document.createElement("span");
+    onlineBisTag.classList.add("job-tag"); 
+    onlineBisTag.textContent = formatDate(jobFieldData["job-date-end"]); // CMS-Feld "job-date-end" verwenden
+    onlineBisCell.appendChild(onlineBisTag);
+    jobHeaderDiv.appendChild(onlineBisCell);
+
+    // 3. Budget (Honorar)
     const paymentCell = document.createElement("div");
     paymentCell.classList.add("db-table-row-item");
-    paymentCell.textContent = jobFieldData["job-payment"] ? `${jobFieldData["job-payment"]} €` : "K.A.";
+    const paymentTag = document.createElement("span");
+    paymentTag.classList.add("job-tag"); 
+    paymentTag.textContent = jobFieldData["job-payment"] ? `${jobFieldData["job-payment"]} €` : "K.A.";
+    paymentCell.appendChild(paymentTag);
     jobHeaderDiv.appendChild(paymentCell);
 
+    // 4. Kategorie
     const categoryCell = document.createElement("div");
     categoryCell.classList.add("db-table-row-item");
-    categoryCell.textContent = jobFieldData["industrie-kategorie"] || "K.A.";
+    const categoryTag = document.createElement("span");
+    categoryTag.classList.add("job-tag"); 
+    categoryTag.textContent = jobFieldData["industrie-kategorie"] || "K.A.";
+    categoryCell.appendChild(categoryTag);
     jobHeaderDiv.appendChild(categoryCell);
 
-    const statusCell = document.createElement("div");
-    statusCell.classList.add("db-table-row-item");
-    const statusTag = document.createElement("div");
-    statusTag.classList.add("job-tag"); 
-    statusTag.textContent = jobFieldData["job-status"] || "Unbekannt";
-    if (jobFieldData["job-status"] === "Aktiv") statusTag.classList.add("is-bg-light-green"); 
-    if (jobFieldData["job-status"] === "Beendet") statusTag.classList.add("is-bg-light-red"); 
-    statusCell.appendChild(statusTag);
-    jobHeaderDiv.appendChild(statusCell);
-
+    // 5. Bewerber (Anzahl)
     const applicantIdsForThisSpecificJob = jobFieldData["bewerber"] || [];
     const applicantsCountCell = document.createElement("div");
     applicantsCountCell.classList.add("db-table-row-item");
-    applicantsCountCell.textContent = `${applicantIdsForThisSpecificJob.length}`; // Nur die Zahl
+    const applicantsCountTag = document.createElement("span");
+    applicantsCountTag.classList.add("job-tag"); 
+    applicantsCountTag.textContent = `${applicantIdsForThisSpecificJob.length}`;
+    applicantsCountCell.appendChild(applicantsCountTag);
     jobHeaderDiv.appendChild(applicantsCountCell);
+
+    // 6. Status (basierend auf job-date-end)
+    const statusCell = document.createElement("div");
+    statusCell.classList.add("db-table-row-item");
+    const statusTag = document.createElement("div"); 
+    statusTag.classList.add("job-tag"); 
+
+    const jobEndDateString = jobFieldData["job-date-end"];
+    if (jobEndDateString) {
+        try {
+            const jobEndDate = new Date(jobEndDateString);
+            jobEndDate.setHours(23, 59, 59, 999); // Ende des Tages für den Vergleich
+            const today = new Date();
+            today.setHours(0,0,0,0); // Anfang des heutigen Tages
+
+            if (jobEndDate >= today) {
+                statusTag.textContent = "Aktiv";
+                statusTag.classList.add("is-bg-light-green");
+            } else {
+                statusTag.textContent = "Beendet";
+                statusTag.classList.add("is-bg-light-red");
+            }
+        } catch (e) {
+            console.warn("Konnte Job-Enddatum nicht verarbeiten:", jobEndDateString, e);
+            statusTag.textContent = "Unbekannt";
+        }
+    } else {
+        statusTag.textContent = "Unbekannt"; // Falls kein Enddatum vorhanden ist
+    }
+    statusCell.appendChild(statusTag);
+    jobHeaderDiv.appendChild(statusCell);
     
-    // NEU: Toggle-Switch Zelle
+    // 7. Toggle-Switch "Bewerber anzeigen"
     const toggleCell = document.createElement("div");
-    toggleCell.classList.add("db-table-row-item", "cell-align-center"); // Eigene Klasse für Zentrierung des Toggles
+    toggleCell.classList.add("db-table-row-item", "cell-align-center"); 
 
     const toggleWrapper = document.createElement("div");
     toggleWrapper.classList.add("checkbox-toggle-wrapper");
@@ -109,25 +165,15 @@
     const toggleCheckbox = document.createElement("input");
     toggleCheckbox.type = "checkbox";
     toggleCheckbox.classList.add("checkbox-toggle");
-    toggleCheckbox.id = `toggle-applicants-${jobItem.id}`; // Eindeutige ID
-
-    // Label für Barrierefreiheit wurde entfernt
-    // const toggleLabel = document.createElement("label");
-    // toggleLabel.htmlFor = toggleCheckbox.id;
-    // toggleLabel.classList.add("visually-hidden"); 
-    // toggleLabel.textContent = `Bewerberliste für Job ${jobFieldData.name || jobItem.id} anzeigen`;
+    toggleCheckbox.id = `toggle-applicants-${jobItem.id}`; 
 
     toggleWrapper.appendChild(toggleCheckbox);
-    // toggleWrapper.appendChild(toggleLabel); // Label wird nicht mehr hinzugefügt
     toggleCell.appendChild(toggleWrapper);
     jobHeaderDiv.appendChild(toggleCell);
 
 
     jobWrapper.appendChild(jobHeaderDiv);
 
-    // Die alte "applicants-toggle-row" wird entfernt.
-
-    // Container für Bewerberliste (initial versteckt)
     const applicantsListContainer = document.createElement("div");
     applicantsListContainer.classList.add("applicants-list-container");
     applicantsListContainer.style.display = "none";
@@ -135,7 +181,6 @@
     applicantsListContainer.dataset.allApplicantsLoaded = 'false'; 
     jobWrapper.appendChild(applicantsListContainer);
 
-    // Pagination Wrapper (initial versteckt)
     let paginationWrapper = jobWrapper.querySelector(".db-table-pagination");
     if (!paginationWrapper) {
       paginationWrapper = document.createElement("div");
@@ -144,18 +189,10 @@
     }
     paginationWrapper.style.display = "none";
 
-
-    // Event Listener für den neuen Toggle-Switch
     toggleCheckbox.addEventListener("change", async () => {
       const isChecked = toggleCheckbox.checked;
-      // Verhindere Mehrfachklicks während Ladevorgang (optional, falls Ladezustand am Toggle sichtbar)
-      // if (toggleCheckbox.disabled) return; 
-      // toggleCheckbox.disabled = true; // Ladezustand setzen
-
       if (isChecked) {
         applicantsListContainer.style.display = "block";
-        // Ggf. weitere Aktionen beim Öffnen (z.B. Icon-Änderung, falls noch gewünscht)
-
         if (!jobDataCache[jobItem.id]) {
           jobDataCache[jobItem.id] = { activeFilters: { follower: [], category: [], creatorType: [], relevantOnly: false } };
         }
@@ -175,14 +212,11 @@
           applicantsListContainer.dataset.allApplicantsLoaded = 'true';
         }
         
-        // Wende aktuelle Filter an (oder Standard, falls keine gesetzt) und sortiere
         if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
-            // applyAndReloadApplicants liest die Filter aus dem UI und sortiert dann
             await window.WEBFLOW_API.core.applyAndReloadApplicants(jobItem.id, applicantsListContainer, paginationWrapper);
         } else {
-             // Fallback: Manuell sortieren und erste Seite laden
             jobDataCache[jobItem.id].sortedAndFilteredItems = sortApplicantsGlobally(
-                jobDataCache[jobItem.id].allItems, // Hier sollten gefilterte Items stehen, wenn Filter schon existieren
+                jobDataCache[jobItem.id].allItems, 
                 jobDataCache[jobItem.id].jobDetails
             );
             if (window.WEBFLOW_API.appLogic && window.WEBFLOW_API.appLogic.loadAndDisplayApplicantsForJob) {
@@ -193,12 +227,9 @@
             }
         }
       } else {
-        // Bereich einklappen
         applicantsListContainer.style.display = "none";
         if(paginationWrapper) paginationWrapper.style.display = "none";
-        // Ggf. weitere Aktionen beim Schließen
       }
-      // toggleCheckbox.disabled = false; // Ladezustand entfernen
     });
 
     return jobWrapper;
@@ -210,15 +241,16 @@
    */
   function createMyJobsTableHeaderElement() {
     const headerDiv = document.createElement("div");
-    headerDiv.classList.add("db-table-header", "db-table-my-jobs"); // Angepasste Klasse
+    headerDiv.classList.add("db-table-header", "db-table-my-jobs"); 
 
     const columns = [
-        { text: "Job", classes: ["justify-left", "flex-grow-2"] }, // Beispiel für mehr Flexibilität
-        { text: "Honorar", classes: [] },
+        { text: "Kampagne", classes: ["justify-left", "flex-grow-2"] }, 
+        { text: "Online bis", classes: [] },
+        { text: "Budget", classes: [] },
         { text: "Kategorie", classes: [] },
-        { text: "Status", classes: [] },
-        { text: "Bewerber", classes: ["cell-align-center"] }, // Für die Anzahl
-        { icon: "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/68301a7669101ccdf5c57eff_eye.svg", alt: "Anzeigen", classes: ["cell-align-center"] } // Neues Icon
+        { text: "Bewerber", classes: ["cell-align-center"] }, 
+        { text: "Status", classes: [] }, 
+        { text: "Bewerber Anzeigen", icon: "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/68301a7669101ccdf5c57eff_eye.svg", alt: "Anzeigen", classes: ["cell-align-center"] } 
     ];
 
     columns.forEach(colInfo => {
@@ -228,16 +260,28 @@
             colInfo.classes.forEach(cls => colDiv.classList.add(cls));
         }
 
-        if (colInfo.text) {
+        if (colInfo.text && !colInfo.icon) { 
             const textSpan = document.createElement("span");
             textSpan.classList.add("is-txt-16", "is-txt-bold"); 
             textSpan.textContent = colInfo.text;
             colDiv.appendChild(textSpan);
-        } else if (colInfo.icon) {
-            const iconImg = document.createElement("img");
+        } else if (colInfo.icon && colInfo.text) { 
+             const iconImg = document.createElement("img");
             iconImg.src = colInfo.icon;
             iconImg.alt = colInfo.alt || "Icon";
-            iconImg.classList.add("db-icon-24"); // Deine Icon-Klasse
+            iconImg.classList.add("db-icon-24", "is-margin-right-small"); 
+            colDiv.appendChild(iconImg);
+            const textSpan = document.createElement("span");
+            textSpan.classList.add("is-txt-16", "is-txt-bold"); 
+            textSpan.textContent = colInfo.text;
+            colDiv.appendChild(textSpan);
+            colDiv.style.display = "flex"; 
+            colDiv.style.alignItems = "center";
+        } else if (colInfo.icon) { 
+             const iconImg = document.createElement("img");
+            iconImg.src = colInfo.icon;
+            iconImg.alt = colInfo.alt || "Icon";
+            iconImg.classList.add("db-icon-24"); 
             colDiv.appendChild(iconImg);
         }
         headerDiv.appendChild(colDiv);
@@ -248,6 +292,6 @@
 
   // Exponieren der UI-Funktionen
   window.WEBFLOW_API.ui.createJobEntryElement = createJobEntryElement;
-  window.WEBFLOW_API.ui.createMyJobsTableHeaderElement = createMyJobsTableHeaderElement; // Neue Funktion exponieren
+  window.WEBFLOW_API.ui.createMyJobsTableHeaderElement = createMyJobsTableHeaderElement; 
 
 })();

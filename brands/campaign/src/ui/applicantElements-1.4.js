@@ -3,22 +3,11 @@
   window.WEBFLOW_API = window.WEBFLOW_API || {};
   window.WEBFLOW_API.ui = window.WEBFLOW_API.ui || {};
 
-  // Abhängigkeiten
   const MAPPINGS = window.WEBFLOW_API.MAPPINGS;
   const { normalizeUrl } = window.WEBFLOW_API.utils;
   
-  /**
-   * Erstellt ein DOM-Element für eine Bewerberzeile.
-   * @param {object} applicantItemWithScoreInfo - Das Bewerberobjekt mit Match-Score-Informationen.
-   * @param {object} jobFieldDataForTooltip - Felddaten des Jobs (optional, für Tooltip-Details).
-   * @param {Array} allJobApplicantsForThisJob - Die Liste aller Bewerber für diesen spezifischen Job (für Sidebar-Navigation).
-   * @param {number} currentIndexInList - Der Index dieses Bewerbers in allJobApplicantsForThisJob.
-   * @param {string} jobId - Die ID des aktuellen Jobs.
-   * @returns {HTMLElement} Das DOM-Element der Bewerberzeile.
-   */
   function createApplicantRowElement(applicantItemWithScoreInfo, jobFieldDataForTooltip, allJobApplicantsForThisJob, currentIndexInList, jobId) {
     const applicantFieldData = applicantItemWithScoreInfo.fieldData;
-
     const applicantDiv = document.createElement("div");
     applicantDiv.classList.add("db-table-row", "db-table-applicant", "job-entry");
     applicantDiv.style.cursor = 'pointer'; 
@@ -27,7 +16,6 @@
       if (event.target.closest('a') || event.target.closest('button') || event.target.closest('input')) {
         return; 
       }
-      
       if (window.WEBFLOW_API.ui && window.WEBFLOW_API.ui.showCreatorSidebar) {
         window.WEBFLOW_API.ui.showCreatorSidebar(applicantItemWithScoreInfo, allJobApplicantsForThisJob, currentIndexInList, jobId);
       } else {
@@ -44,7 +32,6 @@
       return applicantDiv;
     }
 
-    // Profile Info (Bild, Name, Status)
     const profileInfoDiv = document.createElement("div");
     profileInfoDiv.classList.add("db-table-row-item", "justify-left");
     const profileImageField = applicantFieldData["image-thumbnail-small-92px"] || applicantFieldData["user-profile-img"];
@@ -69,7 +56,6 @@
     profileInfoDiv.appendChild(namePlusStatusDiv);
     applicantDiv.appendChild(profileInfoDiv);
 
-    // Location
     const locationDiv = document.createElement("div");
     locationDiv.classList.add("db-table-row-item");
     const city = applicantFieldData["user-city-2"] || "K.A.";
@@ -78,7 +64,6 @@
     locationDiv.textContent = `${city}${bundeslandName !== "K.A." ? `, ${bundeslandName}` : ""}`;
     applicantDiv.appendChild(locationDiv);
 
-    // Category
     const categoryCell = document.createElement("div");
     categoryCell.classList.add("db-table-row-item");
     const categoryTag = document.createElement("span");
@@ -87,7 +72,6 @@
     categoryCell.appendChild(categoryTag);
     applicantDiv.appendChild(categoryCell);
 
-    // Creator Type
     const creatorTypeCell = document.createElement("div");
     creatorTypeCell.classList.add("db-table-row-item");
     const creatorTypeTag = document.createElement("span");
@@ -97,7 +81,6 @@
     creatorTypeCell.appendChild(creatorTypeTag);
     applicantDiv.appendChild(creatorTypeCell);
 
-    // Social Media Icons
     const socialCell = document.createElement("div");
     socialCell.classList.add("db-table-row-item");
     const socialPlatforms = [
@@ -125,7 +108,6 @@
     });
     applicantDiv.appendChild(socialCell);
 
-    // Follower
     const followerCell = document.createElement("div");
     followerCell.classList.add("db-table-row-item");
     const followerTag = document.createElement("span");
@@ -135,7 +117,6 @@
     followerCell.appendChild(followerTag);
     applicantDiv.appendChild(followerCell);
 
-    // Age
     const ageCell = document.createElement("div");
     ageCell.classList.add("db-table-row-item");
     const ageTag = document.createElement("span");
@@ -148,10 +129,6 @@
     return applicantDiv;
   }
 
-  /**
-   * Erstellt das DOM-Element für den Header der Bewerbertabelle.
-   * @returns {HTMLElement} Das Header-DOM-Element.
-   */
   function createApplicantTableHeaderElement() {
     const headerDiv = document.createElement("div");
     headerDiv.classList.add("db-table-header", "db-table-applicant");
@@ -173,34 +150,121 @@
   }
 
   /**
-   * Erstellt ein einzelnes Filter-Dropdown-Element gemäß der neuen Struktur.
-   * @param {string} jobId - Die ID des aktuellen Jobs.
-   * @param {string} filterType - Der Typ des Filters (z.B. "follower", "category", "creatorType").
-   * @param {string} filterLabel - Das Label für den Filter-Trigger (z.B. "Follower").
-   * @param {object} optionsSource - Das Objekt oder Array, das die Filteroptionen enthält.
-   * @param {HTMLElement} applicantsListContainer - Der Container der Bewerberliste.
-   * @param {HTMLElement} paginationWrapper - Der Wrapper für die Paginierung.
-   * @param {boolean} isDynamicOptions - True, wenn Optionen dynamisch aus applicantData generiert werden sollen.
-   * @returns {HTMLElement} Das Filter-Dropdown-DOM-Element (das Parent-Element 'db-table-filter').
+   * Erstellt ein einzelnes "Badge" für einen aktiven Filter.
    */
+  function createActiveFilterBadgeUI(jobId, filterType, filterValue, filterText, applicantsListContainer, paginationWrapper) {
+    const badgeWrapper = document.createElement("div");
+    badgeWrapper.classList.add("db-table-filter-wrapper", "active-filter-badge"); // Zusätzliche Klasse für Styling
+
+    const filterNameSpan = document.createElement("span");
+    filterNameSpan.classList.add("is-txt-16");
+    filterNameSpan.textContent = filterText;
+    badgeWrapper.appendChild(filterNameSpan);
+
+    const removeIcon = document.createElement("img");
+    removeIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/68304c51fb2c1a32a1f2ef77_xmark.svg";
+    removeIcon.classList.add("db-icon-18", "remove-filter-icon"); // Zusätzliche Klasse für Styling/Cursor
+    removeIcon.alt = "Filter entfernen";
+    removeIcon.style.cursor = "pointer";
+    removeIcon.style.marginLeft = "5px";
+
+    removeIcon.addEventListener('click', async () => {
+        // Finde die korrespondierende Checkbox im Dropdown
+        const checkboxId = `filter-${jobId}-${filterType}-${filterValue.replace(/\s+/g, '-')}`;
+        const checkbox = document.getElementById(checkboxId);
+        if (checkbox && checkbox.checked) {
+            checkbox.checked = false;
+            // Triggere das 'change'-Event, um die Filterlogik auszulösen
+            const changeEvent = new Event('change', { bubbles: true });
+            checkbox.dispatchEvent(changeEvent);
+        } else {
+            // Fallback, falls Checkbox nicht gefunden oder nicht mehr aktiv ist (sollte nicht passieren)
+            // Manuell Filter aus Cache entfernen und neu laden (weniger ideal, da es die Checkbox nicht deselektiert)
+            console.warn(`Checkbox für Filter ${filterType}: ${filterValue} nicht gefunden oder nicht aktiv.`);
+            const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
+            if (jobCache && jobCache.activeFilters && jobCache.activeFilters[filterType]) {
+                const index = jobCache.activeFilters[filterType].indexOf(filterValue);
+                if (index > -1) {
+                    jobCache.activeFilters[filterType].splice(index, 1);
+                }
+                if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
+                    await window.WEBFLOW_API.core.applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper);
+                }
+            }
+        }
+    });
+
+    badgeWrapper.appendChild(removeIcon);
+    return badgeWrapper;
+  }
+
+  /**
+   * Rendert die Badges für alle aktiven Filter.
+   */
+  function renderActiveFilterBadgesUI(jobId, badgesContainer, applicantsListContainer, paginationWrapper) {
+    badgesContainer.innerHTML = ''; // Alte Badges entfernen
+    const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
+    if (!jobCache || !jobCache.activeFilters) return;
+
+    const activeFilters = jobCache.activeFilters;
+
+    // Follower-Filter Badges
+    activeFilters.follower?.forEach(value => {
+        const text = MAPPINGS.followerRanges?.[value] || value;
+        const badge = createActiveFilterBadgeUI(jobId, 'follower', value, text, applicantsListContainer, paginationWrapper);
+        badgesContainer.appendChild(badge);
+    });
+
+    // Kategorie-Filter Badges
+    activeFilters.category?.forEach(value => {
+        // Für dynamische Kategorien ist der Wert = Text
+        const badge = createActiveFilterBadgeUI(jobId, 'category', value, value, applicantsListContainer, paginationWrapper);
+        badgesContainer.appendChild(badge);
+    });
+
+    // Creator Typ-Filter Badges
+    activeFilters.creatorType?.forEach(value => {
+        const text = MAPPINGS.creatorTypen?.[value] || value;
+        const badge = createActiveFilterBadgeUI(jobId, 'creatorType', value, text, applicantsListContainer, paginationWrapper);
+        badgesContainer.appendChild(badge);
+    });
+    
+    // "Nur relevante Bewerber" ist ein Toggle und wird hier nicht als Badge angezeigt.
+    // Man könnte es aber als Text-Badge anzeigen, wenn es aktiv ist.
+    if (activeFilters.relevantOnly) {
+        const relevantBadgeWrapper = document.createElement("div");
+        relevantBadgeWrapper.classList.add("db-table-filter-wrapper", "active-filter-badge");
+        const relevantTextSpan = document.createElement("span");
+        relevantTextSpan.classList.add("is-txt-16");
+        relevantTextSpan.textContent = "Nur Relevante";
+        relevantBadgeWrapper.appendChild(relevantTextSpan);
+        // Hier kein X-Icon, da es ein Toggle ist und über die Checkbox gesteuert wird.
+        // Man könnte ein X hinzufügen, das die Checkbox deselektiert.
+        badgesContainer.appendChild(relevantBadgeWrapper);
+    }
+  }
+  // Exponiere die Funktion, damit sie von appLogic aufgerufen werden kann
+  window.WEBFLOW_API.ui.renderActiveFilterBadgesUI = renderActiveFilterBadgesUI;
+
+
   function createFilterDropdown(jobId, filterType, filterLabel, optionsSource, applicantsListContainer, paginationWrapper, isDynamicOptions = false) {
-    const filterParentDiv = document.createElement("div"); // NEU: Parent-Element für das gesamte Filter-Dropdown
+    const filterParentDiv = document.createElement("div"); 
     filterParentDiv.classList.add("db-table-filter");
 
-    const filterTriggerWrapper = document.createElement("div"); // Wrapper für Text und Icon
+    const filterTriggerWrapper = document.createElement("div"); 
     filterTriggerWrapper.classList.add("db-table-filter-wrapper");
 
-    const filterTextSpan = document.createElement("span"); // Text als Span
+    const filterTextSpan = document.createElement("span"); 
     filterTextSpan.classList.add("is-txt-16");
     filterTextSpan.textContent = filterLabel;
     filterTriggerWrapper.appendChild(filterTextSpan);
 
     const filterIcon = document.createElement("img");
     filterIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/682c5e5b84cac09c56cdbebe_angle-down-small.svg"; 
-    filterIcon.classList.add("db-icon-18"); // Ggf. anpassen
+    filterIcon.classList.add("db-icon-18"); 
     filterTriggerWrapper.appendChild(filterIcon);
     
-    filterParentDiv.appendChild(filterTriggerWrapper); // Trigger-Wrapper zum Parent hinzufügen
+    filterParentDiv.appendChild(filterTriggerWrapper); 
 
     const dropdownList = document.createElement("div");
     dropdownList.classList.add("db-filter-dropdown-list"); 
@@ -242,23 +306,19 @@
             checkbox.checked = true;
         }
 
-        const optionTextSpan = document.createElement("span"); // NEU: Text als Span
+        const optionTextSpan = document.createElement("span"); 
         optionTextSpan.classList.add("is-txt-16"); 
         optionTextSpan.textContent = text;
         
-        // Klick auf das gesamte optionDiv soll die Checkbox togglen (verbessert UX)
         optionDiv.addEventListener('click', (e) => {
-            // Verhindere, dass ein Klick auf die Checkbox selbst das Event doppelt auslöst
             if (e.target !== checkbox) {
                 checkbox.checked = !checkbox.checked;
-                // Manuell das 'change'-Event auslösen, damit der Filter angewendet wird
                 const changeEvent = new Event('change', { bubbles: true });
                 checkbox.dispatchEvent(changeEvent);
             }
         });
         
         checkbox.addEventListener("change", async () => {
-            // applyAndReloadApplicants wird aufgerufen, wenn sich der Zustand der Checkbox ändert
             if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
                await window.WEBFLOW_API.core.applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper);
             } else {
@@ -267,13 +327,12 @@
         });
 
         optionDiv.appendChild(checkbox);
-        optionDiv.appendChild(optionTextSpan); // Span statt Label
+        optionDiv.appendChild(optionTextSpan); 
         dropdownList.appendChild(optionDiv);
     });
     
-    filterParentDiv.appendChild(dropdownList); // Dropdown-Liste zum Parent hinzufügen
+    filterParentDiv.appendChild(dropdownList); 
 
-    // Event Listener zum Öffnen/Schließen des spezifischen Dropdowns
     filterTriggerWrapper.addEventListener("click", (e) => {
       e.stopPropagation(); 
       const parentFilterElement = e.currentTarget.closest('.db-table-filter');
@@ -281,7 +340,6 @@
 
       if (!currentDropdownList) return;
 
-      // Schließe alle anderen Dropdowns in der Filterzeile
       const allFilterParents = filterParentDiv.parentElement.querySelectorAll('.db-table-filter');
       allFilterParents.forEach(otherFilterParent => {
           const otherDropdown = otherFilterParent.querySelector('.db-filter-dropdown-list');
@@ -289,47 +347,43 @@
               otherDropdown.style.display = 'none';
           }
       });
-      // Toggle das aktuelle Dropdown
       currentDropdownList.style.display = currentDropdownList.style.display === "none" ? "block" : "none";
     });
-    return filterParentDiv; // Das Parent-Element zurückgeben
+    return filterParentDiv; 
   }
 
-
-  /**
-   * Erstellt das DOM-Element für die Filterzeile.
-   * @param {string} jobId - Die ID des aktuellen Jobs.
-   * @param {HTMLElement} applicantsListContainer - Der Container der Bewerberliste.
-   * @param {HTMLElement} paginationWrapper - Der Wrapper für die Paginierung.
-   * @returns {HTMLElement} Das Filterzeilen-DOM-Element.
-   */
   function createFilterRowElement(jobId, applicantsListContainer, paginationWrapper) {
     const filterRow = document.createElement("div");
-    filterRow.classList.add("db-table-filter-row");
+    filterRow.classList.add("db-table-filter-row"); // Haupt-Wrapper für die gesamte Filterzeile
 
-    const filterWrapper = document.createElement("div"); // Dieser Wrapper enthält alle Filter-Elemente
-    filterWrapper.classList.add("db-table-filter-row-wrapper"); 
-    filterRow.appendChild(filterWrapper);
+    const filterDropdownsWrapper = document.createElement("div"); // Wrapper für die Dropdowns
+    filterDropdownsWrapper.classList.add("db-table-filter-dropdowns-wrapper"); // Für Flexbox-Layout der Filter-Dropdowns
+    filterRow.appendChild(filterDropdownsWrapper);
 
-    // Follower Filter
+    // Container für aktive Filter-Badges (NEU)
+    const activeFiltersDisplay = document.createElement("div");
+    activeFiltersDisplay.classList.add("db-active-filters-display"); // Eigene Klasse für Styling
+    // Dieser Container wird NACH den Dropdowns in die filterRow eingefügt, oder wo du ihn haben möchtest.
+    // Für "neben dem filter 'db-table-filter-row-wrapper' div":
+    // Da db-table-filter-row-wrapper jetzt filterDropdownsWrapper ist, kommt es daneben.
+    filterRow.appendChild(activeFiltersDisplay); 
+
+
     if (MAPPINGS && MAPPINGS.followerRanges) {
         const followerFilterElement = createFilterDropdown(jobId, "follower", "Follower", MAPPINGS.followerRanges, applicantsListContainer, paginationWrapper);
-        filterWrapper.appendChild(followerFilterElement);
+        filterDropdownsWrapper.appendChild(followerFilterElement);
     }
 
-    // Kategorie Filter
     const categoryFilterElement = createFilterDropdown(jobId, "category", "Kategorie", "creator-main-categorie", applicantsListContainer, paginationWrapper, true);
-    filterWrapper.appendChild(categoryFilterElement);
+    filterDropdownsWrapper.appendChild(categoryFilterElement);
     
-    // Creator Type Filter
     if (MAPPINGS && MAPPINGS.creatorTypen) {
         const creatorTypeFilterElement = createFilterDropdown(jobId, "creatorType", "Creator Typ", MAPPINGS.creatorTypen, applicantsListContainer, paginationWrapper);
-        filterWrapper.appendChild(creatorTypeFilterElement);
+        filterDropdownsWrapper.appendChild(creatorTypeFilterElement);
     }
 
-    // Toggle für "Nur relevante Bewerber"
     const relevantToggleWrapper = document.createElement('div');
-    relevantToggleWrapper.classList.add('db-filter-toggle-wrapper'); // Eigene Klasse für Styling des Toggles
+    relevantToggleWrapper.classList.add('db-filter-toggle-wrapper'); 
 
     const relevantToggleCheckbox = document.createElement('input');
     relevantToggleCheckbox.type = 'checkbox';
@@ -338,7 +392,7 @@
     relevantToggleCheckbox.classList.add('db-filter-checkbox'); 
 
     const relevantToggleLabel = document.createElement('label');
-    relevantToggleLabel.htmlFor = relevantToggleCheckbox.id; // Korrekte Verknüpfung
+    relevantToggleLabel.htmlFor = relevantToggleCheckbox.id; 
     relevantToggleLabel.classList.add('is-txt-16');
     relevantToggleLabel.textContent = 'Nur relevante Bewerber'; 
 
@@ -357,14 +411,12 @@
 
     relevantToggleWrapper.appendChild(relevantToggleCheckbox);
     relevantToggleWrapper.appendChild(relevantToggleLabel); 
-    filterWrapper.appendChild(relevantToggleWrapper);
+    filterDropdownsWrapper.appendChild(relevantToggleWrapper); // Toggle zu den anderen Filtern
 
 
-    // Schließen der Dropdowns, wenn außerhalb geklickt wird
     document.addEventListener("click", (e) => {
-        // Prüft, ob der Klick außerhalb *jedes* .db-table-filter Elements war
-        if (!e.target.closest('.db-table-filter') && !e.target.closest('.db-filter-toggle-wrapper')) {
-            const allDropdownLists = filterWrapper.querySelectorAll('.db-filter-dropdown-list');
+        if (!filterDropdownsWrapper.contains(e.target.closest('.db-table-filter')) && !e.target.closest('.db-filter-toggle-wrapper')) {
+            const allDropdownLists = filterDropdownsWrapper.querySelectorAll('.db-filter-dropdown-list');
             allDropdownLists.forEach(dd => {
                 dd.style.display = 'none';
             });
@@ -374,7 +426,6 @@
   }
 
 
-  // Exponieren der UI-Funktionen
   window.WEBFLOW_API.ui.createApplicantRowElement = createApplicantRowElement;
   window.WEBFLOW_API.ui.createApplicantTableHeaderElement = createApplicantTableHeaderElement;
   window.WEBFLOW_API.ui.createFilterRowElement = createFilterRowElement;

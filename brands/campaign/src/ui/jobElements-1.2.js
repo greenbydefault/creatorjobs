@@ -111,14 +111,14 @@
     toggleCheckbox.classList.add("checkbox-toggle");
     toggleCheckbox.id = `toggle-applicants-${jobItem.id}`; // Eindeutige ID
 
-    // Label für Barrierefreiheit (kann unsichtbar gemacht werden, wenn nur der Switch sichtbar sein soll)
-    const toggleLabel = document.createElement("label");
-    toggleLabel.htmlFor = toggleCheckbox.id;
-    toggleLabel.classList.add("visually-hidden"); // Klasse, um Label für Screenreader zugänglich, aber unsichtbar zu machen
-    toggleLabel.textContent = `Bewerberliste für Job ${jobFieldData.name || jobItem.id} anzeigen`;
+    // Label für Barrierefreiheit wurde entfernt
+    // const toggleLabel = document.createElement("label");
+    // toggleLabel.htmlFor = toggleCheckbox.id;
+    // toggleLabel.classList.add("visually-hidden"); 
+    // toggleLabel.textContent = `Bewerberliste für Job ${jobFieldData.name || jobItem.id} anzeigen`;
 
     toggleWrapper.appendChild(toggleCheckbox);
-    toggleWrapper.appendChild(toggleLabel); // Label hinzufügen
+    // toggleWrapper.appendChild(toggleLabel); // Label wird nicht mehr hinzugefügt
     toggleCell.appendChild(toggleWrapper);
     jobHeaderDiv.appendChild(toggleCell);
 

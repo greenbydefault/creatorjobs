@@ -64,6 +64,28 @@
     };
   }
 
+  // Hilfsfunktion zur Formatierung der Follower-Zahlen
+  function formatFollowerCount(numStr) {
+    const num = parseInt(String(numStr).replace(/[,.]/g, ''), 10); // Kommas und Punkte entfernen für Parsing
+    if (isNaN(num)) {
+        return numStr; // Originalwert zurückgeben, wenn keine gültige Zahl
+    }
+
+    if (num < 1000) {
+        return String(num);
+    } else if (num < 1000000) { // Bis 999.999
+        const thousands = num / 1000;
+        if (num < 10000) { // Für Zahlen wie 2400, 9900. Eine Dezimalstelle.
+            return (thousands % 1 === 0 ? thousands.toFixed(0) : thousands.toFixed(1)) + 'K';
+        } else { // Für Zahlen wie 25604. Ganze Zahl K.
+            return Math.floor(thousands) + 'K';
+        }
+    } else { // Millionen
+        const millions = num / 1000000;
+        return (millions % 1 === 0 ? millions.toFixed(0) : millions.toFixed(1)) + 'M';
+    }
+  }
+
 
   function showCreatorSidebar(applicantItem, allJobApplicants, applicantIndex, jobId) {
     console.log("showCreatorSidebar called. MAPPINGS:", JSON.parse(JSON.stringify(window.WEBFLOW_API.MAPPINGS || {})));
@@ -129,13 +151,14 @@
     console.log("Resolved Creator Kategorie Name:", creatorKategorieName); 
 
     let typeAndCategoryText = '';
-    if (creatorTypeName !== 'N/A' && creatorKategorieName !== 'N/A' && creatorTypeName !== creatorKategorieName) {
+    if (creatorTypeName !== 'N/A' && creatorKategorieName !== 'N/A' && creatorTypeName !== creatorKategorieName) { // Nur anzeigen, wenn beide unterschiedlich und nicht N/A
         typeAndCategoryText = `${creatorTypeName} - ${creatorKategorieName}`;
     } else if (creatorTypeName !== 'N/A') {
         typeAndCategoryText = creatorTypeName;
-    } else if (creatorKategorieName !== 'N/A') {
+    } else if (creatorKategorieName !== 'N/A') { // Fallback, falls nur Kategorie da ist (sollte durch obige Logik eigentlich abgedeckt sein)
         typeAndCategoryText = creatorKategorieName;
     }
+
 
     if (typeAndCategoryText) { 
         const kategorieP = document.createElement('p');
@@ -222,10 +245,9 @@
     contentArea.appendChild(creatorDetailsDiv); 
 
 
-    const socialMediaWrapper = document.createElement('div');
-    socialMediaWrapper.classList.add('social-media-wrapper'); 
+    const socialMediaOuterWrapper = document.createElement('div'); // Neuer äußerer Wrapper
+    socialMediaOuterWrapper.classList.add('db-profile-social');  // Klasse für den äußeren Wrapper
 
-    // Korrigierte Schlüssel für Follower und Links
     const socialPlatforms = [
         { name: 'Instagram', id: 'instagram', followersKey: 'creator-follower-instagram', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e8d979b71d2a7e5db3_Instagram.svg', linkKey: 'instagram' },
         { name: 'TikTok', id: 'tiktok', followersKey: 'creator-follower-tiktok', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e99dce86c2b6ba83fe_Tiktok.svg', linkKey: 'tiktok' },
@@ -236,47 +258,60 @@
     console.log("Checking social media data for applicant:", applicantFieldData.name);
 
     socialPlatforms.forEach(platform => {
-        const followers = applicantFieldData[platform.followersKey]; 
+        const followersRaw = applicantFieldData[platform.followersKey]; 
         const link = applicantFieldData[platform.linkKey];
 
-        console.log(`Platform: ${platform.name}, Followers data from key '${platform.followersKey}': ${followers}, Link data from key '${platform.linkKey}': ${link}`);
+        console.log(`Platform: ${platform.name}, Followers data from key '${platform.followersKey}': ${followersRaw}, Link data from key '${platform.linkKey}': ${link}`);
+        
+        const followersFormatted = formatFollowerCount(followersRaw);
 
-        if (link || (followers && followers !== 'N/A' && String(followers).trim() !== '')) {
+        // Nur anzeigen, wenn ein Link vorhanden ist ODER formatierte Follower-Daten (nicht nur 'N/A' oder leer)
+        if (link || (followersRaw && followersFormatted !== 'N/A' && String(followersRaw).trim() !== '')) {
             hasSocialContent = true; 
-            const platformDiv = document.createElement('div');
-            platformDiv.classList.add('social-platform', `social-platform-${platform.id}`);
+            
+            // platformDiv ist jetzt das Element, das entweder ein Link oder ein einfaches Div ist
+            let platformElement; 
+            const innerPlatformDiv = document.createElement('div'); // Dieses Div enthält Icon und Follower
+            innerPlatformDiv.classList.add('social-platform-item-content'); // Eine neue Klasse für internes Styling, falls benötigt
 
+            const iconWrapper = document.createElement('div');
+            iconWrapper.classList.add('db-card-icon-wrapper', 'round');
+            
             const platformIcon = document.createElement('img');
             platformIcon.src = platform.icon;
             platformIcon.alt = platform.name;
-            platformIcon.classList.add('social-icon');
-            platformDiv.appendChild(platformIcon);
+            platformIcon.classList.add('db-icon-24'); // Klasse für das Icon
+            iconWrapper.appendChild(platformIcon);
+            innerPlatformDiv.appendChild(iconWrapper);
 
-            if (followers && followers !== 'N/A' && String(followers).trim() !== '') {
+            if (followersRaw && followersFormatted !== 'N/A' && String(followersRaw).trim() !== '') {
                 const followersSpan = document.createElement('span');
-                followersSpan.textContent = followers; 
-                followersSpan.classList.add('social-followers');
-                platformDiv.appendChild(followersSpan);
+                followersSpan.textContent = followersFormatted; 
+                followersSpan.classList.add('is-txt-16', 'is-txt-medium', 'social-followers'); // Klassen für Follower
+                innerPlatformDiv.appendChild(followersSpan);
             }
 
             if (link) {
-                const platformLinkElement = document.createElement('a'); 
-                platformLinkElement.href = window.WEBFLOW_API.utils.normalizeUrl(link);
-                platformLinkElement.target = '_blank';
-                platformLinkElement.rel = 'noopener noreferrer';
-                platformLinkElement.appendChild(platformDiv); 
-                socialMediaWrapper.appendChild(platformLinkElement);
+                platformElement = document.createElement('a'); 
+                platformElement.href = window.WEBFLOW_API.utils.normalizeUrl(link);
+                platformElement.target = '_blank';
+                platformElement.rel = 'noopener noreferrer';
+                platformElement.appendChild(innerPlatformDiv); 
             } else {
-                socialMediaWrapper.appendChild(platformDiv); 
+                platformElement = innerPlatformDiv; 
             }
+            // Füge Klassen hinzu, die für das Layout im Grid/Flex von db-profile-social wichtig sind
+            platformElement.classList.add('social-platform-item', `social-platform-${platform.id}`); 
+            socialMediaOuterWrapper.appendChild(platformElement);
+
         } else {
             console.log(`Skipping ${platform.name} due to no link and no valid followers.`);
         }
     });
     
     if (hasSocialContent) {
-        console.log("Social media content found, appending wrapper.");
-        contentArea.appendChild(socialMediaWrapper);
+        console.log("Social media content found, appending db-profile-social wrapper.");
+        contentArea.appendChild(socialMediaOuterWrapper); // Den äußeren Wrapper hinzufügen
     } else {
         console.log("No social media content to display for this applicant.");
     }

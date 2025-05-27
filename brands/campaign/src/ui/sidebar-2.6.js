@@ -269,58 +269,102 @@
         contentArea.appendChild(socialMediaWrapper);
     }
 
+    // --- ANGEPASSTER VIDEOBEREICH ---
+    const mainVideoPlayerWrapper = document.createElement('div');
+    mainVideoPlayerWrapper.classList.add('db-modal-video-wrapper'); // Wrapper für Hauptvideo
+    contentArea.appendChild(mainVideoPlayerWrapper);
 
-    const videoGridContainer = document.createElement('div');
-    videoGridContainer.classList.add('db-modal-creator-video-grid');
-    contentArea.appendChild(videoGridContainer);
+    const mainVideoElement = document.createElement('video');
+    mainVideoElement.id = 'main-creator-video-player'; // Eindeutige ID für den Hauptplayer
+    mainVideoElement.controls = true;
+    mainVideoElement.preload = 'metadata';
+    mainVideoElement.classList.add('db-modal-video-item'); // Styling für das Hauptvideo-Element
+    mainVideoPlayerWrapper.appendChild(mainVideoElement);
 
-    const numberOfPotentialVideos = 5;
-    for (let i = 0; i < numberOfPotentialVideos; i++) {
-      if (window.WEBFLOW_API.ui.createVideoSkeletonElement) {
-        videoGridContainer.appendChild(window.WEBFLOW_API.ui.createVideoSkeletonElement());
-      } else if (window.createVideoSkeletonElement) {
-        videoGridContainer.appendChild(window.createVideoSkeletonElement());
-      }
-    }
+    const thumbnailGridContainer = document.createElement('div');
+    thumbnailGridContainer.classList.add('db-modal-creator-video-grid-thumbnail'); // Wrapper für Thumbnails
+    contentArea.appendChild(thumbnailGridContainer);
+
+    const noVideosMessageP = document.createElement('p');
+    noVideosMessageP.textContent = 'Keine Videos vorhanden.';
+    noVideosMessageP.classList.add('no-videos-message'); // Für Styling, falls keine Videos da sind
+    noVideosMessageP.style.display = 'none'; // Standardmäßig ausblenden
+    contentArea.appendChild(noVideosMessageP); // Einmal hinzufügen, dann Sichtbarkeit steuern
+
+    const numberOfPotentialVideos = 5; // Max. Anzahl zu prüfender Video-Links
 
     setTimeout(() => {
-      videoGridContainer.innerHTML = '';
-
-      let videosFound = false;
-      for (let i = 1; i <= numberOfPotentialVideos; i++) {
-        const videoLinkField = `creator-video-link-${i}`;
-        const videoUrl = applicantFieldData[videoLinkField];
-
-        if (videoUrl && typeof videoUrl === 'string' && videoUrl.trim() !== '') {
-          videosFound = true;
-          const videoWrapper = document.createElement('div');
-          videoWrapper.classList.add('db-modal-video-wrapper');
-
-          const videoElement = document.createElement('video');
-          videoElement.src = window.WEBFLOW_API.utils.normalizeUrl(videoUrl);
-          videoElement.controls = true;
-          videoElement.preload = "metadata";
-          videoElement.classList.add('db-modal-video-item');
-
-          const sourceElement = document.createElement('source');
-          sourceElement.src = window.WEBFLOW_API.utils.normalizeUrl(videoUrl);
-          if (videoUrl.endsWith('.mp4')) sourceElement.type = 'video/mp4';
-          else if (videoUrl.endsWith('.webm')) sourceElement.type = 'video/webm';
-          else if (videoUrl.endsWith('.ogg')) sourceElement.type = 'video/ogg';
-          videoElement.appendChild(sourceElement);
-
-          videoElement.appendChild(document.createTextNode('Ihr Browser unterstützt das Video-Tag nicht.'));
-          videoWrapper.appendChild(videoElement);
-          videoGridContainer.appendChild(videoWrapper);
+        let videoUrls = [];
+        for (let i = 1; i <= numberOfPotentialVideos; i++) {
+            const videoLinkField = `creator-video-link-${i}`;
+            const videoUrl = applicantFieldData[videoLinkField];
+            if (videoUrl && typeof videoUrl === 'string' && videoUrl.trim() !== '') {
+                videoUrls.push(window.WEBFLOW_API.utils.normalizeUrl(videoUrl));
+            }
         }
-      }
-      if (!videosFound) {
-        const noVideosP = document.createElement('p');
-        noVideosP.textContent = 'Keine Videos vorhanden.';
-        noVideosP.classList.add('no-videos-message');
-        videoGridContainer.appendChild(noVideosP);
-      }
+
+        thumbnailGridContainer.innerHTML = ''; // Vorherige Thumbnails löschen
+
+        if (videoUrls.length > 0) {
+            mainVideoPlayerWrapper.style.display = '';
+            thumbnailGridContainer.style.display = ''; // Ggf. anpassen, falls es ein Grid-Layout ist
+            noVideosMessageP.style.display = 'none';
+
+            // Erstes Video in den Hauptplayer laden
+            mainVideoElement.innerHTML = ''; // Alte Quellen entfernen
+            const mainSourceElement = document.createElement('source');
+            mainSourceElement.src = videoUrls[0];
+            if (videoUrls[0].endsWith('.mp4')) mainSourceElement.type = 'video/mp4';
+            // Weitere Typen hier hinzufügen, falls nötig
+            mainVideoElement.appendChild(mainSourceElement);
+            mainVideoElement.appendChild(document.createTextNode('Ihr Browser unterstützt das Video-Tag nicht.'));
+            mainVideoElement.load();
+            // mainVideoElement.play().catch(e => console.warn("Autoplay prevented for main video:", e)); // Optional: Autoplay versuchen
+
+            // Thumbnails erstellen
+            videoUrls.forEach(url => {
+                const thumbnailWrapper = document.createElement('div');
+                thumbnailWrapper.classList.add('db-modal-video-thumbnail'); // Klickbares Thumbnail-Element
+                thumbnailWrapper.dataset.videoSrc = url; // Video-URL für Klick-Event speichern
+
+                const thumbnailVideoElement = document.createElement('video');
+                // Klasse für das reine Video-Element im Thumbnail (für Styling)
+                thumbnailVideoElement.classList.add('db-modal-video-thumbnail-visual'); 
+                thumbnailVideoElement.src = url; // Setze src direkt für das Thumbnail-Video
+                thumbnailVideoElement.preload = "metadata";
+                thumbnailVideoElement.muted = true;
+                thumbnailVideoElement.playsInline = true; // Wichtig für mobile Browser
+                // Keine Controls für Thumbnails
+
+                // Optional: Poster für Thumbnail, falls verfügbar
+                // const posterUrl = applicantFieldData[`creator-video-thumbnail-${i}`]; // Annahme
+                // if(posterUrl) thumbnailVideoElement.poster = posterUrl;
+                
+                thumbnailWrapper.appendChild(thumbnailVideoElement);
+                thumbnailGridContainer.appendChild(thumbnailWrapper);
+
+                thumbnailWrapper.addEventListener('click', function() {
+                    const newSrc = this.dataset.videoSrc;
+                    mainVideoElement.innerHTML = ''; // Alte Quellen entfernen
+                    const newMainSourceElement = document.createElement('source');
+                    newMainSourceElement.src = newSrc;
+                    if (newSrc.endsWith('.mp4')) newMainSourceElement.type = 'video/mp4';
+                     // Weitere Typen hier hinzufügen, falls nötig
+                    mainVideoElement.appendChild(newMainSourceElement);
+                    mainVideoElement.appendChild(document.createTextNode('Ihr Browser unterstützt das Video-Tag nicht.'));
+                    mainVideoElement.load();
+                    mainVideoElement.play().catch(error => console.error("Error attempting to play video:", error));
+                });
+            });
+
+        } else {
+            mainVideoPlayerWrapper.style.display = 'none';
+            thumbnailGridContainer.style.display = 'none';
+            noVideosMessageP.style.display = '';
+        }
     }, 0);
+    // --- ENDE ANGEPASSTER VIDEOBEREICH ---
+
 
     sidebarWrapper.appendChild(sidebarControls);
 
@@ -341,9 +385,13 @@
   }
 
   if (!window.WEBFLOW_API.ui.createVideoSkeletonElement) {
+    // Diese Funktion wird in der neuen Logik nicht direkt für Thumbnails verwendet,
+    // könnte aber nützlich sein, wenn man Skeletons für die Thumbnails anzeigen möchte,
+    // bevor die Videos geladen werden. Fürs Erste ist sie nicht aktiv im Thumbnail-Prozess.
     window.WEBFLOW_API.ui.createVideoSkeletonElement = function () {
       const skeletonWrapper = document.createElement('div');
-      skeletonWrapper.classList.add('db-modal-video-wrapper', 'skeleton-video-wrapper');
+      // Passen Sie die Klassen an, wenn Sie es für Thumbnails verwenden
+      skeletonWrapper.classList.add('db-modal-video-wrapper', 'skeleton-video-wrapper'); 
       const skeletonVideo = document.createElement('div');
       skeletonVideo.classList.add('db-modal-video-item', 'skeleton-video-item');
       skeletonWrapper.appendChild(skeletonVideo);

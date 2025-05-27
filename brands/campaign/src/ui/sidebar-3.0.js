@@ -70,7 +70,6 @@
     
     const MAPPINGS = window.WEBFLOW_API.MAPPINGS || {};
     const creatorTypesMapping = MAPPINGS.creatorTypen || {}; 
-    // BITTE PRÜFEN: Ist 'creatorKategorien' der korrekte Schlüssel im MAPPINGS Objekt?
     const creatorKategorienMapping = MAPPINGS.creatorKategorien || {}; 
 
     currentSidebarJobId = jobId;
@@ -107,12 +106,14 @@
       imgWrapperDiv.appendChild(profileImg);
     }
 
-    const creatorInfoDiv = document.createElement('div');
-    creatorInfoDiv.classList.add('db-modal-headline');
+    // Angepasste Struktur für Creator-Name und Kategorie
+    const creatorInfoFlexDiv = document.createElement('div');
+    creatorInfoFlexDiv.classList.add('is-flexbox-vertical'); // Parent-Div mit Flexbox-Klasse
 
     const nameSpan = document.createElement('span');
+    nameSpan.classList.add('db-modal-headline'); // Name erhält diese Klasse
     nameSpan.textContent = applicantFieldData.name || 'Unbekannter Creator';
-    creatorInfoDiv.appendChild(nameSpan);
+    creatorInfoFlexDiv.appendChild(nameSpan);
 
     const creatorTypeId = applicantFieldData['creator-type']; 
     const creatorKategorieId = applicantFieldData['creator-kategorie']; 
@@ -122,34 +123,32 @@
     console.log("Available Creator Types in MAPPINGS (using MAPPINGS.creatorTypen):", JSON.parse(JSON.stringify(creatorTypesMapping)));
     console.log("Available Creator Kategorien in MAPPINGS (using MAPPINGS.creatorKategorien):", JSON.parse(JSON.stringify(creatorKategorienMapping)));
 
-
     const creatorTypeName = creatorTypesMapping[creatorTypeId] || creatorTypeId || 'N/A';
     const creatorKategorieName = creatorKategorienMapping[creatorKategorieId] || creatorKategorieId || 'N/A';
     
     console.log("Resolved Creator Type Name:", creatorTypeName);
     console.log("Resolved Creator Kategorie Name:", creatorKategorieName); 
 
-    // Creator-Typ
-    const typeP = document.createElement('p');
-    typeP.classList.add('is-txt-16'); // Klasse für den Typ, falls abweichend von Kategorie
-    typeP.textContent = creatorTypeName;
-    creatorInfoDiv.appendChild(typeP);
+    // Creator-Typ (kann entfernt werden, wenn nur Kategorie unter dem Namen stehen soll)
+    // const typeP = document.createElement('p');
+    // typeP.classList.add('is-txt-16'); 
+    // typeP.textContent = creatorTypeName;
+    // creatorInfoFlexDiv.appendChild(typeP);
 
     // Kategorie als eigener Textblock, wenn vorhanden
-    if (creatorKategorieName !== 'N/A' || creatorKategorieId) { // Nur anzeigen, wenn eine Kategorie ID vorhanden ist oder aufgelöst werden konnte
+    if (creatorKategorieName !== 'N/A' || creatorKategorieId) { 
         const kategorieP = document.createElement('p');
         kategorieP.classList.add('is-txt-16');
-        kategorieP.textContent = creatorKategorieName;
-        creatorInfoDiv.appendChild(kategorieP);
+        kategorieP.textContent = `${creatorTypeName} - ${creatorKategorieName}`; // Zeigt Typ - Kategorie
+        creatorInfoFlexDiv.appendChild(kategorieP);
     }
 
-
-    imgWrapperDiv.appendChild(creatorInfoDiv);
+    imgWrapperDiv.appendChild(creatorInfoFlexDiv); // Das neue Flex-Div wird dem imgWrapper hinzugefügt
     creatorHeadlineOverallDiv.appendChild(imgWrapperDiv);
 
     const zusagenButton = document.createElement('button');
     zusagenButton.classList.add('db-button-medium-gradient-pink', 'size-auto');
-    zusagenButton.textContent = '+ Zusagen';
+    zusagenButton.textContent = 'Zusagen'; // "+" entfernt
     creatorHeadlineOverallDiv.appendChild(zusagenButton);
 
     sidebarWrapper.appendChild(creatorHeadlineOverallDiv);
@@ -175,10 +174,11 @@
     nextButton.title = "Nächster Creator";
     navButtonsWrapper.appendChild(nextButton);
 
-    const helpButton = document.createElement('div');
-    helpButton.classList.add('db-modal-help');
-    helpButton.textContent = 'Hilfe';
-    sidebarControls.appendChild(helpButton);
+    // Hilfe-Button entfernt
+    // const helpButton = document.createElement('div');
+    // helpButton.classList.add('db-modal-help');
+    // helpButton.textContent = 'Hilfe';
+    // sidebarControls.appendChild(helpButton); 
     sidebarControls.appendChild(navButtonsWrapper);
 
     prevButton.addEventListener('click', () => {
@@ -236,12 +236,16 @@
     ];
     
     let hasSocialContent = false; 
+    console.log("Checking social media data for applicant:", applicantFieldData.name);
 
     socialPlatforms.forEach(platform => {
-        const followers = applicantFieldData[platform.followersKey] || 'N/A';
+        const followers = applicantFieldData[platform.followersKey]; // Direkt Wert holen, Fallback später
         const link = applicantFieldData[platform.linkKey];
 
-        if (link || (followers && followers !== 'N/A')) {
+        console.log(`Platform: ${platform.name}, Followers data: ${followers}, Link data: ${link}`);
+
+        // Nur anzeigen, wenn ein Link vorhanden ist ODER Follower-Daten (nicht nur 'N/A' oder leer)
+        if (link || (followers && followers !== 'N/A' && String(followers).trim() !== '')) {
             hasSocialContent = true; 
             const platformDiv = document.createElement('div');
             platformDiv.classList.add('social-platform', `social-platform-${platform.id}`);
@@ -252,31 +256,37 @@
             platformIcon.classList.add('social-icon');
             platformDiv.appendChild(platformIcon);
 
-            if (followers && followers !== 'N/A') {
+            // Follower nur anzeigen, wenn sie vorhanden und nicht 'N/A' sind
+            if (followers && followers !== 'N/A' && String(followers).trim() !== '') {
                 const followersSpan = document.createElement('span');
-                followersSpan.textContent = followers;
+                followersSpan.textContent = followers; // Zeige den Wert direkt an
                 followersSpan.classList.add('social-followers');
                 platformDiv.appendChild(followersSpan);
             }
 
             if (link) {
-                const platformLink = document.createElement('a');
-                platformLink.href = window.WEBFLOW_API.utils.normalizeUrl(link);
-                platformLink.target = '_blank';
-                platformLink.rel = 'noopener noreferrer';
-                platformLink.appendChild(platformDiv);
-                socialMediaWrapper.appendChild(platformLink);
+                const platformLinkElement = document.createElement('a'); // Umbenannt, um Verwechslung mit 'link' Variable zu vermeiden
+                platformLinkElement.href = window.WEBFLOW_API.utils.normalizeUrl(link);
+                platformLinkElement.target = '_blank';
+                platformLinkElement.rel = 'noopener noreferrer';
+                platformLinkElement.appendChild(platformDiv); // Das platformDiv (mit Icon und Followern) wird zum Link
+                socialMediaWrapper.appendChild(platformLinkElement);
             } else {
                 socialMediaWrapper.appendChild(platformDiv); 
             }
+        } else {
+            console.log(`Skipping ${platform.name} due to no link and no valid followers.`);
         }
     });
     
     if (hasSocialContent) {
+        console.log("Social media content found, appending wrapper.");
         contentArea.appendChild(socialMediaWrapper);
+    } else {
+        console.log("No social media content to display for this applicant.");
     }
 
-    // --- ANGEPASSTER VIDEOBEREICH MIT SKELETONS FÜR THUMBNAILS ---
+    // --- VIDEOBEREICH OHNE THUMBNAIL SKELETONS ---
     const mainVideoPlayerWrapper = document.createElement('div');
     mainVideoPlayerWrapper.classList.add('db-modal-video-wrapper'); 
     contentArea.appendChild(mainVideoPlayerWrapper);
@@ -300,7 +310,6 @@
 
     const numberOfPotentialVideos = 5; 
 
-    // Video URLs sammeln
     let videoUrls = [];
     for (let i = 1; i <= numberOfPotentialVideos; i++) {
         const videoLinkField = `creator-video-link-${i}`;
@@ -310,75 +319,55 @@
         }
     }
 
-    // Thumbnails und Hauptvideo initialisieren
-    thumbnailGridContainer.innerHTML = ''; // Vorherige Thumbnails/Skeletons löschen
+    thumbnailGridContainer.innerHTML = ''; 
 
     if (videoUrls.length > 0) {
         mainVideoPlayerWrapper.style.display = '';
         thumbnailGridContainer.style.display = ''; 
         noVideosMessageP.style.display = 'none';
 
-        // Phase 1: Skeletons für Thumbnails anzeigen
-        videoUrls.forEach(() => {
-            if (window.WEBFLOW_API.ui.createVideoSkeletonElement) {
-                 // Annahme: createVideoSkeletonElement erstellt ein passendes Thumbnail-Skeleton
-                const skeletonThumb = window.WEBFLOW_API.ui.createVideoSkeletonElement();
-                // Ggf. Klassen anpassen, damit es wie ein Thumbnail-Skeleton aussieht
-                skeletonThumb.classList.remove('db-modal-video-wrapper'); // Falls die Skeleton-Funktion diesen Wrapper hinzufügt
-                skeletonThumb.classList.add('db-modal-video-thumbnail', 'skeleton-thumbnail-active'); // Eigene Klasse für Skeleton-Thumb
-                thumbnailGridContainer.appendChild(skeletonThumb);
-            }
-        });
+        mainVideoElement.innerHTML = ''; 
+        const mainSourceElement = document.createElement('source');
+        mainSourceElement.src = videoUrls[0];
+        if (videoUrls[0].endsWith('.mp4')) mainSourceElement.type = 'video/mp4';
+        mainVideoElement.appendChild(mainSourceElement);
+        mainVideoElement.appendChild(document.createTextNode('Ihr Browser unterstützt das Video-Tag nicht.'));
+        mainVideoElement.load();
 
-        // Phase 2: Echte Thumbnails und Hauptvideo laden (nach kurzer Verzögerung)
-        setTimeout(() => {
-            thumbnailGridContainer.innerHTML = ''; // Skeletons entfernen
+        videoUrls.forEach(url => {
+            const thumbnailWrapper = document.createElement('div');
+            thumbnailWrapper.classList.add('db-modal-video-thumbnail'); 
+            thumbnailWrapper.dataset.videoSrc = url; 
 
-            // Erstes Video in den Hauptplayer laden
-            mainVideoElement.innerHTML = ''; 
-            const mainSourceElement = document.createElement('source');
-            mainSourceElement.src = videoUrls[0];
-            if (videoUrls[0].endsWith('.mp4')) mainSourceElement.type = 'video/mp4';
-            mainVideoElement.appendChild(mainSourceElement);
-            mainVideoElement.appendChild(document.createTextNode('Ihr Browser unterstützt das Video-Tag nicht.'));
-            mainVideoElement.load();
+            const thumbnailVideoElement = document.createElement('video');
+            thumbnailVideoElement.classList.add('db-modal-video-thumbnail-visual'); 
+            thumbnailVideoElement.src = url; 
+            thumbnailVideoElement.preload = "metadata";
+            thumbnailVideoElement.muted = true;
+            thumbnailVideoElement.playsInline = true; 
+            
+            thumbnailWrapper.appendChild(thumbnailVideoElement);
+            thumbnailGridContainer.appendChild(thumbnailWrapper);
 
-            // Echte Thumbnails erstellen
-            videoUrls.forEach(url => {
-                const thumbnailWrapper = document.createElement('div');
-                thumbnailWrapper.classList.add('db-modal-video-thumbnail'); 
-                thumbnailWrapper.dataset.videoSrc = url; 
-
-                const thumbnailVideoElement = document.createElement('video');
-                thumbnailVideoElement.classList.add('db-modal-video-thumbnail-visual'); 
-                thumbnailVideoElement.src = url; 
-                thumbnailVideoElement.preload = "metadata";
-                thumbnailVideoElement.muted = true;
-                thumbnailVideoElement.playsInline = true; 
-                
-                thumbnailWrapper.appendChild(thumbnailVideoElement);
-                thumbnailGridContainer.appendChild(thumbnailWrapper);
-
-                thumbnailWrapper.addEventListener('click', function() {
-                    const newSrc = this.dataset.videoSrc;
-                    mainVideoElement.innerHTML = ''; 
-                    const newMainSourceElement = document.createElement('source');
-                    newMainSourceElement.src = newSrc;
-                    if (newSrc.endsWith('.mp4')) newMainSourceElement.type = 'video/mp4';
-                    mainVideoElement.appendChild(newMainSourceElement);
-                    mainVideoElement.appendChild(document.createTextNode('Ihr Browser unterstützt das Video-Tag nicht.'));
-                    mainVideoElement.load();
-                    mainVideoElement.play().catch(error => console.error("Error attempting to play video:", error));
-                });
+            thumbnailWrapper.addEventListener('click', function() {
+                const newSrc = this.dataset.videoSrc;
+                mainVideoElement.innerHTML = ''; 
+                const newMainSourceElement = document.createElement('source');
+                newMainSourceElement.src = newSrc;
+                if (newSrc.endsWith('.mp4')) newMainSourceElement.type = 'video/mp4';
+                mainVideoElement.appendChild(newMainSourceElement);
+                mainVideoElement.appendChild(document.createTextNode('Ihr Browser unterstützt das Video-Tag nicht.'));
+                mainVideoElement.load();
+                mainVideoElement.play().catch(error => console.error("Error attempting to play video:", error));
             });
-        }, 150); // Kurze Verzögerung, damit Skeletons kurz sichtbar sind
+        });
 
     } else {
         mainVideoPlayerWrapper.style.display = 'none';
         thumbnailGridContainer.style.display = 'none';
         noVideosMessageP.style.display = '';
     }
-    // --- ENDE ANGEPASSTER VIDEOBEREICH ---
+    // --- ENDE VIDEOBEREICH ---
 
 
     sidebarWrapper.appendChild(sidebarControls);
@@ -399,17 +388,16 @@
     }
   }
 
+  // Die createVideoSkeletonElement Funktion wird nicht mehr für Thumbnails benötigt,
+  // kann aber für andere Zwecke beibehalten oder entfernt werden.
   if (!window.WEBFLOW_API.ui.createVideoSkeletonElement) {
     window.WEBFLOW_API.ui.createVideoSkeletonElement = function () {
       const skeletonWrapper = document.createElement('div');
-      // Diese Funktion sollte idealerweise ein Element zurückgeben, das als Thumbnail-Skeleton gestylt werden kann.
-      // Für dieses Beispiel fügen wir eine Basisklasse hinzu, die Sie stylen können.
       skeletonWrapper.classList.add('video-skeleton-placeholder'); 
-      // Beispielhafter Inhalt für ein Skeleton
-      skeletonWrapper.style.width = '100px'; // Passen Sie dies an Ihr Thumbnail-Design an
-      skeletonWrapper.style.height = '70px'; // Passen Sie dies an Ihr Thumbnail-Design an
+      skeletonWrapper.style.width = '100px'; 
+      skeletonWrapper.style.height = '70px'; 
       skeletonWrapper.style.backgroundColor = '#e0e0e0';
-      skeletonWrapper.style.margin = '5px'; // Beispielabstand
+      skeletonWrapper.style.margin = '5px'; 
       return skeletonWrapper;
     };
   }

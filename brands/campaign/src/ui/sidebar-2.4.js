@@ -106,11 +106,9 @@
     nameSpan.textContent = applicantFieldData.name || 'Unbekannter Creator';
     creatorInfoDiv.appendChild(nameSpan);
 
-    // Creator Typ und Kategorie mit Mappings auflösen
-    const creatorTypeId = applicantFieldData['creator-type']; // ID des Creator-Typs aus den Daten
-    const creatorKategorieId = applicantFieldData['creator-kategorie']; // ID der Kategorie aus den Daten
+    const creatorTypeId = applicantFieldData['creator-type'];
+    const creatorKategorieId = applicantFieldData['creator-kategorie'];
 
-    // Versuche, die Namen aus MAPPINGS zu bekommen, falle zurück auf ID oder "N/A"
     const creatorTypeName = (MAPPINGS.creatorTypes && MAPPINGS.creatorTypes[creatorTypeId]) ? MAPPINGS.creatorTypes[creatorTypeId] : (creatorTypeId || 'N/A');
     const creatorKategorieName = (MAPPINGS.creatorKategorien && MAPPINGS.creatorKategorien[creatorKategorieId]) ? MAPPINGS.creatorKategorien[creatorKategorieId] : (creatorKategorieId || 'N/A');
     
@@ -184,31 +182,44 @@
       return;
     }
 
+    // NEU: Wrapper für "Über Mich" und Beschreibung
+    const creatorDetailsDiv = document.createElement('div');
+    creatorDetailsDiv.classList.add('db-modal-creator-details');
+
     const ueberMichHeadlineDiv = document.createElement('div'); 
     ueberMichHeadlineDiv.classList.add('is-txt-16', 'is-txt-medium', 'text-color-dark'); 
     ueberMichHeadlineDiv.textContent = `Über ${applicantFieldData.name || 'den Creator'}`;
-    contentArea.appendChild(ueberMichHeadlineDiv);
+    creatorDetailsDiv.appendChild(ueberMichHeadlineDiv); // Hinzufügen zum neuen Wrapper
 
     const beschreibungText = applicantFieldData['beschreibung'] || "Keine Beschreibung vorhanden."; 
     const beschreibungPara = document.createElement('p');
     beschreibungPara.textContent = beschreibungText;
-    beschreibungPara.classList.add('is-profile-txt'); 
-    contentArea.appendChild(beschreibungPara);
+    beschreibungPara.classList.add('db-profile-user-bio'); // Klasse geändert
+    creatorDetailsDiv.appendChild(beschreibungPara); // Hinzufügen zum neuen Wrapper
+
+    contentArea.appendChild(creatorDetailsDiv); // Den gesamten Details-Wrapper zum contentArea hinzufügen
 
 
     const socialMediaWrapper = document.createElement('div');
-    socialMediaWrapper.classList.add('social-media-wrapper');
+    socialMediaWrapper.classList.add('social-media-wrapper'); // Klasse bleibt gleich
 
     const socialPlatforms = [
-        { name: 'Instagram', followers: applicantFieldData['instagram-followers'] || 'N/A', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e8d979b71d2a7e5db3_Instagram.svg', link: applicantFieldData['instagram-link'] },
-        { name: 'TikTok', followers: applicantFieldData['tiktok-followers'] || 'N/A', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e99dce86c2b6ba83fe_Tiktok.svg', link: applicantFieldData['tiktok-link'] },
-        { name: 'YouTube', followers: applicantFieldData['youtube-followers'] || 'N/A', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e9b00d0480ffe289dc_YouTube.svg', link: applicantFieldData['youtube-link'] }
+        { name: 'Instagram', id: 'instagram', followersKey: 'instagram-followers', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e8d979b71d2a7e5db3_Instagram.svg', linkKey: 'instagram-link' },
+        { name: 'TikTok', id: 'tiktok', followersKey: 'tiktok-followers', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e99dce86c2b6ba83fe_Tiktok.svg', linkKey: 'tiktok-link' },
+        { name: 'YouTube', id: 'youtube', followersKey: 'youtube-followers', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e9b00d0480ffe289dc_YouTube.svg', linkKey: 'youtube-link' }
     ];
+    
+    let hasSocialContent = false; // Flag, um zu prüfen, ob überhaupt Social Media Inhalt vorhanden ist
 
     socialPlatforms.forEach(platform => {
-        if (platform.link || platform.followers !== 'N/A') {
+        const followers = applicantFieldData[platform.followersKey] || 'N/A';
+        const link = applicantFieldData[platform.linkKey];
+
+        // Nur anzeigen, wenn ein Link vorhanden ist ODER Follower-Daten (nicht nur 'N/A')
+        if (link || (followers && followers !== 'N/A')) {
+            hasSocialContent = true; // Es gibt Inhalt zum Anzeigen
             const platformDiv = document.createElement('div');
-            platformDiv.classList.add('social-platform');
+            platformDiv.classList.add('social-platform', `social-platform-${platform.id}`);
 
             const platformIcon = document.createElement('img');
             platformIcon.src = platform.icon;
@@ -216,24 +227,31 @@
             platformIcon.classList.add('social-icon');
             platformDiv.appendChild(platformIcon);
 
-            const followersSpan = document.createElement('span');
-            followersSpan.textContent = platform.followers;
-            followersSpan.classList.add('social-followers');
-            platformDiv.appendChild(followersSpan);
+            // Follower nur anzeigen, wenn sie nicht 'N/A' sind
+            if (followers && followers !== 'N/A') {
+                const followersSpan = document.createElement('span');
+                followersSpan.textContent = followers;
+                followersSpan.classList.add('social-followers');
+                platformDiv.appendChild(followersSpan);
+            }
 
-            if (platform.link) {
+            if (link) {
                 const platformLink = document.createElement('a');
-                platformLink.href = window.WEBFLOW_API.utils.normalizeUrl(platform.link);
+                platformLink.href = window.WEBFLOW_API.utils.normalizeUrl(link);
                 platformLink.target = '_blank';
                 platformLink.rel = 'noopener noreferrer';
                 platformLink.appendChild(platformDiv);
                 socialMediaWrapper.appendChild(platformLink);
             } else {
-                socialMediaWrapper.appendChild(platformDiv);
+                socialMediaWrapper.appendChild(platformDiv); // Ohne Link, nur Icon und ggf. Follower
             }
         }
     });
-    contentArea.appendChild(socialMediaWrapper);
+    
+    // Den socialMediaWrapper nur hinzufügen, wenn er Inhalt hat
+    if (hasSocialContent) {
+        contentArea.appendChild(socialMediaWrapper);
+    }
 
 
     const videoGridContainer = document.createElement('div');

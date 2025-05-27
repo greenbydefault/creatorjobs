@@ -106,12 +106,11 @@
       imgWrapperDiv.appendChild(profileImg);
     }
 
-    // Angepasste Struktur für Creator-Name und Kategorie
     const creatorInfoFlexDiv = document.createElement('div');
-    creatorInfoFlexDiv.classList.add('is-flexbox-vertical'); // Parent-Div mit Flexbox-Klasse
+    creatorInfoFlexDiv.classList.add('is-flexbox-vertical'); 
 
     const nameSpan = document.createElement('span');
-    nameSpan.classList.add('db-modal-headline'); // Name erhält diese Klasse
+    nameSpan.classList.add('db-modal-headline'); 
     nameSpan.textContent = applicantFieldData.name || 'Unbekannter Creator';
     creatorInfoFlexDiv.appendChild(nameSpan);
 
@@ -129,26 +128,28 @@
     console.log("Resolved Creator Type Name:", creatorTypeName);
     console.log("Resolved Creator Kategorie Name:", creatorKategorieName); 
 
-    // Creator-Typ (kann entfernt werden, wenn nur Kategorie unter dem Namen stehen soll)
-    // const typeP = document.createElement('p');
-    // typeP.classList.add('is-txt-16'); 
-    // typeP.textContent = creatorTypeName;
-    // creatorInfoFlexDiv.appendChild(typeP);
+    let typeAndCategoryText = '';
+    if (creatorTypeName !== 'N/A' && creatorKategorieName !== 'N/A' && creatorTypeName !== creatorKategorieName) {
+        typeAndCategoryText = `${creatorTypeName} - ${creatorKategorieName}`;
+    } else if (creatorTypeName !== 'N/A') {
+        typeAndCategoryText = creatorTypeName;
+    } else if (creatorKategorieName !== 'N/A') {
+        typeAndCategoryText = creatorKategorieName;
+    }
 
-    // Kategorie als eigener Textblock, wenn vorhanden
-    if (creatorKategorieName !== 'N/A' || creatorKategorieId) { 
+    if (typeAndCategoryText) { 
         const kategorieP = document.createElement('p');
         kategorieP.classList.add('is-txt-16');
-        kategorieP.textContent = `${creatorTypeName} - ${creatorKategorieName}`; // Zeigt Typ - Kategorie
+        kategorieP.textContent = typeAndCategoryText;
         creatorInfoFlexDiv.appendChild(kategorieP);
     }
 
-    imgWrapperDiv.appendChild(creatorInfoFlexDiv); // Das neue Flex-Div wird dem imgWrapper hinzugefügt
+    imgWrapperDiv.appendChild(creatorInfoFlexDiv); 
     creatorHeadlineOverallDiv.appendChild(imgWrapperDiv);
 
     const zusagenButton = document.createElement('button');
     zusagenButton.classList.add('db-button-medium-gradient-pink', 'size-auto');
-    zusagenButton.textContent = 'Zusagen'; // "+" entfernt
+    zusagenButton.textContent = 'Zusagen'; 
     creatorHeadlineOverallDiv.appendChild(zusagenButton);
 
     sidebarWrapper.appendChild(creatorHeadlineOverallDiv);
@@ -174,11 +175,6 @@
     nextButton.title = "Nächster Creator";
     navButtonsWrapper.appendChild(nextButton);
 
-    // Hilfe-Button entfernt
-    // const helpButton = document.createElement('div');
-    // helpButton.classList.add('db-modal-help');
-    // helpButton.textContent = 'Hilfe';
-    // sidebarControls.appendChild(helpButton); 
     sidebarControls.appendChild(navButtonsWrapper);
 
     prevButton.addEventListener('click', () => {
@@ -229,22 +225,22 @@
     const socialMediaWrapper = document.createElement('div');
     socialMediaWrapper.classList.add('social-media-wrapper'); 
 
+    // Korrigierte Schlüssel für Follower und Links
     const socialPlatforms = [
-        { name: 'Instagram', id: 'instagram', followersKey: 'instagram-followers', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e8d979b71d2a7e5db3_Instagram.svg', linkKey: 'instagram-link' },
-        { name: 'TikTok', id: 'tiktok', followersKey: 'tiktok-followers', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e99dce86c2b6ba83fe_Tiktok.svg', linkKey: 'tiktok-link' },
-        { name: 'YouTube', id: 'youtube', followersKey: 'youtube-followers', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e9b00d0480ffe289dc_YouTube.svg', linkKey: 'youtube-link' }
+        { name: 'Instagram', id: 'instagram', followersKey: 'creator-follower-instagram', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e8d979b71d2a7e5db3_Instagram.svg', linkKey: 'instagram' },
+        { name: 'TikTok', id: 'tiktok', followersKey: 'creator-follower-tiktok', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e99dce86c2b6ba83fe_Tiktok.svg', linkKey: 'tiktok' },
+        { name: 'YouTube', id: 'youtube', followersKey: 'creator-follower-youtube', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e9b00d0480ffe289dc_YouTube.svg', linkKey: 'youtube' }
     ];
     
     let hasSocialContent = false; 
     console.log("Checking social media data for applicant:", applicantFieldData.name);
 
     socialPlatforms.forEach(platform => {
-        const followers = applicantFieldData[platform.followersKey]; // Direkt Wert holen, Fallback später
+        const followers = applicantFieldData[platform.followersKey]; 
         const link = applicantFieldData[platform.linkKey];
 
-        console.log(`Platform: ${platform.name}, Followers data: ${followers}, Link data: ${link}`);
+        console.log(`Platform: ${platform.name}, Followers data from key '${platform.followersKey}': ${followers}, Link data from key '${platform.linkKey}': ${link}`);
 
-        // Nur anzeigen, wenn ein Link vorhanden ist ODER Follower-Daten (nicht nur 'N/A' oder leer)
         if (link || (followers && followers !== 'N/A' && String(followers).trim() !== '')) {
             hasSocialContent = true; 
             const platformDiv = document.createElement('div');
@@ -256,20 +252,19 @@
             platformIcon.classList.add('social-icon');
             platformDiv.appendChild(platformIcon);
 
-            // Follower nur anzeigen, wenn sie vorhanden und nicht 'N/A' sind
             if (followers && followers !== 'N/A' && String(followers).trim() !== '') {
                 const followersSpan = document.createElement('span');
-                followersSpan.textContent = followers; // Zeige den Wert direkt an
+                followersSpan.textContent = followers; 
                 followersSpan.classList.add('social-followers');
                 platformDiv.appendChild(followersSpan);
             }
 
             if (link) {
-                const platformLinkElement = document.createElement('a'); // Umbenannt, um Verwechslung mit 'link' Variable zu vermeiden
+                const platformLinkElement = document.createElement('a'); 
                 platformLinkElement.href = window.WEBFLOW_API.utils.normalizeUrl(link);
                 platformLinkElement.target = '_blank';
                 platformLinkElement.rel = 'noopener noreferrer';
-                platformLinkElement.appendChild(platformDiv); // Das platformDiv (mit Icon und Followern) wird zum Link
+                platformLinkElement.appendChild(platformDiv); 
                 socialMediaWrapper.appendChild(platformLinkElement);
             } else {
                 socialMediaWrapper.appendChild(platformDiv); 
@@ -388,8 +383,6 @@
     }
   }
 
-  // Die createVideoSkeletonElement Funktion wird nicht mehr für Thumbnails benötigt,
-  // kann aber für andere Zwecke beibehalten oder entfernt werden.
   if (!window.WEBFLOW_API.ui.createVideoSkeletonElement) {
     window.WEBFLOW_API.ui.createVideoSkeletonElement = function () {
       const skeletonWrapper = document.createElement('div');

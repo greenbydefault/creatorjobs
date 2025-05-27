@@ -69,8 +69,10 @@
     console.log("showCreatorSidebar called. MAPPINGS:", JSON.parse(JSON.stringify(window.WEBFLOW_API.MAPPINGS || {})));
     
     const MAPPINGS = window.WEBFLOW_API.MAPPINGS || {};
-    const creatorTypesMapping = MAPPINGS.creatorTypes || {};
-    const creatorKategorienMapping = MAPPINGS.creatorKategorien || {};
+    // Korrigierte Schreibweise basierend auf dem Log: MAPPINGS.creatorTypen
+    const creatorTypesMapping = MAPPINGS.creatorTypen || {}; 
+    // Annahme für creatorKategorien, bitte prüfen, ob der Schlüssel in MAPPINGS korrekt ist
+    const creatorKategorienMapping = MAPPINGS.creatorKategorien || {}; 
 
     currentSidebarJobId = jobId;
     currentSidebarApplicants = allJobApplicants;
@@ -117,16 +119,16 @@
     const creatorKategorieId = applicantFieldData['creator-kategorie']; 
     
     console.log("Creator Type ID from data:", creatorTypeId);
-    console.log("Creator Kategorie ID from data:", creatorKategorieId);
-    console.log("Available Creator Types in MAPPINGS:", JSON.parse(JSON.stringify(creatorTypesMapping)));
-    console.log("Available Creator Kategorien in MAPPINGS:", JSON.parse(JSON.stringify(creatorKategorienMapping)));
+    console.log("Creator Kategorie ID from data:", creatorKategorieId); // Wird 'undefined' sein für diesen User
+    console.log("Available Creator Types in MAPPINGS (using MAPPINGS.creatorTypen):", JSON.parse(JSON.stringify(creatorTypesMapping)));
+    console.log("Available Creator Kategorien in MAPPINGS (using MAPPINGS.creatorKategorien):", JSON.parse(JSON.stringify(creatorKategorienMapping)));
 
 
     const creatorTypeName = creatorTypesMapping[creatorTypeId] || creatorTypeId || 'N/A';
     const creatorKategorieName = creatorKategorienMapping[creatorKategorieId] || creatorKategorieId || 'N/A';
     
     console.log("Resolved Creator Type Name:", creatorTypeName);
-    console.log("Resolved Creator Kategorie Name:", creatorKategorieName);
+    console.log("Resolved Creator Kategorie Name:", creatorKategorieName); // Sollte 'N/A' sein, wenn ID undefined
 
     const typeCategoryP = document.createElement('p');
     typeCategoryP.classList.add('is-txt-16');

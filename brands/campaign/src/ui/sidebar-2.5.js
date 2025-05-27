@@ -66,12 +66,21 @@
 
 
   function showCreatorSidebar(applicantItem, allJobApplicants, applicantIndex, jobId) {
-    const MAPPINGS = window.WEBFLOW_API.MAPPINGS || { creatorTypes: {}, creatorKategorien: {} }; // Stellen Sie sicher, dass MAPPINGS und benötigte Unterobjekte existieren
+    // Diagnostic log for MAPPINGS availability
+    // console.log("MAPPINGS at start of showCreatorSidebar:", JSON.parse(JSON.stringify(window.WEBFLOW_API.MAPPINGS || {})));
+    
+    const MAPPINGS = window.WEBFLOW_API.MAPPINGS || {};
+    const creatorTypesMapping = MAPPINGS.creatorTypes || {};
+    const creatorKategorienMapping = MAPPINGS.creatorKategorien || {};
 
     currentSidebarJobId = jobId;
     currentSidebarApplicants = allJobApplicants;
     currentSidebarIndex = applicantIndex;
     const applicantFieldData = applicantItem.fieldData;
+
+    // Diagnostic log for applicantFieldData
+    // console.log("Applicant Field Data:", JSON.parse(JSON.stringify(applicantFieldData || {})));
+
 
     let sidebarWrapper = document.getElementById('db-modal-creator-wrapper-dynamic');
     if (!sidebarWrapper) {
@@ -106,12 +115,23 @@
     nameSpan.textContent = applicantFieldData.name || 'Unbekannter Creator';
     creatorInfoDiv.appendChild(nameSpan);
 
-    const creatorTypeId = applicantFieldData['creator-type'];
-    const creatorKategorieId = applicantFieldData['creator-kategorie'];
-
-    const creatorTypeName = (MAPPINGS.creatorTypes && MAPPINGS.creatorTypes[creatorTypeId]) ? MAPPINGS.creatorTypes[creatorTypeId] : (creatorTypeId || 'N/A');
-    const creatorKategorieName = (MAPPINGS.creatorKategorien && MAPPINGS.creatorKategorien[creatorKategorieId]) ? MAPPINGS.creatorKategorien[creatorKategorieId] : (creatorKategorieId || 'N/A');
+    const creatorTypeId = applicantFieldData['creator-type']; // ID des Creator-Typs aus den Daten
+    const creatorKategorieId = applicantFieldData['creator-kategorie']; // ID der Kategorie aus den Daten
     
+    // Diagnostic logs for IDs
+    // console.log("Creator Type ID from data:", creatorTypeId);
+    // console.log("Creator Kategorie ID from data:", creatorKategorieId);
+    // console.log("Available Creator Types in MAPPINGS:", JSON.parse(JSON.stringify(creatorTypesMapping)));
+    // console.log("Available Creator Kategorien in MAPPINGS:", JSON.parse(JSON.stringify(creatorKategorienMapping)));
+
+
+    const creatorTypeName = creatorTypesMapping[creatorTypeId] || creatorTypeId || 'N/A';
+    const creatorKategorieName = creatorKategorienMapping[creatorKategorieId] || creatorKategorieId || 'N/A';
+    
+    // Diagnostic logs for resolved names
+    // console.log("Resolved Creator Type Name:", creatorTypeName);
+    // console.log("Resolved Creator Kategorie Name:", creatorKategorieName);
+
     const typeCategoryP = document.createElement('p');
     typeCategoryP.classList.add('is-txt-16');
     typeCategoryP.textContent = `${creatorTypeName} - ${creatorKategorieName}`;
@@ -182,26 +202,25 @@
       return;
     }
 
-    // NEU: Wrapper für "Über Mich" und Beschreibung
     const creatorDetailsDiv = document.createElement('div');
     creatorDetailsDiv.classList.add('db-modal-creator-details');
 
     const ueberMichHeadlineDiv = document.createElement('div'); 
     ueberMichHeadlineDiv.classList.add('is-txt-16', 'is-txt-medium', 'text-color-dark'); 
     ueberMichHeadlineDiv.textContent = `Über ${applicantFieldData.name || 'den Creator'}`;
-    creatorDetailsDiv.appendChild(ueberMichHeadlineDiv); // Hinzufügen zum neuen Wrapper
+    creatorDetailsDiv.appendChild(ueberMichHeadlineDiv); 
 
     const beschreibungText = applicantFieldData['beschreibung'] || "Keine Beschreibung vorhanden."; 
     const beschreibungPara = document.createElement('p');
     beschreibungPara.textContent = beschreibungText;
-    beschreibungPara.classList.add('db-profile-user-bio'); // Klasse geändert
-    creatorDetailsDiv.appendChild(beschreibungPara); // Hinzufügen zum neuen Wrapper
+    beschreibungPara.classList.add('db-profile-user-bio'); 
+    creatorDetailsDiv.appendChild(beschreibungPara); 
 
-    contentArea.appendChild(creatorDetailsDiv); // Den gesamten Details-Wrapper zum contentArea hinzufügen
+    contentArea.appendChild(creatorDetailsDiv); 
 
 
     const socialMediaWrapper = document.createElement('div');
-    socialMediaWrapper.classList.add('social-media-wrapper'); // Klasse bleibt gleich
+    socialMediaWrapper.classList.add('social-media-wrapper'); 
 
     const socialPlatforms = [
         { name: 'Instagram', id: 'instagram', followersKey: 'instagram-followers', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e8d979b71d2a7e5db3_Instagram.svg', linkKey: 'instagram-link' },
@@ -209,15 +228,14 @@
         { name: 'YouTube', id: 'youtube', followersKey: 'youtube-followers', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e9b00d0480ffe289dc_YouTube.svg', linkKey: 'youtube-link' }
     ];
     
-    let hasSocialContent = false; // Flag, um zu prüfen, ob überhaupt Social Media Inhalt vorhanden ist
+    let hasSocialContent = false; 
 
     socialPlatforms.forEach(platform => {
         const followers = applicantFieldData[platform.followersKey] || 'N/A';
         const link = applicantFieldData[platform.linkKey];
 
-        // Nur anzeigen, wenn ein Link vorhanden ist ODER Follower-Daten (nicht nur 'N/A')
         if (link || (followers && followers !== 'N/A')) {
-            hasSocialContent = true; // Es gibt Inhalt zum Anzeigen
+            hasSocialContent = true; 
             const platformDiv = document.createElement('div');
             platformDiv.classList.add('social-platform', `social-platform-${platform.id}`);
 
@@ -227,7 +245,6 @@
             platformIcon.classList.add('social-icon');
             platformDiv.appendChild(platformIcon);
 
-            // Follower nur anzeigen, wenn sie nicht 'N/A' sind
             if (followers && followers !== 'N/A') {
                 const followersSpan = document.createElement('span');
                 followersSpan.textContent = followers;
@@ -243,12 +260,11 @@
                 platformLink.appendChild(platformDiv);
                 socialMediaWrapper.appendChild(platformLink);
             } else {
-                socialMediaWrapper.appendChild(platformDiv); // Ohne Link, nur Icon und ggf. Follower
+                socialMediaWrapper.appendChild(platformDiv); 
             }
         }
     });
     
-    // Den socialMediaWrapper nur hinzufügen, wenn er Inhalt hat
     if (hasSocialContent) {
         contentArea.appendChild(socialMediaWrapper);
     }

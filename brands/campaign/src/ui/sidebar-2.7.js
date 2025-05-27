@@ -66,8 +66,7 @@
 
 
   function showCreatorSidebar(applicantItem, allJobApplicants, applicantIndex, jobId) {
-    // Diagnostic log for MAPPINGS availability
-    // console.log("MAPPINGS at start of showCreatorSidebar:", JSON.parse(JSON.stringify(window.WEBFLOW_API.MAPPINGS || {})));
+    console.log("showCreatorSidebar called. MAPPINGS:", JSON.parse(JSON.stringify(window.WEBFLOW_API.MAPPINGS || {})));
     
     const MAPPINGS = window.WEBFLOW_API.MAPPINGS || {};
     const creatorTypesMapping = MAPPINGS.creatorTypes || {};
@@ -78,8 +77,7 @@
     currentSidebarIndex = applicantIndex;
     const applicantFieldData = applicantItem.fieldData;
 
-    // Diagnostic log for applicantFieldData
-    // console.log("Applicant Field Data:", JSON.parse(JSON.stringify(applicantFieldData || {})));
+    console.log("Applicant Field Data:", JSON.parse(JSON.stringify(applicantFieldData || {})));
 
 
     let sidebarWrapper = document.getElementById('db-modal-creator-wrapper-dynamic');
@@ -115,22 +113,20 @@
     nameSpan.textContent = applicantFieldData.name || 'Unbekannter Creator';
     creatorInfoDiv.appendChild(nameSpan);
 
-    const creatorTypeId = applicantFieldData['creator-type']; // ID des Creator-Typs aus den Daten
-    const creatorKategorieId = applicantFieldData['creator-kategorie']; // ID der Kategorie aus den Daten
+    const creatorTypeId = applicantFieldData['creator-type']; 
+    const creatorKategorieId = applicantFieldData['creator-kategorie']; 
     
-    // Diagnostic logs for IDs
-    // console.log("Creator Type ID from data:", creatorTypeId);
-    // console.log("Creator Kategorie ID from data:", creatorKategorieId);
-    // console.log("Available Creator Types in MAPPINGS:", JSON.parse(JSON.stringify(creatorTypesMapping)));
-    // console.log("Available Creator Kategorien in MAPPINGS:", JSON.parse(JSON.stringify(creatorKategorienMapping)));
+    console.log("Creator Type ID from data:", creatorTypeId);
+    console.log("Creator Kategorie ID from data:", creatorKategorieId);
+    console.log("Available Creator Types in MAPPINGS:", JSON.parse(JSON.stringify(creatorTypesMapping)));
+    console.log("Available Creator Kategorien in MAPPINGS:", JSON.parse(JSON.stringify(creatorKategorienMapping)));
 
 
     const creatorTypeName = creatorTypesMapping[creatorTypeId] || creatorTypeId || 'N/A';
     const creatorKategorieName = creatorKategorienMapping[creatorKategorieId] || creatorKategorieId || 'N/A';
     
-    // Diagnostic logs for resolved names
-    // console.log("Resolved Creator Type Name:", creatorTypeName);
-    // console.log("Resolved Creator Kategorie Name:", creatorKategorieName);
+    console.log("Resolved Creator Type Name:", creatorTypeName);
+    console.log("Resolved Creator Kategorie Name:", creatorKategorieName);
 
     const typeCategoryP = document.createElement('p');
     typeCategoryP.classList.add('is-txt-16');

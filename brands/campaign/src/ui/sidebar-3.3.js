@@ -151,11 +151,11 @@
     console.log("Resolved Creator Kategorie Name:", creatorKategorieName); 
 
     let typeAndCategoryText = '';
-    if (creatorTypeName !== 'N/A' && creatorKategorieName !== 'N/A' && creatorTypeName !== creatorKategorieName) { // Nur anzeigen, wenn beide unterschiedlich und nicht N/A
+    if (creatorTypeName !== 'N/A' && creatorKategorieName !== 'N/A' && creatorTypeName !== creatorKategorieName) { 
         typeAndCategoryText = `${creatorTypeName} - ${creatorKategorieName}`;
     } else if (creatorTypeName !== 'N/A') {
         typeAndCategoryText = creatorTypeName;
-    } else if (creatorKategorieName !== 'N/A') { // Fallback, falls nur Kategorie da ist (sollte durch obige Logik eigentlich abgedeckt sein)
+    } else if (creatorKategorieName !== 'N/A') { 
         typeAndCategoryText = creatorKategorieName;
     }
 
@@ -170,16 +170,89 @@
     imgWrapperDiv.appendChild(creatorInfoFlexDiv); 
     creatorHeadlineOverallDiv.appendChild(imgWrapperDiv);
 
+    // Social Media Outer Wrapper wird HIER erstellt und später dem creatorHeadlineOverallDiv hinzugefügt
+    const socialMediaOuterWrapper = document.createElement('div'); 
+    socialMediaOuterWrapper.classList.add('db-profile-social');  
+
+    // Zusagen Button wird HIER erstellt und später den sidebarControls hinzugefügt
     const zusagenButton = document.createElement('button');
     zusagenButton.classList.add('db-button-medium-gradient-pink', 'size-auto');
     zusagenButton.textContent = 'Zusagen'; 
-    creatorHeadlineOverallDiv.appendChild(zusagenButton);
+    
+    // Social Media Inhalt erstellen (Logik bleibt gleich)
+    const socialPlatforms = [
+        { name: 'Instagram', id: 'instagram', followersKey: 'creator-follower-instagram', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e8d979b71d2a7e5db3_Instagram.svg', linkKey: 'instagram' },
+        { name: 'TikTok', id: 'tiktok', followersKey: 'creator-follower-tiktok', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e99dce86c2b6ba83fe_Tiktok.svg', linkKey: 'tiktok' },
+        { name: 'YouTube', id: 'youtube', followersKey: 'creator-follower-youtube', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e9b00d0480ffe289dc_YouTube.svg', linkKey: 'youtube' }
+    ];
+    
+    let hasSocialContent = false; 
+    console.log("Checking social media data for applicant:", applicantFieldData.name);
 
-    sidebarWrapper.appendChild(creatorHeadlineOverallDiv);
+    socialPlatforms.forEach(platform => {
+        const followersRaw = applicantFieldData[platform.followersKey]; 
+        const link = applicantFieldData[platform.linkKey];
+
+        console.log(`Platform: ${platform.name}, Followers data from key '${platform.followersKey}': ${followersRaw}, Link data from key '${platform.linkKey}': ${link}`);
+        
+        const followersFormatted = formatFollowerCount(followersRaw);
+
+        if (link || (followersRaw && followersFormatted !== 'N/A' && String(followersRaw).trim() !== '')) {
+            hasSocialContent = true; 
+            
+            let platformElement; 
+            const innerPlatformDiv = document.createElement('div'); 
+            innerPlatformDiv.classList.add('social-platform-item-content'); 
+
+            const iconWrapper = document.createElement('div');
+            iconWrapper.classList.add('db-card-icon-wrapper', 'round');
+            
+            const platformIcon = document.createElement('img');
+            platformIcon.src = platform.icon;
+            platformIcon.alt = platform.name;
+            platformIcon.classList.add('db-icon-24'); 
+            iconWrapper.appendChild(platformIcon);
+            innerPlatformDiv.appendChild(iconWrapper);
+
+            if (followersRaw && followersFormatted !== 'N/A' && String(followersRaw).trim() !== '') {
+                const followersSpan = document.createElement('span');
+                followersSpan.textContent = followersFormatted; 
+                followersSpan.classList.add('is-txt-16', 'is-txt-medium', 'social-followers'); 
+                innerPlatformDiv.appendChild(followersSpan);
+            }
+
+            if (link) {
+                platformElement = document.createElement('a'); 
+                platformElement.href = window.WEBFLOW_API.utils.normalizeUrl(link);
+                platformElement.target = '_blank';
+                platformElement.rel = 'noopener noreferrer';
+                platformElement.appendChild(innerPlatformDiv); 
+            } else {
+                platformElement = innerPlatformDiv; 
+            }
+            platformElement.classList.add('social-platform-item', `social-platform-${platform.id}`); 
+            socialMediaOuterWrapper.appendChild(platformElement);
+
+        } else {
+            console.log(`Skipping ${platform.name} due to no link and no valid followers.`);
+        }
+    });
+    
+    if (hasSocialContent) {
+        console.log("Social media content found, appending db-profile-social wrapper to creatorHeadlineOverallDiv.");
+        creatorHeadlineOverallDiv.appendChild(socialMediaOuterWrapper); // Social Media jetzt hier
+    } else {
+        console.log("No social media content to display for this applicant.");
+    }
+    
+    sidebarWrapper.appendChild(creatorHeadlineOverallDiv); // Haupt-Header zur Sidebar
 
 
     const sidebarControls = document.createElement('div');
     sidebarControls.classList.add('db-modal-creator-controls');
+
+    // Zusagen-Button ZUERST zu den Controls hinzufügen
+    sidebarControls.appendChild(zusagenButton);
 
     const navButtonsWrapper = document.createElement('div');
     navButtonsWrapper.classList.add('db-modal-control-buttons');
@@ -198,7 +271,7 @@
     nextButton.title = "Nächster Creator";
     navButtonsWrapper.appendChild(nextButton);
 
-    sidebarControls.appendChild(navButtonsWrapper);
+    sidebarControls.appendChild(navButtonsWrapper); // Dann die Navigationsbuttons
 
     prevButton.addEventListener('click', () => {
       if (currentSidebarIndex > 0) {
@@ -216,7 +289,7 @@
     const contentArea = document.createElement('div');
     contentArea.classList.add('db-modal-creator-content');
     contentArea.id = 'sidebar-creator-content-dynamic';
-    sidebarWrapper.appendChild(contentArea);
+    sidebarWrapper.appendChild(contentArea); // Content-Bereich NACH dem Header
 
     if (!applicantFieldData) {
       contentArea.textContent = 'Creator-Daten nicht verfügbar.';
@@ -244,77 +317,7 @@
 
     contentArea.appendChild(creatorDetailsDiv); 
 
-
-    const socialMediaOuterWrapper = document.createElement('div'); // Neuer äußerer Wrapper
-    socialMediaOuterWrapper.classList.add('db-profile-social');  // Klasse für den äußeren Wrapper
-
-    const socialPlatforms = [
-        { name: 'Instagram', id: 'instagram', followersKey: 'creator-follower-instagram', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e8d979b71d2a7e5db3_Instagram.svg', linkKey: 'instagram' },
-        { name: 'TikTok', id: 'tiktok', followersKey: 'creator-follower-tiktok', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e99dce86c2b6ba83fe_Tiktok.svg', linkKey: 'tiktok' },
-        { name: 'YouTube', id: 'youtube', followersKey: 'creator-follower-youtube', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e9b00d0480ffe289dc_YouTube.svg', linkKey: 'youtube' }
-    ];
-    
-    let hasSocialContent = false; 
-    console.log("Checking social media data for applicant:", applicantFieldData.name);
-
-    socialPlatforms.forEach(platform => {
-        const followersRaw = applicantFieldData[platform.followersKey]; 
-        const link = applicantFieldData[platform.linkKey];
-
-        console.log(`Platform: ${platform.name}, Followers data from key '${platform.followersKey}': ${followersRaw}, Link data from key '${platform.linkKey}': ${link}`);
-        
-        const followersFormatted = formatFollowerCount(followersRaw);
-
-        // Nur anzeigen, wenn ein Link vorhanden ist ODER formatierte Follower-Daten (nicht nur 'N/A' oder leer)
-        if (link || (followersRaw && followersFormatted !== 'N/A' && String(followersRaw).trim() !== '')) {
-            hasSocialContent = true; 
-            
-            // platformDiv ist jetzt das Element, das entweder ein Link oder ein einfaches Div ist
-            let platformElement; 
-            const innerPlatformDiv = document.createElement('div'); // Dieses Div enthält Icon und Follower
-            innerPlatformDiv.classList.add('social-platform-item-content'); // Eine neue Klasse für internes Styling, falls benötigt
-
-            const iconWrapper = document.createElement('div');
-            iconWrapper.classList.add('db-card-icon-wrapper', 'round');
-            
-            const platformIcon = document.createElement('img');
-            platformIcon.src = platform.icon;
-            platformIcon.alt = platform.name;
-            platformIcon.classList.add('db-icon-24'); // Klasse für das Icon
-            iconWrapper.appendChild(platformIcon);
-            innerPlatformDiv.appendChild(iconWrapper);
-
-            if (followersRaw && followersFormatted !== 'N/A' && String(followersRaw).trim() !== '') {
-                const followersSpan = document.createElement('span');
-                followersSpan.textContent = followersFormatted; 
-                followersSpan.classList.add('is-txt-16', 'is-txt-medium', 'social-followers'); // Klassen für Follower
-                innerPlatformDiv.appendChild(followersSpan);
-            }
-
-            if (link) {
-                platformElement = document.createElement('a'); 
-                platformElement.href = window.WEBFLOW_API.utils.normalizeUrl(link);
-                platformElement.target = '_blank';
-                platformElement.rel = 'noopener noreferrer';
-                platformElement.appendChild(innerPlatformDiv); 
-            } else {
-                platformElement = innerPlatformDiv; 
-            }
-            // Füge Klassen hinzu, die für das Layout im Grid/Flex von db-profile-social wichtig sind
-            platformElement.classList.add('social-platform-item', `social-platform-${platform.id}`); 
-            socialMediaOuterWrapper.appendChild(platformElement);
-
-        } else {
-            console.log(`Skipping ${platform.name} due to no link and no valid followers.`);
-        }
-    });
-    
-    if (hasSocialContent) {
-        console.log("Social media content found, appending db-profile-social wrapper.");
-        contentArea.appendChild(socialMediaOuterWrapper); // Den äußeren Wrapper hinzufügen
-    } else {
-        console.log("No social media content to display for this applicant.");
-    }
+    // Social Media Logik ist jetzt oben, vor dem Hinzufügen von creatorHeadlineOverallDiv zur Sidebar
 
     // --- VIDEOBEREICH OHNE THUMBNAIL SKELETONS ---
     const mainVideoPlayerWrapper = document.createElement('div');
@@ -400,7 +403,7 @@
     // --- ENDE VIDEOBEREICH ---
 
 
-    sidebarWrapper.appendChild(sidebarControls);
+    sidebarWrapper.appendChild(sidebarControls); // Die Controls (mit Zusagen-Button) werden der Sidebar hinzugefügt
 
     const prevBtn = document.getElementById('sidebar-prev-applicant');
     const nextBtn = document.getElementById('sidebar-next-applicant');

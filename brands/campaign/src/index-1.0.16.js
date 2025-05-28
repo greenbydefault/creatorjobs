@@ -23,7 +23,7 @@ import './ui/skeleton.js';
 import './ui/applicantElements-1.5.js';
 import './ui/pagination.js';
 import './ui/jobElements-1.5.js';
-import './ui/sidebar-3.2.js';
+import './ui/sidebar-3.3.js';
 import './ui/notesSidebar.js';
 // Kernlogik, die UI-Elemente und Services verwendet
 // dataProcessing hier, da es ui.applicantElements (für Filter-Callback-Setup) und appLogic (für Reload) referenziert

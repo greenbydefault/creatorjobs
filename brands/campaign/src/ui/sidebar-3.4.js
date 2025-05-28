@@ -170,14 +170,19 @@
     imgWrapperDiv.appendChild(creatorInfoFlexDiv); 
     creatorHeadlineOverallDiv.appendChild(imgWrapperDiv);
 
-    // Social Media Outer Wrapper wird HIER erstellt und später dem creatorHeadlineOverallDiv hinzugefügt
     const socialMediaOuterWrapper = document.createElement('div'); 
     socialMediaOuterWrapper.classList.add('db-profile-social');  
 
-    // Zusagen Button wird HIER erstellt und später den sidebarControls hinzugefügt
-    const zusagenButton = document.createElement('button');
-    zusagenButton.classList.add('db-button-medium-gradient-pink', 'size-auto');
-    zusagenButton.textContent = 'Zusagen'; 
+    // Angepasster "Zusagen"-Button als Link-Block
+    const zusagenLink = document.createElement('a'); // Geändert zu <a>
+    zusagenLink.classList.add('db-button-medium-gradient-pink', 'size-auto');
+    zusagenLink.href = '#'; // Platzhalter für den Link, ggf. anpassen oder JavaScript-Aktion hinzufügen
+    // zusagenLink.addEventListener('click', (e) => { e.preventDefault(); /* Ihre Aktion hier */ });
+
+    const zusagenButtonText = document.createElement('span'); // Span für den Text
+    zusagenButtonText.classList.add('db-button-text', 'white');
+    zusagenButtonText.textContent = 'Zusagen';
+    zusagenLink.appendChild(zusagenButtonText);
     
     // Social Media Inhalt erstellen (Logik bleibt gleich)
     const socialPlatforms = [
@@ -240,19 +245,18 @@
     
     if (hasSocialContent) {
         console.log("Social media content found, appending db-profile-social wrapper to creatorHeadlineOverallDiv.");
-        creatorHeadlineOverallDiv.appendChild(socialMediaOuterWrapper); // Social Media jetzt hier
+        creatorHeadlineOverallDiv.appendChild(socialMediaOuterWrapper); 
     } else {
         console.log("No social media content to display for this applicant.");
     }
     
-    sidebarWrapper.appendChild(creatorHeadlineOverallDiv); // Haupt-Header zur Sidebar
+    sidebarWrapper.appendChild(creatorHeadlineOverallDiv); 
 
 
     const sidebarControls = document.createElement('div');
     sidebarControls.classList.add('db-modal-creator-controls');
 
-    // Zusagen-Button ZUERST zu den Controls hinzufügen
-    sidebarControls.appendChild(zusagenButton);
+    sidebarControls.appendChild(zusagenLink); // "Zusagen"-Link zu den Controls hinzufügen
 
     const navButtonsWrapper = document.createElement('div');
     navButtonsWrapper.classList.add('db-modal-control-buttons');
@@ -271,7 +275,7 @@
     nextButton.title = "Nächster Creator";
     navButtonsWrapper.appendChild(nextButton);
 
-    sidebarControls.appendChild(navButtonsWrapper); // Dann die Navigationsbuttons
+    sidebarControls.appendChild(navButtonsWrapper); 
 
     prevButton.addEventListener('click', () => {
       if (currentSidebarIndex > 0) {
@@ -289,7 +293,7 @@
     const contentArea = document.createElement('div');
     contentArea.classList.add('db-modal-creator-content');
     contentArea.id = 'sidebar-creator-content-dynamic';
-    sidebarWrapper.appendChild(contentArea); // Content-Bereich NACH dem Header
+    sidebarWrapper.appendChild(contentArea); 
 
     if (!applicantFieldData) {
       contentArea.textContent = 'Creator-Daten nicht verfügbar.';
@@ -317,9 +321,6 @@
 
     contentArea.appendChild(creatorDetailsDiv); 
 
-    // Social Media Logik ist jetzt oben, vor dem Hinzufügen von creatorHeadlineOverallDiv zur Sidebar
-
-    // --- VIDEOBEREICH OHNE THUMBNAIL SKELETONS ---
     const mainVideoPlayerWrapper = document.createElement('div');
     mainVideoPlayerWrapper.classList.add('db-modal-video-wrapper'); 
     contentArea.appendChild(mainVideoPlayerWrapper);
@@ -400,10 +401,8 @@
         thumbnailGridContainer.style.display = 'none';
         noVideosMessageP.style.display = '';
     }
-    // --- ENDE VIDEOBEREICH ---
 
-
-    sidebarWrapper.appendChild(sidebarControls); // Die Controls (mit Zusagen-Button) werden der Sidebar hinzugefügt
+    sidebarWrapper.appendChild(sidebarControls); 
 
     const prevBtn = document.getElementById('sidebar-prev-applicant');
     const nextBtn = document.getElementById('sidebar-next-applicant');

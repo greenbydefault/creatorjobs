@@ -18,10 +18,9 @@
       document.body.appendChild(overlayElement);
 
       overlayElement.addEventListener('click', () => {
-        // Schließe die Sidebar, wenn auf das Overlay geklickt wird
         if (sidebarWrapperElement && sidebarWrapperElement.classList.contains('is-open')) {
           sidebarWrapperElement.classList.remove('is-open');
-          toggleOverlay(false); // Blende das Overlay aus
+          toggleOverlay(false);
         }
       });
     }
@@ -33,7 +32,6 @@
       if (show) {
         overlayElement.classList.add('is-visible');
       } else {
-        // Blende das Overlay nur aus, wenn die Sidebar tatsächlich geschlossen ist
         if (!sidebarWrapperElement || !sidebarWrapperElement.classList.contains('is-open')) {
           overlayElement.classList.remove('is-visible');
         }
@@ -84,9 +82,12 @@
     }
     sidebarWrapperElement.innerHTML = '';
 
-    // --- 1. Headline Area (Image, Name, Type/Category) ---
+    // --- 1. Headline Area (Image, Name, Type/Category, Zusagen, Favorit) ---
     const creatorHeadlineOverallDiv = document.createElement('div');
     creatorHeadlineOverallDiv.classList.add('db-modal-creator-headline');
+
+    const imgNameTypeWrapper = document.createElement('div'); // Wrapper für Bild, Name, Typ
+    imgNameTypeWrapper.classList.add('db-modal-creator-img-name-type-wrapper'); // Eigene Klasse für Styling
 
     const imgWrapperDiv = document.createElement('div');
     imgWrapperDiv.classList.add('db-modal-creator-img-wrapper');
@@ -99,6 +100,8 @@
       profileImg.onerror = () => { profileImg.src = 'https://placehold.co/80x80/E0E0E0/BDBDBD?text=Fehler'; };
       imgWrapperDiv.appendChild(profileImg);
     }
+    imgNameTypeWrapper.appendChild(imgWrapperDiv);
+
     const creatorInfoFlexDiv = document.createElement('div');
     creatorInfoFlexDiv.classList.add('is-flexbox-vertical');
     const nameSpan = document.createElement('span');
@@ -123,13 +126,12 @@
       kategorieP.textContent = typeAndCategoryText;
       creatorInfoFlexDiv.appendChild(kategorieP);
     }
-    imgWrapperDiv.appendChild(creatorInfoFlexDiv);
-    creatorHeadlineOverallDiv.appendChild(imgWrapperDiv);
-    sidebarWrapperElement.appendChild(creatorHeadlineOverallDiv);
+    imgNameTypeWrapper.appendChild(creatorInfoFlexDiv);
+    creatorHeadlineOverallDiv.appendChild(imgNameTypeWrapper);
 
-    // --- 2. Action Buttons Area (Zusagen, Favorit) - Positioned below headline ---
+    // Action Buttons (Zusagen, Favorit) - moved into the headline div
     const dbModalCreatorControls = document.createElement('div');
-    dbModalCreatorControls.classList.add('db-modal-creator-controls');
+    dbModalCreatorControls.classList.add('db-modal-creator-controls', 'headline-actions'); // Zusätzliche Klasse für Styling
     const zusagenLink = document.createElement('a');
     zusagenLink.classList.add('db-button-medium-gradient-pink', 'size-auto');
     zusagenLink.href = '#';
@@ -146,7 +148,30 @@
     favoritButtonText.textContent = 'Favorit';
     favoritButton.appendChild(favoritButtonText);
     dbModalCreatorControls.appendChild(favoritButton);
-    sidebarWrapperElement.appendChild(dbModalCreatorControls);
+    creatorHeadlineOverallDiv.appendChild(dbModalCreatorControls); // Add to headline
+
+    sidebarWrapperElement.appendChild(creatorHeadlineOverallDiv);
+
+
+    // --- 2. Navigation Buttons (Prev/Next) - Positioned below headline and action buttons ---
+    const navButtonsWrapperTop = document.createElement('div');
+    navButtonsWrapperTop.classList.add('db-modal-control-buttons', 'top-nav'); // Eigene Klasse für Styling
+
+    const prevButtonTop = document.createElement('div');
+    prevButtonTop.classList.add('db-modal-prev');
+    prevButtonTop.id = 'sidebar-prev-applicant-top';
+    prevButtonTop.textContent = 'Zurück';
+    prevButtonTop.title = "Vorheriger Creator";
+    navButtonsWrapperTop.appendChild(prevButtonTop);
+
+    const nextButtonTop = document.createElement('div');
+    nextButtonTop.classList.add('db-modal-next');
+    nextButtonTop.id = 'sidebar-next-applicant-top';
+    nextButtonTop.textContent = 'Weiter';
+    nextButtonTop.title = "Nächster Creator";
+    navButtonsWrapperTop.appendChild(nextButtonTop);
+    sidebarWrapperElement.appendChild(navButtonsWrapperTop); // Add below headline
+
 
     // --- 3. Main Content Area (Social Media, Videos) ---
     const contentArea = document.createElement('div');
@@ -154,8 +179,18 @@
     contentArea.id = 'sidebar-creator-content-dynamic';
     sidebarWrapperElement.appendChild(contentArea);
 
+    // Social Media Section
+    const socialMediaDetailsWrapper = document.createElement('div');
+    socialMediaDetailsWrapper.classList.add('db-modal-creator-details'); // Parent div as requested
+
+    const socialMediaHeadline = document.createElement('div');
+    socialMediaHeadline.classList.add('is-txt-16', 'is-txt-medium', 'text-color-dark');
+    socialMediaHeadline.textContent = 'Social Media';
+    socialMediaDetailsWrapper.appendChild(socialMediaHeadline); // Add headline to the new parent
+
     const socialMediaOuterWrapper = document.createElement('div');
     socialMediaOuterWrapper.classList.add('db-profile-social');
+    // ... (Rest der Social Media Logik bleibt gleich) ...
     const socialPlatforms = [
         { name: 'Instagram', id: 'instagram', followersKey: 'creator-follower-instagram', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e8d979b71d2a7e5db3_Instagram.svg', linkKey: 'instagram' },
         { name: 'TikTok', id: 'tiktok', followersKey: 'creator-follower-tiktok', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e99dce86c2b6ba83fe_Tiktok.svg', linkKey: 'tiktok' },
@@ -199,12 +234,16 @@
         }
     });
     if (hasSocialContent) {
-        contentArea.appendChild(socialMediaOuterWrapper);
+        socialMediaDetailsWrapper.appendChild(socialMediaOuterWrapper); // Add social icons to the new parent
+        contentArea.appendChild(socialMediaDetailsWrapper); // Add the whole details section to contentArea
     }
 
+
+    // Video Section
     const mainVideoPlayerWrapper = document.createElement('div');
     mainVideoPlayerWrapper.classList.add('db-modal-video-wrapper');
     contentArea.appendChild(mainVideoPlayerWrapper);
+    // ... (Rest der Video Logik bleibt gleich) ...
     const mainVideoElement = document.createElement('video');
     mainVideoElement.id = 'main-creator-video-player';
     mainVideoElement.controls = true;
@@ -269,33 +308,15 @@
         thumbnailGridContainer.style.display = 'none';
         noVideosMessageP.style.display = '';
     }
+    
 
-    // --- 4. Navigation Buttons (Prev/Next) - Positioned at the very bottom ---
-    const navButtonsWrapperBottom = document.createElement('div');
-    navButtonsWrapperBottom.classList.add('db-modal-control-buttons', 'bottom-nav'); // Added 'bottom-nav' for potential specific styling
+    // Event Listeners for Top Prev/Next buttons
+    prevButtonTop.addEventListener('click', navigatePrev);
+    nextButtonTop.addEventListener('click', navigateNext);
 
-    const prevButtonBottom = document.createElement('div');
-    prevButtonBottom.classList.add('db-modal-prev');
-    prevButtonBottom.id = 'sidebar-prev-applicant-bottom'; // Ensure unique ID if needed, or use class for events
-    prevButtonBottom.textContent = 'Zurück';
-    prevButtonBottom.title = "Vorheriger Creator";
-    navButtonsWrapperBottom.appendChild(prevButtonBottom);
-
-    const nextButtonBottom = document.createElement('div');
-    nextButtonBottom.classList.add('db-modal-next');
-    nextButtonBottom.id = 'sidebar-next-applicant-bottom'; // Ensure unique ID
-    nextButtonBottom.textContent = 'Weiter';
-    nextButtonBottom.title = "Nächster Creator";
-    navButtonsWrapperBottom.appendChild(nextButtonBottom);
-    sidebarWrapperElement.appendChild(navButtonsWrapperBottom); // Append to the end of the sidebar
-
-    // Event Listeners for Prev/Next buttons
-    prevButtonBottom.addEventListener('click', navigatePrev);
-    nextButtonBottom.addEventListener('click', navigateNext);
-
-    // Update disabled state for Prev/Next buttons
-    prevButtonBottom.classList.toggle('disabled', currentSidebarIndex === 0);
-    nextButtonBottom.classList.toggle('disabled', currentSidebarIndex === currentSidebarApplicants.length - 1);
+    // Update disabled state for Top Prev/Next buttons
+    prevButtonTop.classList.toggle('disabled', currentSidebarIndex === 0);
+    nextButtonTop.classList.toggle('disabled', currentSidebarIndex === currentSidebarApplicants.length - 1);
     
     sidebarWrapperElement.classList.add('is-open');
     toggleOverlay(true);
@@ -313,16 +334,15 @@
     }
   }
 
-  // Pfeiltasten-Navigation
   document.addEventListener('keydown', function(event) {
     if (sidebarWrapperElement && sidebarWrapperElement.classList.contains('is-open')) {
       if (event.key === 'ArrowLeft') {
-        event.preventDefault(); // Verhindert Scrollen der Seite
+        event.preventDefault();
         navigatePrev();
       } else if (event.key === 'ArrowRight') {
-        event.preventDefault(); // Verhindert Scrollen der Seite
+        event.preventDefault();
         navigateNext();
-      } else if (event.key === 'Escape') { // Optional: Schließen mit Escape-Taste
+      } else if (event.key === 'Escape') {
         event.preventDefault();
         sidebarWrapperElement.classList.remove('is-open');
         toggleOverlay(false);

@@ -12,7 +12,7 @@ import './core/cache.js';
 import './services/webflowService.js';
 import './services/chatService-1.2.js'; 
 // Kernlogik (Scoring, Datenverarbeitung)
-import './core/matchScoring.js';
+// import './core/matchScoring.js';
 // dataProcessing hängt von loadAndDisplayApplicantsForJob ab, das in appLogic ist.
 // Die Funktionen in dataProcessing werden aber erst später durch UI-Events aufgerufen.
 // Es ist wichtig, dass zur Definitionszeit alle Abhängigkeiten für die Funktionskörper vorhanden sind,
@@ -27,7 +27,7 @@ import './ui/sidebar-3.4.js';
 import './ui/notesSidebar.js';
 // Kernlogik, die UI-Elemente und Services verwendet
 // dataProcessing hier, da es ui.applicantElements (für Filter-Callback-Setup) und appLogic (für Reload) referenziert
-import './core/dataProcessing-1.2.js';
+import './core/dataProcessing-1.3.js';
 
 
 // Hauptanwendungslogik, die viele der obigen Module orchestriert

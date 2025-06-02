@@ -265,20 +265,22 @@
         console.warn("Keine Job-Rohdaten im Cache zum Filtern vorhanden.");
         renderMyJobsList([], "jobs-list-active"); 
         renderMyJobsList([], "jobs-list-closed");
-        renderMyJobsList([], "jobs-list"); // Auch die "Alle Jobs"-Liste leeren
+        renderMyJobsList([], "jobs-list"); 
         return;
     }
 
-    const showActiveCheckbox = document.getElementById('job-status-active');
-    const showDoneCheckbox = document.getElementById('job-status-done');
-    
-    const shouldDisplayActive = showActiveCheckbox ? showActiveCheckbox.checked : true; 
-    const shouldDisplayDone = showDoneCheckbox ? showDoneCheckbox.checked : true; 
+    // Die Checkboxen werden hier nicht mehr verwendet, um die Anzeige der Tab-Container zu steuern.
+    // Sie könnten für eine zusätzliche Filterung innerhalb des "Alle Jobs"-Tabs verwendet werden,
+    // aber das ist hier nicht implementiert.
+    // const showActiveCheckbox = document.getElementById('job-status-active');
+    // const showDoneCheckbox = document.getElementById('job-status-done');
+    // const shouldDisplayActive = showActiveCheckbox ? showActiveCheckbox.checked : true; 
+    // const shouldDisplayDone = showDoneCheckbox ? showDoneCheckbox.checked : true; 
 
     const searchInput = document.getElementById('filter-search');
     const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : "";
 
-    console.log(`Filter-Status: Aktiv-Checkbox=${shouldDisplayActive}, Beendet-Checkbox=${shouldDisplayDone}, Suche='${searchTerm}'`);
+    // console.log(`Filter-Status (Checkboxes ignoriert für Tab-Befüllung): Suche='${searchTerm}'`);
 
     let allJobsMatchingSearch = cache.allMyJobsData_MJ.filter(jobItem => {
         if (jobItem.error || !jobItem.fieldData) return false; 
@@ -309,23 +311,16 @@
         renderMyJobsList(allJobsMatchingSearch, "jobs-list");
     }
 
-
-    // Render "Aktive Jobs" Liste
-    if (shouldDisplayActive) {
+    // Render "Aktive Jobs" Liste IMMER (wenn Container existiert)
+    if (document.getElementById('jobs-list-active')) {
         console.log(`filterAndRenderJobs: Rendere ${activeJobs.length} aktive Jobs in #jobs-list-active.`);
         renderMyJobsList(activeJobs, "jobs-list-active");
-    } else {
-        console.log("filterAndRenderJobs: Aktive Jobs werden nicht angezeigt (Checkbox nicht aktiv). Leere #jobs-list-active.");
-        renderMyJobsList([], "jobs-list-active"); 
     }
-
-    // Render "Beendete Jobs" Liste
-    if (shouldDisplayDone) {
+    
+    // Render "Beendete Jobs" Liste IMMER (wenn Container existiert)
+    if (document.getElementById('jobs-list-closed')) {
         console.log(`filterAndRenderJobs: Rendere ${closedJobs.length} beendete Jobs in #jobs-list-closed.`);
         renderMyJobsList(closedJobs, "jobs-list-closed");
-    } else {
-        console.log("filterAndRenderJobs: Beendete Jobs werden nicht angezeigt (Checkbox nicht aktiv). Leere #jobs-list-closed.");
-        renderMyJobsList([], "jobs-list-closed"); 
     }
   }
 
@@ -367,7 +362,7 @@
     }
     const { renderMyJobsSkeletonLoader, createMyJobsTableHeaderElement } = ui;
 
-    let initialContainer = document.getElementById("jobs-list") || document.getElementById("jobs-list-active"); // Bevorzuge #jobs-list für Skeleton
+    let initialContainer = document.getElementById("jobs-list") || document.getElementById("jobs-list-active"); 
     if (!initialContainer && document.getElementById("jobs-list-closed")) initialContainer = document.getElementById("jobs-list-closed");
 
     if (!initialContainer) {
@@ -413,8 +408,7 @@
         initialContainer.innerHTML += `<p class='error-message job-entry visible'>${errorMsgText}</p>`;
         return;
       }
-      // Handle other specific errors (429, 404) as before, targeting `initialContainer` for messages
-
+      
       const postedJobIds = currentUserItem.fieldData ? currentUserItem.fieldData["posted-jobs"] || [] : [];
       if (postedJobIds.length === 0) {
         document.querySelectorAll("#jobs-list .my-job-item-skeleton, #jobs-list-active .my-job-item-skeleton, #jobs-list-closed .my-job-item-skeleton").forEach(el => el.remove());

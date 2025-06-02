@@ -111,8 +111,9 @@
 
       if (activeFiltersToUse && activeFiltersToUse.relevantOnly) {
         console.log(`[RelevantOnly] Prüfung für Bewerber: ${applicantNameOrId}`);
-        let hasFollowers = !!fieldData["creator-follower"];
-        console.log(`  [RelevantOnly] Rohwert fieldData["creator-follower"]: '${fieldData["creator-follower"]}', hasFollowers: ${hasFollowers}`);
+        // Follower-Anzahl wird für die Logik nicht mehr direkt benötigt, aber für Debugging-Zwecke geloggt
+        let hasFollowers = !!fieldData["creator-follower"]; 
+        console.log(`  [RelevantOnly] Rohwert fieldData["creator-follower"]: '${fieldData["creator-follower"]}', hasFollowers (informativ): ${hasFollowers}`);
         
         let hasSocialMedia = false;
         const normalizeUrlFunc = typeof normalizeUrl === 'function' ? normalizeUrl : null;
@@ -125,21 +126,26 @@
             console.log(`  [RelevantOnly] Social Key '${key}': Roh='${rawUrl}', Normalisiert='${normalized}'`);
             if (normalized) {
               hasSocialMedia = true;
+              // Ein Social Media Link reicht aus, um als "hat Social Media" zu gelten.
+              // Für vollständiges Logging aller Social Links wird die Schleife hier nicht abgebrochen.
             }
           }
         } else {
             console.log(`  [RelevantOnly] normalizeUrlFunc nicht verfügbar oder keine fieldData für Social Media Check.`);
         }
-        console.log(`  [RelevantOnly] Finale Prüfung für ${applicantNameOrId}: hasFollowers=${hasFollowers}, hasSocialMedia=${hasSocialMedia}`);
+        console.log(`  [RelevantOnly] Finale Prüfung für ${applicantNameOrId}: hasSocialMedia=${hasSocialMedia}`);
 
-        if (!hasFollowers && !hasSocialMedia) {
-            console.log(`  [RelevantOnly] >>> WIRD GEFILTERT (weder Follower noch Social Media): ${applicantNameOrId}`);
+        // ANGEPASSTE LOGIK: Ein Bewerber ist NICHT relevant (wird gefiltert), wenn er KEINE Social Media Links hat.
+        // Die Angabe von Followern allein macht ihn nicht mehr relevant.
+        if (!hasSocialMedia) {
+            console.log(`  [RelevantOnly] >>> WIRD GEFILTERT (keine Social Media Links): ${applicantNameOrId}`);
             return false;
         } else {
-            console.log(`  [RelevantOnly] >>> WIRD BEIBEHALTEN: ${applicantNameOrId}`);
+            console.log(`  [RelevantOnly] >>> WIRD BEIBEHALTEN (hat Social Media Links): ${applicantNameOrId}`);
         }
       }
 
+      // Die anderen Filter (Follower, Kategorie, Creator Typ) bleiben wie zuvor
       if (activeFiltersToUse?.follower?.length > 0) {
         const followerRangeId = fieldData["creator-follower"];
         if (!followerRangeId || !activeFiltersToUse.follower.includes(followerRangeId)) {

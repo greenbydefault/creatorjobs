@@ -16,91 +16,81 @@
       overlayElement.classList.add('db-modal-overlay');
       document.body.appendChild(overlayElement);
 
+      // Event listener for the overlay click
       overlayElement.addEventListener('click', () => {
         const creatorSidebarToClose = document.getElementById('db-modal-creator-wrapper-dynamic');
-        let anySidebarIsOpen = false;
-
+        
         if (creatorSidebarToClose && creatorSidebarToClose.classList.contains('is-open')) {
           creatorSidebarToClose.classList.remove('is-open');
         }
-
-        const isCreatorStillOpen = creatorSidebarToClose && creatorSidebarToClose.classList.contains('is-open');
-        anySidebarIsOpen = isCreatorStillOpen;
-
-        if (!anySidebarIsOpen) {
-          toggleOverlay(false);
-        }
+        // Let toggleOverlay handle the visibility based on the current state of sidebars
+        toggleOverlay(false); 
       });
     }
   }
 
   function toggleOverlay(show) {
-    ensureOverlay();
+    ensureOverlay(); // Make sure overlay is created
     if (overlayElement) {
       if (show) {
         overlayElement.classList.add('is-visible');
       } else {
+        // Only hide overlay if no sidebars that rely on it are open.
+        // For now, we assume only this creator sidebar uses this specific overlay.
         const creatorSidebar = document.getElementById('db-modal-creator-wrapper-dynamic');
         const isCreatorOpen = creatorSidebar && creatorSidebar.classList.contains('is-open');
 
-        if (!isCreatorOpen) {
-          overlayElement.classList.remove('is-visible');
+        if (!isCreatorOpen) { // If the creator sidebar is NOT open (or was just closed)
+            overlayElement.classList.remove('is-visible');
         }
       }
     }
   }
   window.WEBFLOW_API.ui.toggleOverlay = toggleOverlay;
 
+  // Ensure normalizeUrl is defined if not already present
   if (!window.WEBFLOW_API.utils.normalizeUrl) {
     window.WEBFLOW_API.utils.normalizeUrl = function(url) {
       if (!url) return '';
-      if (url.startsWith('//')) {
-        return `https:${url}`;
+      let trimmedUrl = String(url).trim(); // Ensure it's a string and trim whitespace
+      if (!trimmedUrl) return ''; // Return empty if afrer trim it's empty
+      if (trimmedUrl.startsWith('//')) {
+        return `https:${trimmedUrl}`;
       }
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        return `https://${url}`;
+      if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+        return `https://${trimmedUrl}`;
       }
-      return url;
+      return trimmedUrl;
     };
   }
 
-  // Hilfsfunktion zur Formatierung der Follower-Zahlen
   function formatFollowerCount(numStr) {
-    const num = parseInt(String(numStr).replace(/[,.]/g, ''), 10); // Kommas und Punkte entfernen für Parsing
+    const num = parseInt(String(numStr).replace(/[,.]/g, ''), 10);
     if (isNaN(num)) {
-        return numStr; // Originalwert zurückgeben, wenn keine gültige Zahl
+        return numStr; 
     }
-
-    if (num < 1000) {
-        return String(num);
-    } else if (num < 1000000) { // Bis 999.999
+    if (num < 1000) return String(num);
+    if (num < 1000000) {
         const thousands = num / 1000;
-        if (num < 10000) { // Für Zahlen wie 2400, 9900. Eine Dezimalstelle.
-            return (thousands % 1 === 0 ? thousands.toFixed(0) : thousands.toFixed(1)) + 'K';
-        } else { // Für Zahlen wie 25604. Ganze Zahl K.
-            return Math.floor(thousands) + 'K';
-        }
-    } else { // Millionen
-        const millions = num / 1000000;
-        return (millions % 1 === 0 ? millions.toFixed(0) : millions.toFixed(1)) + 'M';
+        return (num < 10000 && thousands % 1 !== 0 ? thousands.toFixed(1) : Math.floor(thousands)) + 'K';
     }
+    const millions = num / 1000000;
+    return (millions % 1 !== 0 ? millions.toFixed(1) : millions.toFixed(0)) + 'M';
   }
 
-
   function showCreatorSidebar(applicantItem, allJobApplicants, applicantIndex, jobId) {
-    console.log("showCreatorSidebar called. MAPPINGS:", JSON.parse(JSON.stringify(window.WEBFLOW_API.MAPPINGS || {})));
+    // console.log("showCreatorSidebar called. MAPPINGS:", JSON.parse(JSON.stringify(window.WEBFLOW_API.MAPPINGS || {})));
     
     const MAPPINGS = window.WEBFLOW_API.MAPPINGS || {};
     const creatorTypesMapping = MAPPINGS.creatorTypen || {}; 
-    const creatorKategorienMapping = MAPPINGS.creatorKategorien || {}; 
+    const creatorKategorienMapping = MAPPINGS.creatorKategorien || {}; // Assuming this is the correct mapping key
 
     currentSidebarJobId = jobId;
     currentSidebarApplicants = allJobApplicants;
     currentSidebarIndex = applicantIndex;
     const applicantFieldData = applicantItem.fieldData;
 
-    console.log("Applicant Field Data:", JSON.parse(JSON.stringify(applicantFieldData || {})));
-
+    // console.log("Applicant Field Data:", JSON.parse(JSON.stringify(applicantFieldData || {})));
 
     let sidebarWrapper = document.getElementById('db-modal-creator-wrapper-dynamic');
     if (!sidebarWrapper) {
@@ -109,9 +99,9 @@
       sidebarWrapper.classList.add('db-modal-creator-wrapper');
       document.body.appendChild(sidebarWrapper);
     }
-    sidebarWrapper.innerHTML = '';
+    sidebarWrapper.innerHTML = ''; // Clear previous content
 
-
+    // --- 1. Headline Area (Image, Name, Type/Category, Prev/Next Nav) ---
     const creatorHeadlineOverallDiv = document.createElement('div');
     creatorHeadlineOverallDiv.classList.add('db-modal-creator-headline');
 
@@ -137,19 +127,11 @@
     creatorInfoFlexDiv.appendChild(nameSpan);
 
     const creatorTypeId = applicantFieldData['creator-type']; 
-    const creatorKategorieId = applicantFieldData['creator-kategorie']; 
+    const creatorKategorieId = applicantFieldData['creator-kategorie']; // Assuming this is the field key
     
-    console.log("Creator Type ID from data:", creatorTypeId);
-    console.log("Creator Kategorie ID from data:", creatorKategorieId); 
-    console.log("Available Creator Types in MAPPINGS (using MAPPINGS.creatorTypen):", JSON.parse(JSON.stringify(creatorTypesMapping)));
-    console.log("Available Creator Kategorien in MAPPINGS (using MAPPINGS.creatorKategorien):", JSON.parse(JSON.stringify(creatorKategorienMapping)));
-
     const creatorTypeName = creatorTypesMapping[creatorTypeId] || creatorTypeId || 'N/A';
     const creatorKategorieName = creatorKategorienMapping[creatorKategorieId] || creatorKategorieId || 'N/A';
     
-    console.log("Resolved Creator Type Name:", creatorTypeName);
-    console.log("Resolved Creator Kategorie Name:", creatorKategorieName); 
-
     let typeAndCategoryText = '';
     if (creatorTypeName !== 'N/A' && creatorKategorieName !== 'N/A' && creatorTypeName !== creatorKategorieName) { 
         typeAndCategoryText = `${creatorTypeName} - ${creatorKategorieName}`;
@@ -158,7 +140,6 @@
     } else if (creatorKategorieName !== 'N/A') { 
         typeAndCategoryText = creatorKategorieName;
     }
-
 
     if (typeAndCategoryText) { 
         const kategorieP = document.createElement('p');
@@ -170,21 +151,67 @@
     imgWrapperDiv.appendChild(creatorInfoFlexDiv); 
     creatorHeadlineOverallDiv.appendChild(imgWrapperDiv);
 
-    const socialMediaOuterWrapper = document.createElement('div'); 
-    socialMediaOuterWrapper.classList.add('db-profile-social');  
+    // Navigation Buttons (Prev/Next) - moved to headline area
+    const navButtonsWrapper = document.createElement('div');
+    navButtonsWrapper.classList.add('db-modal-control-buttons'); // This is the div for prev/next
 
-    // Angepasster "Zusagen"-Button als Link-Block
-    const zusagenLink = document.createElement('a'); // Geändert zu <a>
+    const prevButton = document.createElement('div');
+    prevButton.classList.add('db-modal-prev');
+    prevButton.id = 'sidebar-prev-applicant';
+    prevButton.textContent = 'Zurück';
+    prevButton.title = "Vorheriger Creator";
+    navButtonsWrapper.appendChild(prevButton);
+
+    const nextButton = document.createElement('div');
+    nextButton.classList.add('db-modal-next');
+    nextButton.id = 'sidebar-next-applicant';
+    nextButton.textContent = 'Weiter';
+    nextButton.title = "Nächster Creator";
+    navButtonsWrapper.appendChild(nextButton);
+    
+    creatorHeadlineOverallDiv.appendChild(navButtonsWrapper); // Add nav buttons to headline div
+
+    sidebarWrapper.appendChild(creatorHeadlineOverallDiv); // Add headline area to sidebar
+
+    // --- 2. Action Buttons Area (Zusagen, Favorit) ---
+    const dbModalCreatorControls = document.createElement('div');
+    dbModalCreatorControls.classList.add('db-modal-creator-controls');
+
+    const zusagenLink = document.createElement('a');
     zusagenLink.classList.add('db-button-medium-gradient-pink', 'size-auto');
-    zusagenLink.href = '#'; // Platzhalter für den Link, ggf. anpassen oder JavaScript-Aktion hinzufügen
-    // zusagenLink.addEventListener('click', (e) => { e.preventDefault(); /* Ihre Aktion hier */ });
+    zusagenLink.href = '#'; // Placeholder
+    // zusagenLink.addEventListener('click', (e) => { e.preventDefault(); /* Aktion */ });
 
-    const zusagenButtonText = document.createElement('span'); // Span für den Text
+    const zusagenButtonText = document.createElement('span');
     zusagenButtonText.classList.add('db-button-text', 'white');
     zusagenButtonText.textContent = 'Zusagen';
     zusagenLink.appendChild(zusagenButtonText);
+    dbModalCreatorControls.appendChild(zusagenLink);
+
+    // New "Favorit" button
+    const favoritButton = document.createElement('a'); // Using <a> for consistency
+    favoritButton.classList.add('db-button-medium-white-border', 'size-auto');
+    favoritButton.href = '#'; // Placeholder
+    // favoritButton.addEventListener('click', (e) => { e.preventDefault(); /* Favorit Aktion */ });
+
+    const favoritButtonText = document.createElement('span');
+    favoritButtonText.classList.add('db-button-text'); // As per request
+    favoritButtonText.textContent = 'Favorit';
+    favoritButton.appendChild(favoritButtonText);
+    dbModalCreatorControls.appendChild(favoritButton);
+
+    sidebarWrapper.appendChild(dbModalCreatorControls); // Add action buttons area to sidebar
+
+    // --- 3. Main Content Area (Social Media, Videos) ---
+    const contentArea = document.createElement('div');
+    contentArea.classList.add('db-modal-creator-content');
+    contentArea.id = 'sidebar-creator-content-dynamic';
+    sidebarWrapper.appendChild(contentArea); 
+
+    // Social Media Icons - moved to contentArea (was previously in creatorHeadlineOverallDiv)
+    const socialMediaOuterWrapper = document.createElement('div'); 
+    socialMediaOuterWrapper.classList.add('db-profile-social');   
     
-    // Social Media Inhalt erstellen (Logik bleibt gleich)
     const socialPlatforms = [
         { name: 'Instagram', id: 'instagram', followersKey: 'creator-follower-instagram', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e8d979b71d2a7e5db3_Instagram.svg', linkKey: 'instagram' },
         { name: 'TikTok', id: 'tiktok', followersKey: 'creator-follower-tiktok', icon: 'https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e99dce86c2b6ba83fe_Tiktok.svg', linkKey: 'tiktok' },
@@ -192,13 +219,12 @@
     ];
     
     let hasSocialContent = false; 
-    console.log("Checking social media data for applicant:", applicantFieldData.name);
+    // console.log("Checking social media data for applicant:", applicantFieldData.name);
 
     socialPlatforms.forEach(platform => {
         const followersRaw = applicantFieldData[platform.followersKey]; 
         const link = applicantFieldData[platform.linkKey];
-
-        console.log(`Platform: ${platform.name}, Followers data from key '${platform.followersKey}': ${followersRaw}, Link data from key '${platform.linkKey}': ${link}`);
+        // console.log(`Platform: ${platform.name}, Followers data from key '${platform.followersKey}': ${followersRaw}, Link data from key '${platform.linkKey}': ${link}`);
         
         const followersFormatted = formatFollowerCount(followersRaw);
 
@@ -237,90 +263,22 @@
             }
             platformElement.classList.add('social-platform-item', `social-platform-${platform.id}`); 
             socialMediaOuterWrapper.appendChild(platformElement);
-
         } else {
-            console.log(`Skipping ${platform.name} due to no link and no valid followers.`);
+            // console.log(`Skipping ${platform.name} due to no link and no valid followers.`);
         }
     });
     
     if (hasSocialContent) {
-        console.log("Social media content found, appending db-profile-social wrapper to creatorHeadlineOverallDiv.");
-        creatorHeadlineOverallDiv.appendChild(socialMediaOuterWrapper); 
+        // console.log("Social media content found, appending db-profile-social wrapper to contentArea.");
+        contentArea.appendChild(socialMediaOuterWrapper); // Add social media to contentArea
     } else {
-        console.log("No social media content to display for this applicant.");
-    }
-    
-    sidebarWrapper.appendChild(creatorHeadlineOverallDiv); 
-
-
-    const sidebarControls = document.createElement('div');
-    sidebarControls.classList.add('db-modal-creator-controls');
-
-    sidebarControls.appendChild(zusagenLink); // "Zusagen"-Link zu den Controls hinzufügen
-
-    const navButtonsWrapper = document.createElement('div');
-    navButtonsWrapper.classList.add('db-modal-control-buttons');
-
-    const prevButton = document.createElement('div');
-    prevButton.classList.add('db-modal-prev');
-    prevButton.id = 'sidebar-prev-applicant';
-    prevButton.textContent = 'Zurück';
-    prevButton.title = "Vorheriger Creator";
-    navButtonsWrapper.appendChild(prevButton);
-
-    const nextButton = document.createElement('div');
-    nextButton.classList.add('db-modal-next');
-    nextButton.id = 'sidebar-next-applicant';
-    nextButton.textContent = 'Weiter';
-    nextButton.title = "Nächster Creator";
-    navButtonsWrapper.appendChild(nextButton);
-
-    sidebarControls.appendChild(navButtonsWrapper); 
-
-    prevButton.addEventListener('click', () => {
-      if (currentSidebarIndex > 0) {
-        showCreatorSidebar(currentSidebarApplicants[currentSidebarIndex - 1], currentSidebarApplicants, currentSidebarIndex - 1, currentSidebarJobId);
-      }
-    });
-
-    nextButton.addEventListener('click', () => {
-      if (currentSidebarIndex < currentSidebarApplicants.length - 1) {
-        showCreatorSidebar(currentSidebarApplicants[currentSidebarIndex + 1], currentSidebarApplicants, currentSidebarIndex + 1, currentSidebarJobId);
-      }
-    });
-
-
-    const contentArea = document.createElement('div');
-    contentArea.classList.add('db-modal-creator-content');
-    contentArea.id = 'sidebar-creator-content-dynamic';
-    sidebarWrapper.appendChild(contentArea); 
-
-    if (!applicantFieldData) {
-      contentArea.textContent = 'Creator-Daten nicht verfügbar.';
-      const wrapperToShow = document.getElementById('db-modal-creator-wrapper-dynamic');
-      if (wrapperToShow) {
-        wrapperToShow.classList.add('is-open');
-        toggleOverlay(true);
-      }
-      return;
+        // console.log("No social media content to display for this applicant.");
     }
 
-    const creatorDetailsDiv = document.createElement('div');
-    creatorDetailsDiv.classList.add('db-modal-creator-details');
+    // Bio / "Über Mich" section is REMOVED as per request.
+    // const creatorDetailsDiv = document.createElement('div'); ... (and its children)
 
-    const ueberMichHeadlineDiv = document.createElement('div'); 
-    ueberMichHeadlineDiv.classList.add('is-txt-16', 'is-txt-medium', 'text-color-dark'); 
-    ueberMichHeadlineDiv.textContent = `Über ${applicantFieldData.name || 'den Creator'}`;
-    creatorDetailsDiv.appendChild(ueberMichHeadlineDiv); 
-
-    const beschreibungText = applicantFieldData['beschreibung'] || "Keine Beschreibung vorhanden."; 
-    const beschreibungPara = document.createElement('p');
-    beschreibungPara.textContent = beschreibungText;
-    beschreibungPara.classList.add('db-profile-user-bio'); 
-    creatorDetailsDiv.appendChild(beschreibungPara); 
-
-    contentArea.appendChild(creatorDetailsDiv); 
-
+    // Video Section
     const mainVideoPlayerWrapper = document.createElement('div');
     mainVideoPlayerWrapper.classList.add('db-modal-video-wrapper'); 
     contentArea.appendChild(mainVideoPlayerWrapper);
@@ -343,7 +301,6 @@
     contentArea.appendChild(noVideosMessageP); 
 
     const numberOfPotentialVideos = 5; 
-
     let videoUrls = [];
     for (let i = 1; i <= numberOfPotentialVideos; i++) {
         const videoLinkField = `creator-video-link-${i}`;
@@ -395,24 +352,30 @@
                 mainVideoElement.play().catch(error => console.error("Error attempting to play video:", error));
             });
         });
-
     } else {
         mainVideoPlayerWrapper.style.display = 'none';
         thumbnailGridContainer.style.display = 'none';
         noVideosMessageP.style.display = '';
     }
 
-    sidebarWrapper.appendChild(sidebarControls); 
+    // Event Listeners for Prev/Next buttons
+    prevButton.addEventListener('click', () => {
+      if (currentSidebarIndex > 0) {
+        showCreatorSidebar(currentSidebarApplicants[currentSidebarIndex - 1], currentSidebarApplicants, currentSidebarIndex - 1, currentSidebarJobId);
+      }
+    });
 
-    const prevBtn = document.getElementById('sidebar-prev-applicant');
-    const nextBtn = document.getElementById('sidebar-next-applicant');
-    if (prevBtn) {
-      prevBtn.classList.toggle('disabled', currentSidebarIndex === 0);
-    }
-    if (nextBtn) {
-      nextBtn.classList.toggle('disabled', currentSidebarIndex === currentSidebarApplicants.length - 1);
-    }
+    nextButton.addEventListener('click', () => {
+      if (currentSidebarIndex < currentSidebarApplicants.length - 1) {
+        showCreatorSidebar(currentSidebarApplicants[currentSidebarIndex + 1], currentSidebarApplicants, currentSidebarIndex + 1, currentSidebarJobId);
+      }
+    });
 
+    // Update disabled state for Prev/Next buttons
+    prevButton.classList.toggle('disabled', currentSidebarIndex === 0);
+    nextButton.classList.toggle('disabled', currentSidebarIndex === currentSidebarApplicants.length - 1);
+    
+    // Show sidebar and overlay
     const finalCreatorSidebarWrapper = document.getElementById('db-modal-creator-wrapper-dynamic');
     if (finalCreatorSidebarWrapper) {
       finalCreatorSidebarWrapper.classList.add('is-open');
@@ -420,6 +383,7 @@
     }
   }
 
+  // Skeleton for video (if needed elsewhere, this is a simple placeholder)
   if (!window.WEBFLOW_API.ui.createVideoSkeletonElement) {
     window.WEBFLOW_API.ui.createVideoSkeletonElement = function () {
       const skeletonWrapper = document.createElement('div');

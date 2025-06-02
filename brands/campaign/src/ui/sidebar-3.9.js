@@ -7,45 +7,15 @@
   let currentSidebarJobId = null;
   let currentSidebarApplicants = [];
   let currentSidebarIndex = -1;
-  let overlayElement = null;
+  // let overlayElement = null; // Entfernt
   let sidebarWrapperElement = null; // Globale Referenz zur Sidebar
 
-  function ensureOverlay() {
-    if (!overlayElement) {
-      overlayElement = document.createElement('div');
-      overlayElement.id = 'db-modal-overlay-dynamic';
-      overlayElement.classList.add('db-modal-overlay');
-      document.body.appendChild(overlayElement);
-
-      overlayElement.addEventListener('click', () => {
-        if (sidebarWrapperElement && sidebarWrapperElement.classList.contains('is-open')) {
-          closeSidebar();
-        }
-      });
-    }
-  }
-
-  function toggleOverlay(show) {
-    ensureOverlay();
-    if (overlayElement) {
-      if (show) {
-        overlayElement.classList.add('is-visible');
-        document.body.style.overflow = 'hidden'; // Verhindert Scrollen des Body
-      } else {
-        // Blende das Overlay nur aus, wenn die Sidebar tatsächlich geschlossen ist
-        if (!sidebarWrapperElement || !sidebarWrapperElement.classList.contains('is-open')) {
-          overlayElement.classList.remove('is-visible');
-          document.body.style.overflow = ''; // Erlaubt Scrollen des Body wieder
-        }
-      }
-    }
-  }
-  window.WEBFLOW_API.ui.toggleOverlay = toggleOverlay; // Expose if needed by other modules
+  // ensureOverlay() und toggleOverlay() wurden entfernt
 
   function closeSidebar() {
     if (sidebarWrapperElement && sidebarWrapperElement.classList.contains('is-open')) {
       sidebarWrapperElement.classList.remove('is-open');
-      toggleOverlay(false);
+      document.body.style.overflow = ''; // Erlaubt Scrollen des Body wieder
     }
   }
 
@@ -95,7 +65,6 @@
     const creatorHeadlineOverallDiv = document.createElement('div');
     creatorHeadlineOverallDiv.classList.add('db-modal-creator-headline');
 
-    // Wrapper for Image, Name, Type/Category
     const imgNameTypeWrapper = document.createElement('div');
     imgNameTypeWrapper.classList.add('db-modal-creator-img-name-type-wrapper');
 
@@ -139,9 +108,8 @@
     imgNameTypeWrapper.appendChild(creatorInfoFlexDiv);
     creatorHeadlineOverallDiv.appendChild(imgNameTypeWrapper);
 
-    // Action Buttons (Zusagen, Favorit) - Part of the headline area
     const headlineActionsWrapper = document.createElement('div');
-    headlineActionsWrapper.classList.add('db-modal-creator-headline-actions'); // New wrapper for styling
+    headlineActionsWrapper.classList.add('db-modal-creator-headline-actions');
 
     const zusagenLink = document.createElement('a');
     zusagenLink.classList.add('db-button-medium-gradient-pink', 'size-auto');
@@ -162,10 +130,9 @@
     headlineActionsWrapper.appendChild(favoritButton);
     creatorHeadlineOverallDiv.appendChild(headlineActionsWrapper);
 
-    // Close Button
     const closeButtonElement = document.createElement('div');
-    closeButtonElement.classList.add('db-modal-close-button'); // Add class for styling
-    closeButtonElement.innerHTML = '&times;'; // Simple "X"
+    closeButtonElement.classList.add('db-modal-close-button');
+    closeButtonElement.innerHTML = '&times;';
     closeButtonElement.title = 'Schließen';
     closeButtonElement.addEventListener('click', closeSidebar);
     creatorHeadlineOverallDiv.appendChild(closeButtonElement);
@@ -178,7 +145,6 @@
     contentArea.id = 'sidebar-creator-content-dynamic';
     sidebarWrapperElement.appendChild(contentArea);
 
-    // Social Media Section
     const socialMediaDetailsWrapper = document.createElement('div');
     socialMediaDetailsWrapper.classList.add('db-modal-creator-details');
 
@@ -236,7 +202,6 @@
         contentArea.appendChild(socialMediaDetailsWrapper);
     }
 
-    // Video Section
     const mainVideoPlayerWrapper = document.createElement('div');
     mainVideoPlayerWrapper.classList.add('db-modal-video-wrapper');
     contentArea.appendChild(mainVideoPlayerWrapper);
@@ -305,7 +270,10 @@
         noVideosMessageP.style.display = '';
     }
     
-    // --- Navigation Buttons (Prev/Next) - Positioned at the very bottom ---
+    // --- Navigation Buttons (Prev/Next) - Positioned at the very bottom, wrapped in db-modal-creator-controls ---
+    const bottomNavControlsWrapper = document.createElement('div'); // Neuer Parent-Wrapper
+    bottomNavControlsWrapper.classList.add('db-modal-creator-controls'); // Klasse wie bei den oberen Action-Buttons
+
     const navButtonsWrapperBottom = document.createElement('div');
     navButtonsWrapperBottom.classList.add('db-modal-control-buttons', 'bottom-nav');
 
@@ -322,18 +290,19 @@
     nextButtonBottom.textContent = 'Weiter';
     nextButtonBottom.title = "Nächster Creator";
     navButtonsWrapperBottom.appendChild(nextButtonBottom);
-    sidebarWrapperElement.appendChild(navButtonsWrapperBottom);
+    
+    bottomNavControlsWrapper.appendChild(navButtonsWrapperBottom); // Nav-Buttons in den neuen Parent
+    sidebarWrapperElement.appendChild(bottomNavControlsWrapper); // Parent an die Sidebar anhängen
 
-    // Event Listeners for Bottom Prev/Next buttons
     prevButtonBottom.addEventListener('click', navigatePrev);
     nextButtonBottom.addEventListener('click', navigateNext);
 
-    // Update disabled state for Bottom Prev/Next buttons
     prevButtonBottom.classList.toggle('disabled', currentSidebarIndex === 0);
     nextButtonBottom.classList.toggle('disabled', currentSidebarIndex === currentSidebarApplicants.length - 1);
     
     sidebarWrapperElement.classList.add('is-open');
-    toggleOverlay(true);
+    // toggleOverlay(true); // Entfernt, da kein Overlay mehr
+    document.body.style.overflow = 'hidden'; // Scrollen des Body verhindern, wenn Sidebar offen ist
   }
 
   function navigatePrev() {

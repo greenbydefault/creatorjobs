@@ -93,40 +93,79 @@
             activeFiltersToUse = { follower: [], category: [], creatorType: [], relevantOnly: false };
         }
     }
+
+    console.log(`filterAndSortApplicants: Job ${jobId}, activeFiltersToUse:`, JSON.parse(JSON.stringify(activeFiltersToUse)));
+
     const filteredApplicants = allItems.filter(applicant => {
+      const applicantNameOrId = applicant.fieldData?.name || applicant.id || "Unbekannter Bewerber";
+
       if (applicant.error || !applicant.fieldData) {
-        return !(activeFiltersToUse && activeFiltersToUse.relevantOnly);
+        if (activeFiltersToUse && activeFiltersToUse.relevantOnly) {
+            console.log(`[RelevantOnly] Filtert Bewerber (Fehler/keine fieldData): ${applicantNameOrId}`);
+            return false; // Filter out if error/no fieldData and relevantOnly is active
+        }
+        return true; // Keep if not relevantOnly or no error
       }
+
       const fieldData = applicant.fieldData;
+
       if (activeFiltersToUse && activeFiltersToUse.relevantOnly) {
+        console.log(`[RelevantOnly] Prüfung für Bewerber: ${applicantNameOrId}`);
         let hasFollowers = !!fieldData["creator-follower"];
+        console.log(`  [RelevantOnly] Rohwert fieldData["creator-follower"]: '${fieldData["creator-follower"]}', hasFollowers: ${hasFollowers}`);
+        
         let hasSocialMedia = false;
         const normalizeUrlFunc = typeof normalizeUrl === 'function' ? normalizeUrl : null;
+        
         if (fieldData && normalizeUrlFunc) {
           const socialKeys = ['instagram', 'tiktok', 'youtube'];
           for (const key of socialKeys) {
-            if (normalizeUrlFunc(fieldData[key])) {
+            const rawUrl = fieldData[key];
+            const normalized = normalizeUrlFunc(rawUrl);
+            console.log(`  [RelevantOnly] Social Key '${key}': Roh='${rawUrl}', Normalisiert='${normalized}'`);
+            if (normalized) {
               hasSocialMedia = true;
-              break;
             }
           }
+        } else {
+            console.log(`  [RelevantOnly] normalizeUrlFunc nicht verfügbar oder keine fieldData für Social Media Check.`);
         }
-        if (!hasFollowers && !hasSocialMedia) return false;
+        console.log(`  [RelevantOnly] Finale Prüfung für ${applicantNameOrId}: hasFollowers=${hasFollowers}, hasSocialMedia=${hasSocialMedia}`);
+
+        if (!hasFollowers && !hasSocialMedia) {
+            console.log(`  [RelevantOnly] >>> WIRD GEFILTERT (weder Follower noch Social Media): ${applicantNameOrId}`);
+            return false;
+        } else {
+            console.log(`  [RelevantOnly] >>> WIRD BEIBEHALTEN: ${applicantNameOrId}`);
+        }
       }
+
       if (activeFiltersToUse?.follower?.length > 0) {
         const followerRangeId = fieldData["creator-follower"];
-        if (!followerRangeId || !activeFiltersToUse.follower.includes(followerRangeId)) return false;
+        if (!followerRangeId || !activeFiltersToUse.follower.includes(followerRangeId)) {
+            // console.log(`[Follower] Filtert ${applicantNameOrId} (Follower-ID: ${followerRangeId})`);
+            return false;
+        }
       }
       if (activeFiltersToUse?.category?.length > 0) {
         const category = fieldData["creator-main-categorie"];
-        if (!category || !activeFiltersToUse.category.includes(category)) return false;
+        if (!category || !activeFiltersToUse.category.includes(category)) {
+            // console.log(`[Category] Filtert ${applicantNameOrId} (Kategorie: ${category})`);
+            return false;
+        }
       }
       if (activeFiltersToUse?.creatorType?.length > 0) {
         const creatorTypeId = fieldData["creator-type"];
-        if (!creatorTypeId || !activeFiltersToUse.creatorType.includes(creatorTypeId)) return false;
+        if (!creatorTypeId || !activeFiltersToUse.creatorType.includes(creatorTypeId)) {
+            // console.log(`[CreatorType] Filtert ${applicantNameOrId} (Typ-ID: ${creatorTypeId})`);
+            return false;
+        }
       }
       return true;
     });
+
+    console.log(`filterAndSortApplicants: Job ${jobId}, Anzahl gefilterter Bewerber: ${filteredApplicants.length}`);
+
     const sortedApplicants = filteredApplicants.sort((a, b) => {
       if (a.error && !b.error) return 1;
       if (!a.error && b.error) return -1;
@@ -137,6 +176,7 @@
       if (nameCompare !== 0) return nameCompare;
       return (a.id || '').localeCompare(b.id || '');
     });
+
     if (window.WEBFLOW_API.cache && typeof window.WEBFLOW_API.cache.updateJobCacheWithSortedAndFilteredItems === 'function') {
         window.WEBFLOW_API.cache.updateJobCacheWithSortedAndFilteredItems(jobId, sortedApplicants);
     } else {
@@ -149,21 +189,20 @@
     console.log(`applyAndReloadApplicants called for Job ID: ${jobId}`);
     const newActiveFilters = { follower: [], category: [], creatorType: [], relevantOnly: false };
 
-    // Korrigierte Selektoren für Dropdown-Filter
     const followerCheckboxes = document.querySelectorAll(`input[type="checkbox"][data-filter-type="follower"][id^="filter-${jobId}-follower-"]:checked`);
-    console.log(`applyAndReloadApplicants: Found ${followerCheckboxes.length} checked follower checkboxes for Job ID ${jobId}. Selector: input[type="checkbox"][data-filter-type="follower"][id^="filter-${jobId}-follower-"]:checked`);
+    // console.log(`applyAndReloadApplicants: Found ${followerCheckboxes.length} checked follower checkboxes for Job ID ${jobId}. Selector: input[type="checkbox"][data-filter-type="follower"][id^="filter-${jobId}-follower-"]:checked`);
     followerCheckboxes.forEach(cb => cb.dataset.filterValue ? newActiveFilters.follower.push(cb.dataset.filterValue) : console.warn("Follower checkbox found without data-filter-value:", cb));
 
     const categoryCheckboxes = document.querySelectorAll(`input[type="checkbox"][data-filter-type="category"][id^="filter-${jobId}-category-"]:checked`);
-    console.log(`applyAndReloadApplicants: Found ${categoryCheckboxes.length} checked category checkboxes for Job ID ${jobId}. Selector: input[type="checkbox"][data-filter-type="category"][id^="filter-${jobId}-category-"]:checked`);
+    // console.log(`applyAndReloadApplicants: Found ${categoryCheckboxes.length} checked category checkboxes for Job ID ${jobId}. Selector: input[type="checkbox"][data-filter-type="category"][id^="filter-${jobId}-category-"]:checked`);
     categoryCheckboxes.forEach(cb => cb.dataset.filterValue ? newActiveFilters.category.push(cb.dataset.filterValue) : console.warn("Category checkbox found without data-filter-value:", cb));
 
     const creatorTypeCheckboxes = document.querySelectorAll(`input[type="checkbox"][data-filter-type="creatorType"][id^="filter-${jobId}-creatorType-"]:checked`);
-    console.log(`applyAndReloadApplicants: Found ${creatorTypeCheckboxes.length} checked creatorType checkboxes for Job ID ${jobId}. Selector: input[type="checkbox"][data-filter-type="creatorType"][id^="filter-${jobId}-creatorType-"]:checked`);
+    // console.log(`applyAndReloadApplicants: Found ${creatorTypeCheckboxes.length} checked creatorType checkboxes for Job ID ${jobId}. Selector: input[type="checkbox"][data-filter-type="creatorType"][id^="filter-${jobId}-creatorType-"]:checked`);
     creatorTypeCheckboxes.forEach(cb => cb.dataset.filterValue ? newActiveFilters.creatorType.push(cb.dataset.filterValue) : console.warn("CreatorType checkbox found without data-filter-value:", cb));
 
     const relevantOnlyCheckbox = document.getElementById(`filter-${jobId}-relevantOnly`);
-    console.log(`applyAndReloadApplicants: RelevantOnly checkbox element for Job ID ${jobId} (selector: #filter-${jobId}-relevantOnly):`, relevantOnlyCheckbox);
+    // console.log(`applyAndReloadApplicants: RelevantOnly checkbox element for Job ID ${jobId} (selector: #filter-${jobId}-relevantOnly):`, relevantOnlyCheckbox);
     if (relevantOnlyCheckbox && relevantOnlyCheckbox.checked) {
       newActiveFilters.relevantOnly = true;
     }

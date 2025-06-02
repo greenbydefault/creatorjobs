@@ -160,7 +160,6 @@
       const fieldData = applicant.fieldData;
 
       // Filter by "Nur relevante Bewerber"
-      // MODIFIED LOGIC STARTS HERE
       if (activeFilters.relevantOnly) {
         let hasFollowers = false;
         let hasSocialMedia = false;
@@ -194,7 +193,6 @@
           return false;
         }
       }
-      // MODIFIED LOGIC ENDS HERE
 
 
       // Filter by follower range
@@ -228,8 +226,9 @@
       // Handle cases where items might be errors or lack scores
       const scoreA = a.error ? -Infinity : a.weightedScore;
       const scoreB = b.error ? -Infinity : b.weightedScore;
-      const nameA = a.fieldData ? .name || '';
-      const nameB = b.fieldData ? .name || '';
+      // ERSETZUNG DES OPTIONAL CHAINING FÜR BESSERE KOMPATIBILITÄT:
+      const nameA = (a.fieldData && a.fieldData.name) || '';
+      const nameB = (b.fieldData && b.fieldData.name) || '';
 
       if (scoreB !== scoreA) {
         return scoreB - scoreA;

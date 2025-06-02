@@ -189,18 +189,13 @@
       return;
     }
 
-    // Remove existing job items and messages, but keep a potential header specific to this container
-    // Assuming .my-job-item is the class for individual job entries
-    // And .job-entry.info-message or .error-message for messages
     container.querySelectorAll(".my-job-item, .job-entry.info-message, .job-entry.error-message").forEach(item => item.remove());
 
     if (!jobItemsToRender || jobItemsToRender.length === 0) {
-      // console.log(`renderMyJobsList: Keine Jobs zum Rendern für Container '${containerId}'. Zeige 'Keine Jobs'-Nachricht.`);
       const noJobsMsg = document.createElement("p");
-      noJobsMsg.textContent = "Keine Jobs entsprechen den aktuellen Kriterien."; // Generic message
+      noJobsMsg.textContent = "Keine Jobs entsprechen den aktuellen Kriterien."; 
       noJobsMsg.classList.add("job-entry", "visible", "info-message"); 
       container.appendChild(noJobsMsg);
-      // Call plan styling even if no jobs, to ensure consistency if there were old styled items
       if (window.WEBFLOW_API.planLogic && typeof window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling === 'function') {
         window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling();
       }
@@ -208,17 +203,17 @@
     }
 
     const fragment = document.createDocumentFragment();
-    let globalRateLimitMessageShown = false; // This might need to be managed more globally if lists are separate
+    let globalRateLimitMessageShown = false; 
 
     jobItemsToRender.forEach(jobItem => {
       if (jobItem.error && jobItem.status === 429) {
-        if (!globalRateLimitMessageShown && !document.getElementById(`global-rate-limit-message-${containerId}`)) { // Unique ID for message per container
+        if (!globalRateLimitMessageShown && !document.getElementById(`global-rate-limit-message-${containerId}`)) { 
           const globalRateLimitInfo = document.createElement("p");
           globalRateLimitInfo.id = `global-rate-limit-message-${containerId}`;
           globalRateLimitInfo.textContent = "Hinweis: Einige Jobdaten konnten aufgrund von API-Anfragelimits nicht geladen werden.";
           globalRateLimitInfo.classList.add("job-entry", "visible", "error-message");
           container.insertBefore(globalRateLimitInfo, container.firstChild);
-          globalRateLimitMessageShown = true; // This logic might show the message in the first container that hits the limit
+          globalRateLimitMessageShown = true; 
         }
         return; 
       }
@@ -228,7 +223,7 @@
       }
 
       if (createJobEntryElement) {
-          const jobElement = createJobEntryElement(jobItem); // createJobEntryElement should return a .my-job-item
+          const jobElement = createJobEntryElement(jobItem); 
           if (jobElement) { 
             fragment.appendChild(jobElement);
           }
@@ -258,8 +253,7 @@
     });
 
     if (window.WEBFLOW_API.planLogic && typeof window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling === 'function') {
-      // console.log(`renderMyJobsList: Rufe applyPlanBasedJobStyling für Container '${containerId}' auf...`);
-      window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling(); // This function queries globally, which is fine.
+      window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling(); 
     } else {
       console.warn(`renderMyJobsList: window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling Funktion nicht gefunden für Container '${containerId}'.`);
     }
@@ -269,22 +263,17 @@
     const cache = window.WEBFLOW_API.cache;
     if (!cache || !cache.allMyJobsData_MJ) {
         console.warn("Keine Job-Rohdaten im Cache zum Filtern vorhanden.");
-        // Clear all potential job lists if data is missing
         renderMyJobsList([], "jobs-list-active"); 
         renderMyJobsList([], "jobs-list-closed");
-        // renderMyJobsList([], "jobs-list"); // If you still have an "all" jobs list
+        renderMyJobsList([], "jobs-list"); // Auch die "Alle Jobs"-Liste leeren
         return;
     }
 
     const showActiveCheckbox = document.getElementById('job-status-active');
     const showDoneCheckbox = document.getElementById('job-status-done');
     
-    // Determine which lists to display based on checkboxes.
-    // This assumes tabs might control visibility of these containers,
-    // and checkboxes filter *which types* of jobs are fetched/processed.
-    // For simplicity, we'll use the checkboxes to decide if a list is populated.
-    const shouldDisplayActive = showActiveCheckbox ? showActiveCheckbox.checked : true; // Default to true if no checkbox
-    const shouldDisplayDone = showDoneCheckbox ? showDoneCheckbox.checked : true; // Default to true if no checkbox
+    const shouldDisplayActive = showActiveCheckbox ? showActiveCheckbox.checked : true; 
+    const shouldDisplayDone = showDoneCheckbox ? showDoneCheckbox.checked : true; 
 
     const searchInput = document.getElementById('filter-search');
     const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : "";
@@ -312,59 +301,45 @@
         } else if (status === "Beendet") {
             closedJobs.push(jobItem);
         }
-        // "Unbekannt" status jobs are currently ignored for these specific lists
     });
 
+    // Render "Alle Jobs" Liste (gefiltert nach Suche)
+    if (document.getElementById('jobs-list')) {
+        console.log(`filterAndRenderJobs: Rendere ${allJobsMatchingSearch.length} (durch Suche gefilterten) Jobs in #jobs-list.`);
+        renderMyJobsList(allJobsMatchingSearch, "jobs-list");
+    }
+
+
+    // Render "Aktive Jobs" Liste
     if (shouldDisplayActive) {
         console.log(`filterAndRenderJobs: Rendere ${activeJobs.length} aktive Jobs in #jobs-list-active.`);
         renderMyJobsList(activeJobs, "jobs-list-active");
     } else {
         console.log("filterAndRenderJobs: Aktive Jobs werden nicht angezeigt (Checkbox nicht aktiv). Leere #jobs-list-active.");
-        renderMyJobsList([], "jobs-list-active"); // Clear active list if not displayed
+        renderMyJobsList([], "jobs-list-active"); 
     }
 
+    // Render "Beendete Jobs" Liste
     if (shouldDisplayDone) {
         console.log(`filterAndRenderJobs: Rendere ${closedJobs.length} beendete Jobs in #jobs-list-closed.`);
         renderMyJobsList(closedJobs, "jobs-list-closed");
     } else {
         console.log("filterAndRenderJobs: Beendete Jobs werden nicht angezeigt (Checkbox nicht aktiv). Leere #jobs-list-closed.");
-        renderMyJobsList([], "jobs-list-closed"); // Clear closed list if not displayed
-    }
-    
-    // Handle the original #jobs-list if it's meant for "all" jobs and both checkboxes are active or no checkboxes exist
-    // This part depends on how you want #jobs-list to behave with the new tabs.
-    // For now, we assume it's not the primary display for active/closed when those specific containers exist.
-    // If you want #jobs-list to show *all* (active and closed) when both checkboxes are checked:
-    if (document.getElementById('jobs-list')) { // Check if the general list container still exists
-        if (shouldDisplayActive && shouldDisplayDone) {
-            // console.log(`filterAndRenderJobs: Rendere alle ${allJobsMatchingSearch.length} (durch Suche gefilterten) Jobs in #jobs-list.`);
-            // renderMyJobsList(allJobsMatchingSearch, "jobs-list");
-        } else if (!shouldDisplayActive && !shouldDisplayDone && !showActiveCheckbox && !showDoneCheckbox) {
-            // If no status checkboxes exist at all, maybe show all in the main list
-            // console.log(`filterAndRenderJobs: Keine Status-Checkboxes, rendere alle ${allJobsMatchingSearch.length} Jobs in #jobs-list.`);
-            // renderMyJobsList(allJobsMatchingSearch, "jobs-list");
-        } else {
-            // Clear #jobs-list if it's not supposed to show a combined view based on current checkbox state
-            // console.log("filterAndRenderJobs: Leere #jobs-list, da nicht alle Kategorien angezeigt werden sollen.");
-            // renderMyJobsList([], "jobs-list");
-        }
+        renderMyJobsList([], "jobs-list-closed"); 
     }
   }
 
   async function initializeMyJobsDisplay() {
-    // ... (rest of the function remains largely the same, ensure all module checks are robust) ...
-    // The key is that it calls filterAndRenderJobs() at the end, which will now handle the new containers.
-
     if (!window.WEBFLOW_API.config) {
         console.error("❌ Konfigurationsmodul nicht geladen. Breche initializeMyJobsDisplay ab.");
-        const container = document.getElementById("jobs-list") || document.getElementById("jobs-list-active"); // Try to find a valid container
+        const container = document.getElementById("jobs-list") || document.getElementById("jobs-list-active"); 
         if (container) container.innerHTML = "<p class='error-message job-entry visible'>Fehler: Konfiguration konnte nicht geladen werden.</p>";
         return;
     }
     const { API_CALL_DELAY_MS, USER_COLLECTION_ID_MJ, JOB_COLLECTION_ID_MJ, SKELETON_JOBS_COUNT_MJ } = window.WEBFLOW_API.config;
     
     const cache = window.WEBFLOW_API.cache;
-    if (!cache) { // Check for cache module itself
+    if (!cache) { 
         console.error("❌ Cache-Modul nicht geladen. Breche initializeMyJobsDisplay ab.");
         const container = document.getElementById("jobs-list") || document.getElementById("jobs-list-active");
         if (container) container.innerHTML = "<p class='error-message job-entry visible'>Fehler: Cache konnte nicht geladen werden.</p>";
@@ -392,22 +367,14 @@
     }
     const { renderMyJobsSkeletonLoader, createMyJobsTableHeaderElement } = ui;
 
-    // Determine a primary container for initial messages/skeleton, e.g., the "active" tab's container or the old "jobs-list"
-    // This needs to align with which tab is visible by default.
-    // For now, let's assume one of them will exist for skeleton/header.
-    let initialContainer = document.getElementById("jobs-list-active") || document.getElementById("jobs-list");
+    let initialContainer = document.getElementById("jobs-list") || document.getElementById("jobs-list-active"); // Bevorzuge #jobs-list für Skeleton
     if (!initialContainer && document.getElementById("jobs-list-closed")) initialContainer = document.getElementById("jobs-list-closed");
 
     if (!initialContainer) {
-      console.error("❌ Keinen initialen Job-Container (jobs-list-active, jobs-list, oder jobs-list-closed) für initializeMyJobsDisplay gefunden.");
+      console.error("❌ Keinen initialen Job-Container (jobs-list, jobs-list-active, oder jobs-list-closed) für initializeMyJobsDisplay gefunden.");
       return;
     }
     
-    // Assuming each tab might have its own header, or you have a general one.
-    // This part might need adjustment based on your tab structure.
-    // For now, let's assume a general header might be placed in one of the containers or above them.
-    // If headers are specific per tab, createMyJobsTableHeaderElement might need to be called per tab container.
-    // The current logic adds a header if ".db-table-header.db-table-my-jobs" is not found in `initialContainer`.
     if (!initialContainer.querySelector(".db-table-header.db-table-my-jobs")) {
         const myJobsHeader = createMyJobsTableHeaderElement ? createMyJobsTableHeaderElement() : null;
         if (myJobsHeader) initialContainer.appendChild(myJobsHeader);
@@ -450,8 +417,8 @@
 
       const postedJobIds = currentUserItem.fieldData ? currentUserItem.fieldData["posted-jobs"] || [] : [];
       if (postedJobIds.length === 0) {
-        initialContainer.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
-        filterAndRenderJobs(); // This will show "no jobs" in the respective containers
+        document.querySelectorAll("#jobs-list .my-job-item-skeleton, #jobs-list-active .my-job-item-skeleton, #jobs-list-closed .my-job-item-skeleton").forEach(el => el.remove());
+        filterAndRenderJobs(); 
         return;
       }
 
@@ -464,14 +431,12 @@
       const myJobItemsResults = await Promise.all(myJobItemsPromises);
       cache.allMyJobsData_MJ = myJobItemsResults.filter(item => item !== null); 
       
-      // Remove skeletons from all potential containers
       document.querySelectorAll("#jobs-list .my-job-item-skeleton, #jobs-list-active .my-job-item-skeleton, #jobs-list-closed .my-job-item-skeleton").forEach(el => el.remove());
       filterAndRenderJobs(); 
 
     } catch (error) {
       console.error("❌ Schwerwiegender Fehler in initializeMyJobsDisplay:", error);
-      // Clear skeletons and show error in a primary container
-      const errorContainer = document.getElementById("jobs-list-active") || document.getElementById("jobs-list") || document.getElementById("jobs-list-closed");
+      const errorContainer = document.getElementById("jobs-list") || document.getElementById("jobs-list-active") || document.getElementById("jobs-list-closed");
       if (errorContainer) {
           errorContainer.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
           errorContainer.innerHTML += `<p class='error-message job-entry visible'>Ein allgemeiner Fehler ist aufgetreten.</p>`;

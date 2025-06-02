@@ -7,7 +7,7 @@ import './config/mappings.js';
 // Hilfsfunktionen und Cache als nächstes
 import './utils/helpers.js';
 import './core/cache-1.1.js';
-import './core/planStatusChecker.js';
+import './core/planStatusChecker-1.01.js';
 
 // Services, die Konfiguration und Utils verwenden
 import './services/webflowService.js';

@@ -3,11 +3,10 @@
   window.WEBFLOW_API = window.WEBFLOW_API || {};
   window.WEBFLOW_API.core = window.WEBFLOW_API.core || {};
 
-  // Destructure services and utils safely, cache will be accessed directly
+  // Services and utils are expected to be on window.WEBFLOW_API
   const services = window.WEBFLOW_API.services || {};
   const {
     fetchWebflowItem,
-    // fetchCollectionItemsWithRetry // Not currently used in this script
   } = services;
 
   const utils = window.WEBFLOW_API.utils || {};
@@ -16,7 +15,8 @@
     delay: utilDelay
   } = utils;
 
-  const MAPPINGS = window.WEBFLOW_API.MAPPINGS || {};
+  // MAPPINGS is expected to be on window.WEBFLOW_API
+  // const MAPPINGS = window.WEBFLOW_API.MAPPINGS || {}; // Not directly used in this version of the script
 
   /**
    * Fetches applicant data for a given job.
@@ -25,7 +25,6 @@
    * @returns {Promise<Array<Object>>} - A promise that resolves to an array of applicant items.
    */
   async function fetchApplicantData(jobId, applicantIds) {
-    // Check for config and specific service function
     if (!window.WEBFLOW_API.config || typeof fetchWebflowItem !== 'function') {
       console.error("❌ Config or fetchWebflowItem service not available for fetchApplicantData.");
       return applicantIds.map(id => ({
@@ -52,7 +51,7 @@
       }));
     }
 
-    console.log(`Fetching applicant data for job ${jobId}. Applicant IDs:`, applicantIds);
+    // console.log(`Fetching applicant data for job ${jobId}. Applicant IDs:`, applicantIds);
     const applicantPromises = applicantIds.map(async (applicantId, index) => {
       await delayFunc(index * API_CALL_DELAY_MS);
       const applicantItem = await fetchWebflowItem(USER_COLLECTION_ID, applicantId);
@@ -86,7 +85,7 @@
         };
       }
     });
-    console.log(`Fetched applicant data for job ${jobId}:`, applicantData);
+    // console.log(`Fetched applicant data for job ${jobId}:`, applicantData);
     return applicantData;
   }
 
@@ -102,33 +101,34 @@
     if (window.WEBFLOW_API.cache && typeof window.WEBFLOW_API.cache.getJobDataFromCache === 'function') {
         jobCache = window.WEBFLOW_API.cache.getJobDataFromCache(jobId);
     } else {
-        console.warn("window.WEBFLOW_API.cache.getJobDataFromCache is not available.");
+        // This warning should ideally not appear if cache.js is loaded and working
+        console.warn("filterAndSortApplicants: window.WEBFLOW_API.cache.getJobDataFromCache is not available.");
     }
 
     if (!jobCache || !jobCache.allItems) {
-      console.warn(`Keine Rohdaten (allItems) für Job ${jobId} im Cache zum Filtern/Sortieren.`);
+      console.warn(`filterAndSortApplicants: Keine Rohdaten (allItems) für Job ${jobId} im Cache zum Filtern/Sortieren. jobCache:`, jobCache);
       return [];
     }
 
     const { allItems } = jobCache;
     let activeFiltersToUse = explicitFilters;
 
-    if (!activeFiltersToUse) { // If explicitFilters were not passed
+    if (!activeFiltersToUse) {
         if (jobCache && jobCache.activeFilters) {
             activeFiltersToUse = jobCache.activeFilters;
-            console.log(`filterAndSortApplicants für Job ${jobId} verwendet activeFilters aus dem Cache.`);
+            // console.log(`filterAndSortApplicants für Job ${jobId} verwendet activeFilters aus dem Cache:`, JSON.parse(JSON.stringify(activeFiltersToUse)));
         } else {
-            console.warn(`Keine expliziten Filter übergeben und keine activeFilters im Cache für Job ${jobId}. Verwende Standard (keine Filter).`);
-            activeFiltersToUse = { follower: [], category: [], creatorType: [], relevantOnly: false }; // Default empty filters
+            console.warn(`filterAndSortApplicants: Keine expliziten Filter übergeben und keine activeFilters im Cache für Job ${jobId}. Verwende Standard (keine Filter).`);
+            activeFiltersToUse = { follower: [], category: [], creatorType: [], relevantOnly: false };
         }
     }
     
-    console.log(`Filtere und sortiere Bewerber für Job ${jobId}. Verwendete Filter:`, activeFiltersToUse);
+    // console.log(`Filtere und sortiere Bewerber für Job ${jobId}. Verwendete Filter:`, JSON.parse(JSON.stringify(activeFiltersToUse)));
 
     const filteredApplicants = allItems.filter(applicant => {
       if (applicant.error || !applicant.fieldData) {
         if (activeFiltersToUse && activeFiltersToUse.relevantOnly) return false;
-        return true;
+        return true; // Pass through items with errors if not filtering by relevantOnly
       }
 
       const fieldData = applicant.fieldData;
@@ -151,11 +151,11 @@
             }
           }
         } else if (!normalizeUrlFunc) {
-            console.warn("normalizeUrl function is not available from utils. Cannot check social media links for 'relevantOnly' filter.");
+            // console.warn("normalizeUrl function is not available from utils. Cannot check social media links for 'relevantOnly' filter.");
         }
 
         if (!hasFollowers && !hasSocialMedia) {
-          console.log(`Filtering out applicant ${fieldData.name || applicant.id} due to relevantOnly (no followers AND no social media).`);
+          // console.log(`Filtering out applicant ${fieldData.name || applicant.id} due to relevantOnly (no followers AND no social media).`);
           return false;
         }
       }
@@ -205,11 +205,11 @@
       return idA.localeCompare(idB);
     });
 
-    console.log(`Sortierte und gefilterte Bewerber für Job ${jobId} (ohne Score):`, sortedApplicants);
+    // console.log(`Sortierte und gefilterte Bewerber für Job ${jobId} (Anzahl: ${sortedApplicants.length}):`, sortedApplicants);
     if (window.WEBFLOW_API.cache && typeof window.WEBFLOW_API.cache.updateJobCacheWithSortedAndFilteredItems === 'function') {
         window.WEBFLOW_API.cache.updateJobCacheWithSortedAndFilteredItems(jobId, sortedApplicants);
     } else {
-        console.warn("window.WEBFLOW_API.cache.updateJobCacheWithSortedAndFilteredItems is not available.");
+        console.warn("filterAndSortApplicants: window.WEBFLOW_API.cache.updateJobCacheWithSortedAndFilteredItems is not available.");
     }
     return sortedApplicants;
   }
@@ -231,41 +231,67 @@
       relevantOnly: false,
     };
 
+    // --- Erweiterte Diagnose für Filterauslesung ---
+    // Prüfen Sie die Konsole auf diese Ausgaben. Wenn die "count" Werte 0 sind, obwohl Checkboxen
+    // in der UI ausgewählt sind, dann stimmen die Selektoren nicht mit Ihrer HTML-Struktur überein
+    // oder die data-filter-value Attribute fehlen/sind falsch.
+
     const followerCheckboxes = document.querySelectorAll(`#filter-${jobId}-follower input[type="checkbox"]:checked`);
-    followerCheckboxes.forEach(cb => newActiveFilters.follower.push(cb.dataset.filterValue));
+    console.log(`applyAndReloadApplicants: Found ${followerCheckboxes.length} checked follower checkboxes for Job ID ${jobId}. Selector: #filter-${jobId}-follower input[type="checkbox"]:checked`);
+    followerCheckboxes.forEach(cb => {
+        if (cb.dataset.filterValue) {
+            newActiveFilters.follower.push(cb.dataset.filterValue);
+        } else {
+            console.warn("applyAndReloadApplicants: Follower checkbox found without data-filter-value:", cb);
+        }
+    });
 
     const categoryCheckboxes = document.querySelectorAll(`#filter-${jobId}-category input[type="checkbox"]:checked`);
-    categoryCheckboxes.forEach(cb => newActiveFilters.category.push(cb.dataset.filterValue));
+    console.log(`applyAndReloadApplicants: Found ${categoryCheckboxes.length} checked category checkboxes for Job ID ${jobId}. Selector: #filter-${jobId}-category input[type="checkbox"]:checked`);
+    categoryCheckboxes.forEach(cb => {
+        if (cb.dataset.filterValue) {
+            newActiveFilters.category.push(cb.dataset.filterValue);
+        } else {
+            console.warn("applyAndReloadApplicants: Category checkbox found without data-filter-value:", cb);
+        }
+    });
 
     const creatorTypeCheckboxes = document.querySelectorAll(`#filter-${jobId}-creatorType input[type="checkbox"]:checked`);
-    creatorTypeCheckboxes.forEach(cb => newActiveFilters.creatorType.push(cb.dataset.filterValue));
+    console.log(`applyAndReloadApplicants: Found ${creatorTypeCheckboxes.length} checked creatorType checkboxes for Job ID ${jobId}. Selector: #filter-${jobId}-creatorType input[type="checkbox"]:checked`);
+    creatorTypeCheckboxes.forEach(cb => {
+        if (cb.dataset.filterValue) {
+            newActiveFilters.creatorType.push(cb.dataset.filterValue);
+        } else {
+            console.warn("applyAndReloadApplicants: CreatorType checkbox found without data-filter-value:", cb);
+        }
+    });
 
     const relevantOnlyCheckbox = document.getElementById(`filter-${jobId}-relevantOnly`);
+    console.log(`applyAndReloadApplicants: RelevantOnly checkbox element for Job ID ${jobId} (selector: #filter-${jobId}-relevantOnly):`, relevantOnlyCheckbox);
     if (relevantOnlyCheckbox && relevantOnlyCheckbox.checked) {
       newActiveFilters.relevantOnly = true;
     }
+    // --- Ende Diagnose ---
 
-    // Attempt to update cache, but proceed even if it fails
+    console.log(`UI-Filter für Job ${jobId} ermittelt:`, JSON.parse(JSON.stringify(newActiveFilters)));
+
+
     if (window.WEBFLOW_API.cache && typeof window.WEBFLOW_API.cache.updateJobCacheWithActiveFilters === 'function') {
         window.WEBFLOW_API.cache.updateJobCacheWithActiveFilters(jobId, newActiveFilters);
     } else {
-        console.warn("window.WEBFLOW_API.cache.updateJobCacheWithActiveFilters is not available. 'newActiveFilters' will be passed directly for this operation.");
+        console.warn("applyAndReloadApplicants: window.WEBFLOW_API.cache.updateJobCacheWithActiveFilters is not available. 'newActiveFilters' will be passed directly for this operation.");
     }
-    console.log(`UI-Filter für Job ${jobId} ermittelt:`, newActiveFilters);
     
     if (window.WEBFLOW_API.cache && typeof window.WEBFLOW_API.cache.logCacheState === 'function') {
-        window.WEBFLOW_API.cache.logCacheState(jobId, "Nach Aktualisierung der aktiven Filter in applyAndReloadApplicants (Versuch)");
+        // window.WEBFLOW_API.cache.logCacheState(jobId, "Nach (versuchter) Aktualisierung der aktiven Filter in applyAndReloadApplicants");
     }
 
-    // Call filterAndSortApplicants with the newActiveFilters directly
-    filterAndSortApplicants(jobId, newActiveFilters); // This will update sortedAndFilteredItems in cache internally
+    filterAndSortApplicants(jobId, newActiveFilters);
 
-    // loadAndDisplayApplicantsForJob will read sortedAndFilteredItems from cache,
-    // which should have been updated by the filterAndSortApplicants call above.
     if (window.WEBFLOW_API.appLogic && typeof window.WEBFLOW_API.appLogic.loadAndDisplayApplicantsForJob === 'function') {
-      await window.WEBFLOW_API.appLogic.loadAndDisplayApplicantsForJob(jobId, applicantsListContainer, paginationWrapper, 1);
+      await window.WEBFLOW_API.appLogic.loadAndDisplayApplicantsForJob(jobId, applicantsListContainer, paginationWrapper, 1); // Reset to page 1
     } else {
-      console.error("loadAndDisplayApplicantsForJob function not found on window.WEBFLOW_API.appLogic or appLogic itself is missing.");
+      console.error("applyAndReloadApplicants: loadAndDisplayApplicantsForJob function not found on window.WEBFLOW_API.appLogic or appLogic itself is missing.");
     }
 
     const filterRow = applicantsListContainer.querySelector(".db-table-filter-row");
@@ -274,11 +300,11 @@
     if (activeFiltersDisplayContainer && window.WEBFLOW_API.ui && typeof window.WEBFLOW_API.ui.renderActiveFilterBadgesUI === 'function') {
       window.WEBFLOW_API.ui.renderActiveFilterBadgesUI(jobId, activeFiltersDisplayContainer, applicantsListContainer, paginationWrapper);
     } else {
-      console.warn("Container für aktive Filter-Badges nicht gefunden oder renderActiveFilterBadgesUI nicht verfügbar auf window.WEBFLOW_API.ui.");
+      // console.warn("Container für aktive Filter-Badges nicht gefunden oder renderActiveFilterBadgesUI nicht verfügbar auf window.WEBFLOW_API.ui.");
     }
 
     if (window.WEBFLOW_API.cache && typeof window.WEBFLOW_API.cache.logCacheState === 'function') {
-        window.WEBFLOW_API.cache.logCacheState(jobId, "Nach applyAndReloadApplicants");
+        // window.WEBFLOW_API.cache.logCacheState(jobId, "Nach applyAndReloadApplicants Abschluss");
     }
   }
 
@@ -291,33 +317,31 @@
    * @returns {Promise<boolean>} - True if initialization was successful, false otherwise.
    */
   async function initializeJobData(jobId, applicantIdsFromJob, jobDetailsFromMJ) {
-    console.log(`Initialisiere Daten für Job ${jobId}. Bewerber-IDs vom Job-Objekt:`, applicantIdsFromJob);
+    // console.log(`initializeJobData: Start für Job ${jobId}. Bewerber-IDs vom Job-Objekt:`, applicantIdsFromJob);
     if (window.WEBFLOW_API.cache && typeof window.WEBFLOW_API.cache.initializeJobCache === 'function') {
-        // initializeJobCache should set up jobCache[jobId].activeFilters to a default (e.g., empty filters)
-        window.WEBFLOW_API.cache.initializeJobCache(jobId);
+        window.WEBFLOW_API.cache.initializeJobCache(jobId); // Ensures cache entry exists with default activeFilters
     } else {
-        console.warn("window.WEBFLOW_API.cache.initializeJobCache is not available.");
+        console.warn("initializeJobData: window.WEBFLOW_API.cache.initializeJobCache is not available.");
     }
 
     if (jobDetailsFromMJ) {
       if (window.WEBFLOW_API.cache && typeof window.WEBFLOW_API.cache.updateJobCacheWithJobDetails === 'function') {
           window.WEBFLOW_API.cache.updateJobCacheWithJobDetails(jobId, jobDetailsFromMJ);
       } else {
-          console.warn("window.WEBFLOW_API.cache.updateJobCacheWithJobDetails is not available.");
+          console.warn("initializeJobData: window.WEBFLOW_API.cache.updateJobCacheWithJobDetails is not available.");
       }
     } else {
-      console.warn(`Job-Details für Job ${jobId} wurden nicht an initializeJobData übergeben.`);
+      console.warn(`initializeJobData: Job-Details für Job ${jobId} wurden nicht übergeben.`);
     }
 
     if (!applicantIdsFromJob || applicantIdsFromJob.length === 0) {
-      console.log(`Job ${jobId} hat keine Bewerber-IDs. Initialisiere mit leeren Bewerbern.`);
+      // console.log(`initializeJobData: Job ${jobId} hat keine Bewerber-IDs. Initialisiere mit leeren Bewerbern.`);
       if (window.WEBFLOW_API.cache && typeof window.WEBFLOW_API.cache.updateJobCacheWithApplicants === 'function') {
           window.WEBFLOW_API.cache.updateJobCacheWithApplicants(jobId, []);
       } else {
-          console.warn("window.WEBFLOW_API.cache.updateJobCacheWithApplicants is not available.");
+          console.warn("initializeJobData: window.WEBFLOW_API.cache.updateJobCacheWithApplicants is not available.");
       }
-      // Call filterAndSortApplicants without explicit filters; it will use cache/defaults.
-      filterAndSortApplicants(jobId);
+      filterAndSortApplicants(jobId); // Uses default filters from initialized cache
       return true;
     }
 
@@ -326,16 +350,15 @@
       if (window.WEBFLOW_API.cache && typeof window.WEBFLOW_API.cache.updateJobCacheWithApplicants === 'function') {
           window.WEBFLOW_API.cache.updateJobCacheWithApplicants(jobId, applicants);
       } else {
-          console.warn("window.WEBFLOW_API.cache.updateJobCacheWithApplicants is not available.");
+          console.warn("initializeJobData: window.WEBFLOW_API.cache.updateJobCacheWithApplicants is not available.");
       }
-      // Call filterAndSortApplicants without explicit filters; it will use cache/defaults.
-      filterAndSortApplicants(jobId);
+      filterAndSortApplicants(jobId); // Uses default filters from initialized cache
       if (window.WEBFLOW_API.cache && typeof window.WEBFLOW_API.cache.logCacheState === 'function') {
-          window.WEBFLOW_API.cache.logCacheState(jobId, "Nach Initialisierung der Job-Daten (inkl. Bewerber)");
+          // window.WEBFLOW_API.cache.logCacheState(jobId, "Nach Initialisierung der Job-Daten (inkl. Bewerber)");
       }
       return true;
     } catch (error) {
-      console.error(`Fehler beim Initialisieren der Daten für Job ${jobId}:`, error);
+      console.error(`initializeJobData: Fehler beim Initialisieren der Daten für Job ${jobId}:`, error);
       const errorApplicants = applicantIdsFromJob.map(id => ({
         id,
         error: true,
@@ -345,9 +368,8 @@
       if (window.WEBFLOW_API.cache && typeof window.WEBFLOW_API.cache.updateJobCacheWithApplicants === 'function') {
           window.WEBFLOW_API.cache.updateJobCacheWithApplicants(jobId, errorApplicants);
       } else {
-          console.warn("window.WEBFLOW_API.cache.updateJobCacheWithApplicants is not available. Cannot store error state for applicants.");
+          console.warn("initializeJobData: window.WEBFLOW_API.cache.updateJobCacheWithApplicants is not available. Cannot store error state for applicants.");
       }
-      // Call filterAndSortApplicants without explicit filters; it will use cache/defaults.
       filterAndSortApplicants(jobId);
       return false;
     }

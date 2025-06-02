@@ -20,10 +20,9 @@
     currentApplicantPageSize
   } = window.WEBFLOW_API.cache;
 
-  const {
-    calculateMatchScore,
-    calculateWeightedScore
-  } = window.WEBFLOW_API.matchScoring;
+  // REMOVED: const { calculateMatchScore, calculateWeightedScore } = window.WEBFLOW_API.matchScoring;
+  // This line caused the error because window.WEBFLOW_API.matchScoring was undefined.
+
   const {
     loadAndDisplayApplicantsForJob
   } = window.WEBFLOW_API.appLogic;
@@ -43,7 +42,6 @@
   async function fetchApplicantData(jobId, applicantIds) {
     if (!window.WEBFLOW_API.config || !window.WEBFLOW_API.services) {
       console.error("❌ Config or Services not available for fetchApplicantData.");
-      // Return an empty array or an array of error objects
       return applicantIds.map(id => ({
         id: id,
         error: true,
@@ -76,7 +74,6 @@
       await delay(index * API_CALL_DELAY_MS); // Stagger API calls
       const applicantItem = await fetchWebflowItem(USER_COLLECTION_ID, applicantId);
       if (!applicantItem) {
-        // This case should ideally be handled by fetchWebflowItem returning an error object
         console.warn(`fetchWebflowItem returned null for applicantId: ${applicantId}`);
         return {
           id: applicantId,
@@ -85,7 +82,6 @@
           status: 'fetch_null_error'
         };
       }
-      // Ensure the returned object always has an id, even if it's an error from fetchWebflowItem
       if (!applicantItem.id && applicantId) {
         applicantItem.id = applicantId;
       }
@@ -97,9 +93,7 @@
       if (result.status === 'fulfilled') {
         return result.value;
       } else {
-        // Log and return an error object if the promise was rejected
         console.error("Error fetching an applicant:", result.reason);
-        // Try to find ID from reason if possible, otherwise it's a general error for an applicant
         const id = result.reason && result.reason.id ? result.reason.id : 'unknown_applicant_id';
         return {
           id: id,
@@ -115,87 +109,73 @@
 
 
   /**
-   * Filters and sorts applicants based on active filters and job details.
+   * Filters and sorts applicants based on active filters.
+   * Job details are no longer used for scoring in this version.
    * @param {string} jobId - The ID of the job.
-   * @returns {Array<Object>} - An array of sorted and filtered applicant items with score info.
+   * @returns {Array<Object>} - An array of sorted and filtered applicant items.
    */
   function filterAndSortApplicants(jobId) {
     const jobCache = getJobDataFromCache(jobId);
-    if (!jobCache || !jobCache.allItems || !jobCache.jobDetails) {
-      console.warn(`Keine Rohdaten oder Jobdetails für Job ${jobId} im Cache zum Filtern/Sortieren.`);
+    if (!jobCache || !jobCache.allItems /* || !jobCache.jobDetails */) { // jobDetails might not be strictly needed if only for scoring
+      console.warn(`Keine Rohdaten (allItems) für Job ${jobId} im Cache zum Filtern/Sortieren.`);
       return [];
     }
 
     const {
-      allItems,
-      jobDetails,
+      allItems, // These are applicants, some might have .error
+      // jobDetails, // No longer directly used here for scoring
       activeFilters
     } = jobCache;
     console.log(`Filtere und sortiere Bewerber für Job ${jobId}. Aktive Filter:`, activeFilters);
-    console.log(`Job Details für Scoring:`, jobDetails);
+    // console.log(`Job Details für Scoring:`, jobDetails); // This log is removed as scoring is removed.
 
-    const applicantsWithScores = allItems.map(applicant => {
-      if (applicant.error || !applicant.fieldData) {
-        return applicant; // Keep error objects or invalid items as they are
-      }
-      const scoreInfo = calculateMatchScore(applicant.fieldData, jobDetails.fieldData);
-      const weightedScore = calculateWeightedScore(scoreInfo, jobDetails.fieldData);
-      return { ...applicant,
-        scoreInfo,
-        weightedScore
-      };
-    });
+    // The map to add scores is removed. We filter `allItems` directly.
+    // const applicantsWithScores = allItems.map(applicant => {
+    //   if (applicant.error || !applicant.fieldData) {
+    //     return applicant;
+    //   }
+    //   // REMOVED: Score calculation
+    //   // const scoreInfo = calculateMatchScore(applicant.fieldData, jobDetails.fieldData);
+    //   // const weightedScore = calculateWeightedScore(scoreInfo, jobDetails.fieldData);
+    //   // return { ...applicant, scoreInfo, weightedScore };
+    //   return applicant; // Just return the applicant as is
+    // });
 
-    const filteredApplicants = applicantsWithScores.filter(applicant => {
+    const filteredApplicants = allItems.filter(applicant => {
       if (applicant.error || !applicant.fieldData) {
-        // Option: decide if items with errors should always be excluded or passed through
-        // For now, let's pass them through and let the rendering logic handle display of errors
-        // If you want to exclude items that had fetching errors, return false here.
-        // However, if a filter is "relevantOnly", an item with an error might be considered not relevant.
-        // Let's refine this: if it's an error, it doesn't meet any positive criteria.
-        if (activeFilters.relevantOnly) return false; // If error and relevantOnly, filter out
-        return true; // Otherwise, pass through to be potentially handled by UI
+        if (activeFilters.relevantOnly) return false;
+        return true;
       }
 
       const fieldData = applicant.fieldData;
 
-      // Filter by "Nur relevante Bewerber"
       if (activeFilters.relevantOnly) {
         let hasFollowers = false;
         let hasSocialMedia = false;
         const normalizeUrlFunc = normalizeUrl || (window.WEBFLOW_API.utils && window.WEBFLOW_API.utils.normalizeUrl);
 
-
-        // 1. Check for follower count
-        // Assuming "creator-follower" contains a value if follower data is present.
-        // The value itself (e.g., a range ID) indicates presence.
         if (fieldData["creator-follower"]) {
           hasFollowers = true;
         }
 
-        // 2. Check for social media links
         if (fieldData && normalizeUrlFunc) {
           const socialKeys = ['instagram', 'tiktok', 'youtube'];
           for (const key of socialKeys) {
             if (normalizeUrlFunc(fieldData[key])) {
               hasSocialMedia = true;
-              break; // One valid link is enough
+              break;
             }
           }
         } else if (!normalizeUrlFunc) {
             console.warn("normalizeUrl function is not available. Cannot check social media links for 'relevantOnly' filter.");
         }
 
-        // An applicant is considered "relevant" if they have followers OR social media.
-        // If they have neither, they are filtered out when "relevantOnly" is active.
         if (!hasFollowers && !hasSocialMedia) {
           console.log(`Filtering out applicant ${fieldData.name || applicant.id} due to relevantOnly (no followers AND no social media).`);
           return false;
         }
       }
 
-
-      // Filter by follower range
       if (activeFilters.follower && activeFilters.follower.length > 0) {
         const followerRangeId = fieldData["creator-follower"];
         if (!followerRangeId || !activeFilters.follower.includes(followerRangeId)) {
@@ -203,7 +183,6 @@
         }
       }
 
-      // Filter by category
       if (activeFilters.category && activeFilters.category.length > 0) {
         const category = fieldData["creator-main-categorie"];
         if (!category || !activeFilters.category.includes(category)) {
@@ -211,7 +190,6 @@
         }
       }
 
-      // Filter by creator type
       if (activeFilters.creatorType && activeFilters.creatorType.length > 0) {
         const creatorTypeId = fieldData["creator-type"];
         if (!creatorTypeId || !activeFilters.creatorType.includes(creatorTypeId)) {
@@ -221,22 +199,33 @@
       return true;
     });
 
-    // Sort by weighted score (descending), then by name (ascending) as a tie-breaker
+    // Sort by name (ascending), then by ID as a tie-breaker. Error items are pushed to the end.
     const sortedApplicants = filteredApplicants.sort((a, b) => {
-      // Handle cases where items might be errors or lack scores
-      const scoreA = a.error ? -Infinity : a.weightedScore;
-      const scoreB = b.error ? -Infinity : b.weightedScore;
-      // ERSETZUNG DES OPTIONAL CHAINING FÜR BESSERE KOMPATIBILITÄT:
+      // Push items with errors to the end of the list
+      if (a.error && !b.error) return 1; // a comes after b
+      if (!a.error && b.error) return -1; // a comes before b
+      if (a.error && b.error) { // If both are errors, sort by ID or maintain order
+          const idA_err = a.id || '';
+          const idB_err = b.id || '';
+          return idA_err.localeCompare(idB_err);
+      }
+
+      // If neither are errors, sort by name
       const nameA = (a.fieldData && a.fieldData.name) || '';
       const nameB = (b.fieldData && b.fieldData.name) || '';
 
-      if (scoreB !== scoreA) {
-        return scoreB - scoreA;
+      const nameCompare = nameA.localeCompare(nameB);
+      if (nameCompare !== 0) {
+        return nameCompare;
       }
-      return nameA.localeCompare(nameB);
+
+      // If names are the same, sort by ID as a tie-breaker
+      const idA = a.id || '';
+      const idB = b.id || '';
+      return idA.localeCompare(idB);
     });
 
-    console.log(`Sortierte und gefilterte Bewerber für Job ${jobId}:`, sortedApplicants);
+    console.log(`Sortierte und gefilterte Bewerber für Job ${jobId} (ohne Score):`, sortedApplicants);
     updateJobCacheWithSortedAndFilteredItems(jobId, sortedApplicants);
     return sortedApplicants;
   }
@@ -251,9 +240,8 @@
    */
   async function applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper) {
     console.log(`applyAndReloadApplicants called for Job ID: ${jobId}`);
-    const jobCache = getJobDataFromCache(jobId);
+    // const jobCache = getJobDataFromCache(jobId); // Not directly used here, but functions below use it
 
-    // 1. Update activeFilters in cache from UI elements
     const newActiveFilters = {
       follower: [],
       category: [],
@@ -279,19 +267,14 @@
     console.log(`Aktualisierte aktive Filter für Job ${jobId}:`, newActiveFilters);
     logCacheState(jobId, "Nach Aktualisierung der aktiven Filter in applyAndReloadApplicants");
 
+    filterAndSortApplicants(jobId);
 
-    // 2. Re-filter and sort applicants using data from cache
-    filterAndSortApplicants(jobId); // This updates jobCache.sortedAndFilteredItems
-
-    // 3. Re-render the applicants list (usually page 1 after filter change)
-    // The loadAndDisplayApplicantsForJob function will use the updated sortedAndFilteredItems from cache
     if (window.WEBFLOW_API.appLogic && window.WEBFLOW_API.appLogic.loadAndDisplayApplicantsForJob) {
-      await window.WEBFLOW_API.appLogic.loadAndDisplayApplicantsForJob(jobId, applicantsListContainer, paginationWrapper, 1); // Reset to page 1
+      await window.WEBFLOW_API.appLogic.loadAndDisplayApplicantsForJob(jobId, applicantsListContainer, paginationWrapper, 1);
     } else {
       console.error("loadAndDisplayApplicantsForJob function not found on window.WEBFLOW_API.appLogic");
     }
 
-    // 4. Update active filter badges UI
     const filterRow = applicantsListContainer.querySelector(".db-table-filter-row");
     const activeFiltersDisplayContainer = filterRow ? filterRow.querySelector(".db-active-filters-display") : null;
     if (activeFiltersDisplayContainer && window.WEBFLOW_API.ui && window.WEBFLOW_API.ui.renderActiveFilterBadgesUI) {
@@ -313,43 +296,36 @@
    */
   async function initializeJobData(jobId, applicantIdsFromJob, jobDetailsFromMJ) {
     console.log(`Initialisiere Daten für Job ${jobId}. Bewerber-IDs vom Job-Objekt:`, applicantIdsFromJob);
-    initializeJobCache(jobId); // Ensure cache entry exists
+    initializeJobCache(jobId);
 
-    // Store job details in cache
     if (jobDetailsFromMJ) {
       updateJobCacheWithJobDetails(jobId, jobDetailsFromMJ);
     } else {
-      // This case should ideally not happen if called from toggleJobApplicantsVisibility
-      // as jobDetailsFromMJ comes from allMyJobsData_MJ which should be populated.
-      console.warn(`Job-Details für Job ${jobId} wurden nicht an initializeJobData übergeben. Versuche, sie separat zu laden...`);
-      // Optional: Fetch job details if not provided, though this might be redundant
-      // if allMyJobsData_MJ is the source of truth for job listings.
-      // For now, we assume jobDetailsFromMJ is sufficient.
+      console.warn(`Job-Details für Job ${jobId} wurden nicht an initializeJobData übergeben.`);
     }
 
     if (!applicantIdsFromJob || applicantIdsFromJob.length === 0) {
       console.log(`Job ${jobId} hat keine Bewerber-IDs. Initialisiere mit leeren Bewerbern.`);
       updateJobCacheWithApplicants(jobId, []);
-      filterAndSortApplicants(jobId); // Process with empty list to set sortedAndFilteredItems
+      filterAndSortApplicants(jobId);
       return true;
     }
 
     try {
       const applicants = await fetchApplicantData(jobId, applicantIdsFromJob);
       updateJobCacheWithApplicants(jobId, applicants);
-      filterAndSortApplicants(jobId); // Filter and sort immediately after fetching
+      filterAndSortApplicants(jobId);
       logCacheState(jobId, "Nach Initialisierung der Job-Daten (inkl. Bewerber)");
       return true;
     } catch (error) {
       console.error(`Fehler beim Initialisieren der Daten für Job ${jobId}:`, error);
-      // Store error state in cache or handle appropriately
       updateJobCacheWithApplicants(jobId, applicantIdsFromJob.map(id => ({
         id,
         error: true,
         message: `Fehler beim Laden der Bewerberdaten für Job ${jobId}: ${error.message}`,
         status: 'init_error'
       })));
-      filterAndSortApplicants(jobId); // Process error list
+      filterAndSortApplicants(jobId);
       return false;
     }
   }

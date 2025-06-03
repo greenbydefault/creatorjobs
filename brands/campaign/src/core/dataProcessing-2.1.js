@@ -118,7 +118,7 @@
       }
 
       if (activeFiltersToUse && activeFiltersToUse.relevantOnly) {
-        console.log(`[RelevantOnly] Prüfung für Bewerber: ${applicantNameOrId}`);
+        // console.log(`[RelevantOnly] Prüfung für Bewerber: ${applicantNameOrId}`); // Auskommentiert für weniger Logs
         let hasSocialMedia = false;
         const normalizeUrlFunc = typeof normalizeUrl === 'function' ? normalizeUrl : null;
         
@@ -127,21 +127,18 @@
           for (const key of socialKeys) {
             const rawUrl = fieldData[key];
             const normalized = normalizeUrlFunc(rawUrl);
-            // console.log(`  [RelevantOnly] Social Key '${key}': Roh='${rawUrl}', Normalisiert='${normalized}'`); // Auskommentiert für weniger Logs
             if (normalized) {
               hasSocialMedia = true;
+                  break; // Ein Social Media Link reicht aus
             }
           }
         } else {
-            console.log(`  [RelevantOnly] normalizeUrlFunc nicht verfügbar oder keine fieldData für Social Media Check.`);
+            // console.log(`  [RelevantOnly] normalizeUrlFunc nicht verfügbar oder keine fieldData für Social Media Check.`); // Auskommentiert
         }
-        // console.log(`  [RelevantOnly] Finale Prüfung für ${applicantNameOrId}: hasSocialMedia=${hasSocialMedia}`); // Auskommentiert
 
         if (!hasSocialMedia) {
-            console.log(`  [RelevantOnly] >>> WIRD GEFILTERT (keine Social Media Links): ${applicantNameOrId}`);
+            // console.log(`  [RelevantOnly] >>> WIRD GEFILTERT (keine Social Media Links): ${applicantNameOrId}`); // Auskommentiert
             return false;
-        } else {
-            // console.log(`  [RelevantOnly] >>> WIRD BEIBEHALTEN (hat Social Media Links): ${applicantNameOrId}`); // Auskommentiert
         }
       }
 
@@ -169,13 +166,33 @@
     console.log(`filterAndSortApplicants: Job ${jobId}, Anzahl gefilterter Bewerber: ${filteredApplicants.length}`);
 
     const sortedApplicants = filteredApplicants.sort((a, b) => {
-      if (a.error && !b.error) return 1;
-      if (!a.error && b.error) return -1;
-      if (a.error && b.error) return (a.id || '').localeCompare(b.id || '');
-      const nameA = (a.fieldData?.name) || '';
-      const nameB = (b.fieldData?.name) || '';
+      // Fehlerbehandlung zuerst
+      if (a.error && !b.error) return 1;  // Fehlerhafte ans Ende
+      if (!a.error && b.error) return -1; // Fehlerhafte ans Ende
+      if (a.error && b.error) return (a.id || '').localeCompare(b.id || ''); // Beide fehlerhaft, nach ID sortieren
+
+      // Sicherstellen, dass fieldData vorhanden ist für die Sortierung
+      const fieldDataA = a.fieldData || {};
+      const fieldDataB = b.fieldData || {};
+
+      // Primäre Sortierung: Plus-Mitglieder zuerst
+      const isPlusA = fieldDataA["plus-mitglied"] === true;
+      const isPlusB = fieldDataB["plus-mitglied"] === true;
+
+      if (isPlusA && !isPlusB) {
+        return -1; // a (Plus) kommt vor b (Nicht-Plus)
+      }
+      if (!isPlusA && isPlusB) {
+        return 1;  // b (Plus) kommt vor a (Nicht-Plus)
+      }
+
+      // Sekundäre Sortierung: Nach Name (alphabetisch)
+      const nameA = (fieldDataA.name) || '';
+      const nameB = (fieldDataB.name) || '';
       const nameCompare = nameA.localeCompare(nameB);
       if (nameCompare !== 0) return nameCompare;
+
+      // Tertiäre Sortierung: Nach ID (als Fallback)
       return (a.id || '').localeCompare(b.id || '');
     });
 

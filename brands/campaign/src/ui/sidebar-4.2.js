@@ -11,7 +11,12 @@
   let currentSidebarIndex = -1;
   let sidebarWrapperElement = null;
   let favoritButtonElement = null;
-  let zusagenButtonElement = null; // Referenz zum Zusagen-Button
+  let zusagenButtonElement = null;
+
+  // Placeholder für Spinner/Icons - ersetze diese durch deine echten Icons/Spinner
+  const SPINNER_ICON_HTML = '<span class="button-spinner" style="margin-right: 5px;">(Lädt...)</span>'; // Einfacher Text-Spinner
+  const SUCCESS_ICON_HTML = '<span class="button-icon-success" style="margin-right: 5px;">✓</span>';
+  const ERROR_ICON_HTML = '<span class="button-icon-error" style="margin-right: 5px;">X</span>';
 
   if (!window.WEBFLOW_API.utils.normalizeUrl) {
     window.WEBFLOW_API.utils.normalizeUrl = function(url) {
@@ -28,12 +33,12 @@
     if (sidebarWrapperElement && sidebarWrapperElement.classList.contains('is-open')) {
       sidebarWrapperElement.classList.remove('is-open');
       document.body.style.overflow = '';
+      // Event-Listener sicher entfernen
       if (favoritButtonElement) {
         const newFavoritButton = favoritButtonElement.cloneNode(true);
         favoritButtonElement.parentNode.replaceChild(newFavoritButton, favoritButtonElement);
         favoritButtonElement = null;
       }
-      // Event-Listener vom Zusagen-Button entfernen
       if (zusagenButtonElement) {
         const newZusagenButton = zusagenButtonElement.cloneNode(true);
         zusagenButtonElement.parentNode.replaceChild(newZusagenButton, zusagenButtonElement);
@@ -54,76 +59,115 @@
     return (millions % 1 !== 0 ? millions.toFixed(1) : millions.toFixed(0)) + 'M';
   }
 
-  function updateFavoriteButtonUI(isFavorite) {
+  /**
+   * Helper-Funktion zum Setzen des Button-Zustands (Text, Icon, Deaktiviert).
+   * @param {HTMLElement} button - Das Button-Element.
+   * @param {string} text - Der anzuzeigende Text.
+   * @param {boolean} isLoading - Ob ein Ladezustand angezeigt werden soll.
+   * @param {boolean} isSuccess - Ob ein Erfolgszustand angezeigt werden soll (kurzzeitig).
+   * @param {boolean} isError - Ob ein Fehlerzustand angezeigt werden soll (kurzzeitig).
+   * @param {boolean} isDisabled - Ob der Button deaktiviert sein soll.
+   */
+  function setButtonState(button, text, isLoading = false, isSuccess = false, isError = false, isDisabled = false) {
+    if (!button) return;
+    const buttonTextSpan = button.querySelector('.db-button-text');
+    if (!buttonTextSpan) return;
+
+    let prefix = '';
+    if (isLoading) prefix = SPINNER_ICON_HTML;
+    else if (isSuccess) prefix = SUCCESS_ICON_HTML;
+    else if (isError) prefix = ERROR_ICON_HTML;
+
+    buttonTextSpan.innerHTML = `${prefix}${text}`;
+    button.disabled = isDisabled;
+    if (isDisabled) {
+        button.classList.add('is-disabled-processing'); // Eigene Klasse für Styling während Deaktivierung
+    } else {
+        button.classList.remove('is-disabled-processing');
+    }
+  }
+
+
+  function updateFavoriteButtonUI(isFavorite, finalState = true) {
     if (favoritButtonElement) {
-      const favoritButtonText = favoritButtonElement.querySelector('.db-button-text');
-      if (favoritButtonText) {
-        favoritButtonText.textContent = isFavorite ? 'Entfernen' : 'Favorit';
+      const text = isFavorite ? 'Entfernen' : 'Favorit';
+      if (finalState) { // Nur den finalen Text setzen, keine Icons
+        setButtonState(favoritButtonElement, text, false, false, false, false);
       }
       favoritButtonElement.classList.toggle('is-favorite', isFavorite);
     }
   }
 
-  /**
-   * Aktualisiert den Zusagen-Button in der Sidebar.
-   * @param {boolean} isBooked - True, wenn der Creator gebucht ist.
-   */
-  function updateBookingButtonUI(isBooked) {
+  function updateBookingButtonUI(isBooked, finalState = true) {
     if (zusagenButtonElement) {
-      const zusagenButtonText = zusagenButtonElement.querySelector('.db-button-text');
-      if (zusagenButtonText) {
-        zusagenButtonText.textContent = isBooked ? 'Gebucht' : 'Zusagen';
+      const text = isBooked ? 'Gebucht' : 'Zusagen';
+       if (finalState) { // Nur den finalen Text setzen, keine Icons
+        setButtonState(zusagenButtonElement, text, false, false, false, false);
       }
-      // Optional: Klassen für unterschiedliches Styling
       zusagenButtonElement.classList.toggle('is-booked', isBooked);
-      // Wenn gebucht, vielleicht andere Farbe oder Icon
+      const buttonTextSpan = zusagenButtonElement.querySelector('.db-button-text');
+
       if (isBooked) {
         zusagenButtonElement.classList.remove('db-button-medium-gradient-pink');
-        zusagenButtonElement.classList.add('db-button-medium-white-border'); // Beispiel für gebuchten Zustand
-        if(zusagenButtonText) zusagenButtonText.classList.remove('white');
+        zusagenButtonElement.classList.add('db-button-medium-white-border');
+        if (buttonTextSpan) buttonTextSpan.classList.remove('white');
       } else {
         zusagenButtonElement.classList.add('db-button-medium-gradient-pink');
         zusagenButtonElement.classList.remove('db-button-medium-white-border');
-        if(zusagenButtonText) zusagenButtonText.classList.add('white');
+        if (buttonTextSpan) buttonTextSpan.classList.add('white');
       }
     }
   }
 
   async function handleFavoriteToggle() {
-    if (!currentSidebarJobId || !currentSidebarApplicantId) return;
+    if (!currentSidebarJobId || !currentSidebarApplicantId || !favoritButtonElement) return;
     if (!window.WEBFLOW_API.core || !window.WEBFLOW_API.core.favoriteService) return;
-    if (favoritButtonElement) favoritButtonElement.disabled = true;
+
+    const isCurrentlyFavorite = window.WEBFLOW_API.core.favoriteService.isFavorite(currentSidebarJobId, currentSidebarApplicantId);
+    const actionText = isCurrentlyFavorite ? "Wird entfernt..." : "Wird hinzugefügt...";
+    setButtonState(favoritButtonElement, actionText, true, false, false, true);
+
     const newFavoriteStatus = await window.WEBFLOW_API.core.favoriteService.toggleFavorite(currentSidebarJobId, currentSidebarApplicantId);
-    if (newFavoriteStatus !== null) updateFavoriteButtonUI(newFavoriteStatus);
-    else alert('Fehler beim Aktualisieren des Favoritenstatus.');
-    if (favoritButtonElement) favoritButtonElement.disabled = false;
+
+    if (newFavoriteStatus !== null) {
+      const successText = newFavoriteStatus ? "Gespeichert!" : "Entfernt!";
+      setButtonState(favoritButtonElement, successText, false, true, false, true); // Noch disabled für die kurze Erfolgsanzeige
+      setTimeout(() => {
+        updateFavoriteButtonUI(newFavoriteStatus, true); // Setzt den finalen Text und enabled
+      }, 1500);
+    } else {
+      setButtonState(favoritButtonElement, "Fehler!", false, false, true, true); // Noch disabled
+      alert('Fehler beim Aktualisieren des Favoritenstatus.');
+      setTimeout(() => {
+        updateFavoriteButtonUI(isCurrentlyFavorite, true); // Zurück zum vorherigen Zustand und enabled
+      }, 1500);
+    }
   }
 
-  /**
-   * Behandelt den Klick auf den Zusagen-Button.
-   */
   async function handleBookingToggle() {
-    if (!currentSidebarJobId || !currentSidebarApplicantId) {
-      console.warn('handleBookingToggle: JobID oder ApplicantID nicht gesetzt.');
-      return;
-    }
-    if (!window.WEBFLOW_API.core || !window.WEBFLOW_API.core.bookingService) {
-      console.error('handleBookingToggle: bookingService nicht verfügbar.');
-      return;
-    }
+    if (!currentSidebarJobId || !currentSidebarApplicantId || !zusagenButtonElement) return;
+    if (!window.WEBFLOW_API.core || !window.WEBFLOW_API.core.bookingService) return;
 
-    if (zusagenButtonElement) zusagenButtonElement.disabled = true;
+    const isCurrentlyBooked = window.WEBFLOW_API.core.bookingService.isBooked(currentSidebarJobId, currentSidebarApplicantId);
+    const actionText = isCurrentlyBooked ? "Buchung storniert..." : "Wird gebucht...";
+    setButtonState(zusagenButtonElement, actionText, true, false, false, true);
 
     const newBookingStatus = await window.WEBFLOW_API.core.bookingService.toggleBooking(currentSidebarJobId, currentSidebarApplicantId);
 
     if (newBookingStatus !== null) {
-      updateBookingButtonUI(newBookingStatus);
+      const successText = newBookingStatus ? "Gebucht!" : "Storniert!";
+      setButtonState(zusagenButtonElement, successText, false, true, false, true);
+      setTimeout(() => {
+        updateBookingButtonUI(newBookingStatus, true);
+      }, 1500);
     } else {
+      setButtonState(zusagenButtonElement, "Fehler!", false, false, true, true);
       alert('Fehler beim Aktualisieren des Buchungsstatus.');
+      setTimeout(() => {
+        updateBookingButtonUI(isCurrentlyBooked, true);
+      }, 1500);
     }
-    if (zusagenButtonElement) zusagenButtonElement.disabled = false;
   }
-
 
   function showCreatorSidebar(applicantItem, allJobApplicants, applicantIndex, jobId) {
     const MAPPINGS = window.WEBFLOW_API.MAPPINGS || {};
@@ -147,10 +191,11 @@
       sidebarWrapperElement.classList.add('db-modal-creator-wrapper');
       document.body.appendChild(sidebarWrapperElement);
     }
-    sidebarWrapperElement.innerHTML = '';
+    sidebarWrapperElement.innerHTML = ''; // Vorherigen Inhalt leeren
 
     const creatorHeadlineOverallDiv = document.createElement('div');
     creatorHeadlineOverallDiv.classList.add('db-modal-creator-headline');
+    // ... (Restlicher Code zum Erstellen der Headline-Struktur bleibt gleich) ...
     const imgNameTypeWrapper = document.createElement('div');
     imgNameTypeWrapper.classList.add('db-modal-creator-img-name-type-wrapper');
     const imgWrapperDiv = document.createElement('div');
@@ -195,54 +240,40 @@
     const headlineActionsWrapper = document.createElement('div');
     headlineActionsWrapper.classList.add('db-modal-creator-headline-actions');
 
-    // Zusagen-Button erstellen und Event-Listener hinzufügen
-    zusagenButtonElement = document.createElement('a'); // Globale Referenz setzen
-    zusagenButtonElement.classList.add('db-button-medium-gradient-pink', 'size-auto'); // Start-Styling
+    // Zusagen-Button
+    zusagenButtonElement = document.createElement('a');
     zusagenButtonElement.href = '#';
     zusagenButtonElement.id = 'sidebar-zusagen-button';
-    const zusagenButtonText = document.createElement('span');
-    zusagenButtonText.classList.add('db-button-text', 'white'); // Start-Styling
-    // Text wird durch updateBookingButtonUI gesetzt
-    zusagenButtonElement.appendChild(zusagenButtonText);
+    zusagenButtonElement.classList.add('db-button-medium-gradient-pink', 'size-auto'); // Standard-Klassen
+    const zusagenButtonTextSpan = document.createElement('span');
+    zusagenButtonTextSpan.classList.add('db-button-text', 'white'); // Standard-Klassen
+    zusagenButtonElement.appendChild(zusagenButtonTextSpan);
     headlineActionsWrapper.appendChild(zusagenButtonElement);
-    zusagenButtonElement.addEventListener('click', (e) => {
-        e.preventDefault();
-        handleBookingToggle();
-    });
-
-    // Initialen Zustand des Zusagen-Buttons setzen
+    zusagenButtonElement.addEventListener('click', (e) => { e.preventDefault(); handleBookingToggle(); });
     if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.bookingService && currentSidebarJobId && currentSidebarApplicantId) {
       const isCurrentlyBooked = window.WEBFLOW_API.core.bookingService.isBooked(currentSidebarJobId, currentSidebarApplicantId);
-      updateBookingButtonUI(isCurrentlyBooked);
+      updateBookingButtonUI(isCurrentlyBooked, true);
     } else {
-      updateBookingButtonUI(false); // Fallback
-      if (!(window.WEBFLOW_API.core && window.WEBFLOW_API.core.bookingService)) {
-        console.warn("showCreatorSidebar: bookingService nicht verfügbar für initialen Button-Status (Zusagen).");
-      }
+      updateBookingButtonUI(false, true);
     }
 
+    // Favorit-Button
     favoritButtonElement = document.createElement('a');
-    favoritButtonElement.classList.add('db-button-medium-white-border', 'size-auto');
     favoritButtonElement.href = '#';
     favoritButtonElement.id = 'sidebar-favorit-button';
-    const favoritButtonText = document.createElement('span');
-    favoritButtonText.classList.add('db-button-text');
-    favoritButtonElement.appendChild(favoritButtonText);
+    favoritButtonElement.classList.add('db-button-medium-white-border', 'size-auto');
+    const favoritButtonTextSpan = document.createElement('span');
+    favoritButtonTextSpan.classList.add('db-button-text');
+    favoritButtonElement.appendChild(favoritButtonTextSpan);
     headlineActionsWrapper.appendChild(favoritButtonElement);
-    favoritButtonElement.addEventListener('click', (e) => {
-        e.preventDefault();
-        handleFavoriteToggle();
-    });
+    favoritButtonElement.addEventListener('click', (e) => { e.preventDefault(); handleFavoriteToggle(); });
     if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.favoriteService && currentSidebarJobId && currentSidebarApplicantId) {
       const isCurrentlyFavorite = window.WEBFLOW_API.core.favoriteService.isFavorite(currentSidebarJobId, currentSidebarApplicantId);
-      updateFavoriteButtonUI(isCurrentlyFavorite);
+      updateFavoriteButtonUI(isCurrentlyFavorite, true);
     } else {
-      updateFavoriteButtonUI(false);
-      if (!(window.WEBFLOW_API.core && window.WEBFLOW_API.core.favoriteService)) {
-        console.warn("showCreatorSidebar: favoriteService nicht verfügbar für initialen Button-Status (Favorit).");
-      }
+      updateFavoriteButtonUI(false, true);
     }
-
+    
     creatorHeadlineOverallDiv.appendChild(headlineActionsWrapper);
     const closeButtonElement = document.createElement('div');
     closeButtonElement.classList.add('db-modal-close-button');
@@ -252,6 +283,7 @@
     creatorHeadlineOverallDiv.appendChild(closeButtonElement);
     sidebarWrapperElement.appendChild(creatorHeadlineOverallDiv);
 
+    // ... (Restlicher Code für Social Media, Videos, Navigation bleibt gleich) ...
     const contentArea = document.createElement('div');
     contentArea.classList.add('db-modal-creator-content');
     contentArea.id = 'sidebar-creator-content-dynamic';
@@ -420,16 +452,9 @@
 
   document.addEventListener('keydown', function(event) {
     if (sidebarWrapperElement && sidebarWrapperElement.classList.contains('is-open')) {
-      if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        navigatePrev();
-      } else if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        navigateNext();
-      } else if (event.key === 'Escape') {
-        event.preventDefault();
-        closeSidebar();
-      }
+      if (event.key === 'ArrowLeft') { event.preventDefault(); navigatePrev(); }
+      else if (event.key === 'ArrowRight') { event.preventDefault(); navigateNext(); }
+      else if (event.key === 'Escape') { event.preventDefault(); closeSidebar(); }
     }
   });
   
@@ -445,18 +470,22 @@
     };
   }
   
-  // Event-Listener für das globale 'bookingUpdated' Event (aus bookingService)
   document.addEventListener('bookingUpdated', function(event) {
     const { jobId, applicantId, isBooked } = event.detail;
-    // Nur aktualisieren, wenn die Sidebar für diesen Job und Applicant offen ist
     if (sidebarWrapperElement && sidebarWrapperElement.classList.contains('is-open') &&
         currentSidebarJobId === jobId && currentSidebarApplicantId === applicantId) {
-      updateBookingButtonUI(isBooked);
+      updateBookingButtonUI(isBooked, true); // finalState true für den direkten Endzustand
     }
   });
 
+  document.addEventListener('favoritesUpdated', function(event) {
+    const { jobId, applicantId, isFavorite } = event.detail;
+     if (sidebarWrapperElement && sidebarWrapperElement.classList.contains('is-open') &&
+        currentSidebarJobId === jobId && currentSidebarApplicantId === applicantId) {
+      updateFavoriteButtonUI(isFavorite, true); // finalState true für den direkten Endzustand
+    }
+  });
 
   window.WEBFLOW_API.ui.showCreatorSidebar = showCreatorSidebar;
-  console.log("Sidebar UI (sidebar-3.9.js) wurde aktualisiert für Booking-Funktion.");
-
+  console.log("Sidebar UI (sidebar-3.9.js) wurde aktualisiert mit Feedback-Logik für Buttons.");
 })();

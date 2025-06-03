@@ -8,9 +8,8 @@
   
   function createApplicantRowElement(applicantItemWithScoreInfo, jobFieldDataForTooltip, allJobApplicantsForThisJob, currentIndexInList, jobId) {
     const applicantFieldData = applicantItemWithScoreInfo.fieldData;
-    // Assuming applicantItemWithScoreInfo has an _id property for the applicant's unique ID.
-    // This ID is used to check against the "job-favoriten" list.
-    const applicantId = applicantItemWithScoreInfo._id; 
+    // ID des Bewerbers wird jetzt aus fieldData["webflow-member-id"] gelesen
+    const applicantId = applicantFieldData["webflow-member-id"]; 
 
     const applicantDiv = document.createElement("div");
     applicantDiv.classList.add("db-table-row", "db-table-applicant", "job-entry");
@@ -99,7 +98,7 @@
 
     const isFavorite = jobFieldDataForTooltip && 
                        Array.isArray(jobFieldDataForTooltip["job-favoriten"]) && 
-                       applicantId && 
+                       applicantId && // Stellt sicher, dass applicantId jetzt einen Wert hat
                        jobFieldDataForTooltip["job-favoriten"].includes(applicantId);
     
     // --- DEBUGGING START (Result) ---

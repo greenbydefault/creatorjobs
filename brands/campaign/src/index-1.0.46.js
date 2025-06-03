@@ -28,7 +28,7 @@ import './ui/sidebar-3.9.js';
 import './ui/notesSidebar.js';
 // Kernlogik, die UI-Elemente und Services verwendet
 // dataProcessing hier, da es ui.applicantElements (für Filter-Callback-Setup) und appLogic (für Reload) referenziert
-import './core/dataProcessing-2.0.js';
+import './core/dataProcessing-2.1.js';
 
 
 // Hauptanwendungslogik, die viele der obigen Module orchestriert

@@ -46,7 +46,7 @@
     const profileImageField = applicantFieldData["image-thumbnail-small-92px"] || applicantFieldData["user-profile-img"];
     if (profileImageField) {
       const applicantImg = document.createElement("img");
-      applicantImg.classList.add("db-table-img", "is-margin-right-12");
+      applicantImg.classList.add("db-table-img"); // "is-margin-right-12" entfernt
       applicantImg.src = typeof profileImageField === 'string' ? profileImageField : (profileImageField?.url || 'https://placehold.co/92x92/E0E0E0/BDBDBD?text=Bild');
       applicantImg.alt = applicantFieldData.name || "Bewerberbild";
       applicantImg.onerror = () => { applicantImg.src = 'https://placehold.co/92x92/E0E0E0/BDBDBD?text=Fehler'; };
@@ -54,9 +54,7 @@
     }
 
     const namePlusStatusDiv = document.createElement("div");
-    namePlusStatusDiv.classList.add("is-flexbox-vertical"); // This class might imply display:flex; flex-direction:column.
-                                                          // If it's just for the name now, it could be simplified.
-                                                          // Adding a margin to separate name from subsequent icons/tags.
+    namePlusStatusDiv.classList.add("is-flexbox-vertical"); 
     namePlusStatusDiv.style.marginRight = "8px";
 
 
@@ -64,17 +62,10 @@
     nameSpan.textContent = applicantFieldData.name || "Unbekannter Bewerber";
     nameSpan.classList.add("truncate");
     namePlusStatusDiv.appendChild(nameSpan);
-
-    // Plus status text is removed from here as per requirements.
-    // const plusStatusSpan = document.createElement("span");
-    // plusStatusSpan.classList.add("is-txt-tiny");
-    // plusStatusSpan.textContent = applicantFieldData["plus-mitglied"] ? "Plus Mitglied" : "Standard";
-    // namePlusStatusDiv.appendChild(plusStatusSpan);
     
     profileInfoDiv.appendChild(namePlusStatusDiv);
 
     // Add Favorite Star Icon if applicable
-    // Check if jobFieldDataForTooltip and job-favoriten exist, and if applicantId is in the list.
     const isFavorite = jobFieldDataForTooltip && 
                        Array.isArray(jobFieldDataForTooltip["job-favoriten"]) && 
                        applicantId && 
@@ -83,10 +74,9 @@
     if (isFavorite) {
       const favoriteStarIcon = document.createElement("img");
       favoriteStarIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/661cf386ae10eea98ee337f6_star-Regular.svg";
-      favoriteStarIcon.classList.add("db-icon-18"); // Using db-icon-18 for consistency with other small icons
+      favoriteStarIcon.classList.add("db-icon-18"); 
       favoriteStarIcon.alt = "Favorit";
-      favoriteStarIcon.style.marginRight = "8px"; // Space before the next element (Plus Member tag or end)
-      // favoriteStarIcon.style.verticalAlign = "middle"; // Ensure alignment if needed
+      favoriteStarIcon.style.marginRight = "8px"; 
       profileInfoDiv.appendChild(favoriteStarIcon);
     }
 
@@ -94,20 +84,18 @@
     if (applicantFieldData["plus-mitglied"]) {
       const plusTagDiv = document.createElement("div");
       plusTagDiv.classList.add("db-plus-tag");
-      plusTagDiv.style.display = "flex";
-      plusTagDiv.style.alignItems = "center";
-      // plusTagDiv.style.marginLeft = "8px"; // Margin is handled by preceding elements or general spacing
+      // Inline styles entfernt: plusTagDiv.style.display = "flex"; plusTagDiv.style.alignItems = "center";
 
       const plusIcon = document.createElement("img");
       plusIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/678a291ddc6029abd5904169_bolt-filled.svg";
-      plusIcon.classList.add("db-icon-24");
+      plusIcon.classList.add("db-icon-18"); // Geändert von db-icon-24
       plusIcon.alt = "Plus Mitglied Icon";
       plusTagDiv.appendChild(plusIcon);
 
       const plusText = document.createElement("span");
       plusText.classList.add("db-plus-tag-text");
       plusText.textContent = "Plus Member";
-      plusText.style.marginLeft = "4px"; // Space between bolt icon and text
+      // Inline style entfernt: plusText.style.marginLeft = "4px"; 
       plusTagDiv.appendChild(plusText);
 
       profileInfoDiv.appendChild(plusTagDiv);
@@ -142,7 +130,7 @@
 
     const socialCell = document.createElement("div");
     socialCell.classList.add("db-table-row-item");
-    socialCell.style.display = "flex"; // Ensure icons are in a row
+    socialCell.style.display = "flex"; 
     socialCell.style.alignItems = "center";
 
     const socialPlatforms = [
@@ -157,7 +145,7 @@
         const socialLink = document.createElement("a");
         socialLink.href = normalizedPlatformUrl;
         socialLink.classList.add("db-application-option", "no-icon", "w-inline-block"); 
-        socialLink.style.marginRight = "4px"; // Add some space between social icons
+        socialLink.style.marginRight = "4px"; 
         socialLink.target = "_blank";
         socialLink.rel = "noopener noreferrer";
         socialLink.addEventListener('click', (e) => e.stopPropagation()); 
@@ -201,8 +189,7 @@
       const colDiv = document.createElement("div");
       colDiv.classList.add("db-table-row-item");
       if (index === 0) { 
-          // Make the "Creator" column wider to accommodate potential new icons/tags
-          colDiv.style.flex = "1.8"; // Increased from 1.5 or adjust as needed
+          colDiv.style.flex = "1.8"; 
       }
       const textSpan = document.createElement("span");
       textSpan.classList.add("is-txt-16", "is-txt-bold"); 

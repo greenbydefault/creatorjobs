@@ -1,23 +1,74 @@
+// brands/campaign/src/ui/applicantElements-2.0.js
 (function () {
   'use strict';
   window.WEBFLOW_API = window.WEBFLOW_API || {};
   window.WEBFLOW_API.ui = window.WEBFLOW_API.ui || {};
 
   const MAPPINGS = window.WEBFLOW_API.MAPPINGS;
-  const { normalizeUrl } = window.WEBFLOW_API.utils;
-  
+  const { normalizeUrl } = (window.WEBFLOW_API.utils || {}); // Sicherstellen, dass utils existiert
+
+  /**
+   * Aktualisiert das Favoriten-Icon für einen bestimmten Bewerber in der Liste.
+   * @param {string} jobId - Die ID des Jobs.
+   * @param {string} applicantId - Die Webflow Member ID des Bewerbers.
+   * @param {boolean} isFavorite - Der neue Favoritenstatus.
+   */
+  function updateApplicantFavoriteIcon(jobId, applicantId, isFavorite) {
+    // Finde die entsprechende Bewerberzeile im DOM
+    // Die Zeile könnte eine data-attribute wie data-applicant-id haben oder wir müssen durch die Job-Container iterieren.
+    // Annahme: Jede applicantDiv hat ein data-applicant-id Attribut.
+    const applicantRow = document.querySelector(`.my-job-item[data-job-id="${jobId}"] .db-table-applicant[data-applicant-id="${applicantId}"]`);
+
+    if (applicantRow) {
+      const profileInfoDiv = applicantRow.querySelector(".db-table-row-item.justify-left"); // Der erste Container mit Bild und Name
+      if (!profileInfoDiv) return;
+
+      // Entferne ein eventuell vorhandenes altes Favoriten-Tag
+      const existingFavoriteTag = profileInfoDiv.querySelector(".db-plus-tag.favorite-star-tag"); // Spezifischere Klasse
+      if (existingFavoriteTag) {
+        existingFavoriteTag.remove();
+      }
+
+      if (isFavorite) {
+        const favoriteTagDiv = document.createElement("div");
+        favoriteTagDiv.classList.add("db-plus-tag", "favorite-star-tag"); // Eindeutige Klasse für das Stern-Tag
+
+        const favoriteStarIcon = document.createElement("img");
+        favoriteStarIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/662246de06d5827a9de8850f_star-Filled.svg";
+        favoriteStarIcon.classList.add("db-icon-18");
+        favoriteStarIcon.alt = "Favorit";
+        favoriteStarIcon.style.marginLeft = "4px"; // Etwas Abstand zum Namen
+
+        favoriteTagDiv.appendChild(favoriteStarIcon);
+        
+        // Füge das Stern-Icon direkt nach dem Namen-Wrapper (namePlusStatusDiv) ein
+        const nameWrapper = profileInfoDiv.querySelector(".is-flexbox-vertical");
+        if (nameWrapper && nameWrapper.nextSibling) {
+            profileInfoDiv.insertBefore(favoriteTagDiv, nameWrapper.nextSibling);
+        } else if (nameWrapper) {
+            profileInfoDiv.appendChild(favoriteTagDiv);
+        } else { // Fallback, falls nameWrapper nicht gefunden wird
+            profileInfoDiv.appendChild(favoriteTagDiv);
+        }
+      }
+    } else {
+      // console.warn(`updateApplicantFavoriteIcon: Bewerberzeile für Applicant ${applicantId} in Job ${jobId} nicht gefunden.`);
+    }
+  }
+
+
   function createApplicantRowElement(applicantItemWithScoreInfo, jobFieldDataForTooltip, allJobApplicantsForThisJob, currentIndexInList, jobId) {
     const applicantFieldData = applicantItemWithScoreInfo.fieldData;
-    // ID des Bewerbers wird jetzt aus fieldData["webflow-member-id"] gelesen
-    const applicantId = applicantFieldData["webflow-member-id"]; 
+    const applicantId = applicantFieldData["webflow-member-id"]; // Webflow Member ID
 
     const applicantDiv = document.createElement("div");
     applicantDiv.classList.add("db-table-row", "db-table-applicant", "job-entry");
-    applicantDiv.style.cursor = 'pointer'; 
+    applicantDiv.style.cursor = 'pointer';
+    applicantDiv.dataset.applicantId = applicantId; // Wichtig für das spätere Finden der Zeile
 
     applicantDiv.addEventListener('click', (event) => {
       if (event.target.closest('a') || event.target.closest('button') || event.target.closest('input')) {
-        return; 
+        return;
       }
       if (window.WEBFLOW_API.ui && window.WEBFLOW_API.ui.showCreatorSidebar) {
         window.WEBFLOW_API.ui.showCreatorSidebar(applicantItemWithScoreInfo, allJobApplicantsForThisJob, currentIndexInList, jobId);
@@ -30,7 +81,7 @@
       console.error("❌ MAPPINGS-Objekt ist nicht definiert in createApplicantRowElement.");
       const errorDiv = document.createElement("div");
       errorDiv.textContent = "Fehler: Mapping-Daten nicht verfügbar.";
-      errorDiv.style.gridColumn = "span 7"; 
+      errorDiv.style.gridColumn = "span 7";
       applicantDiv.appendChild(errorDiv);
       return applicantDiv;
     }
@@ -40,84 +91,61 @@
     profileInfoDiv.style.display = "flex";
     profileInfoDiv.style.alignItems = "center";
 
-    // Create the image wrapper
     const imgWrapper = document.createElement("div");
     imgWrapper.classList.add("db-table-img-wrapper");
 
     const profileImageField = applicantFieldData["image-thumbnail-small-92px"] || applicantFieldData["user-profile-img"];
     if (profileImageField) {
       const applicantImg = document.createElement("img");
-      applicantImg.classList.add("db-table-img"); 
+      applicantImg.classList.add("db-table-img");
       applicantImg.src = typeof profileImageField === 'string' ? profileImageField : (profileImageField?.url || 'https://placehold.co/92x92/E0E0E0/BDBDBD?text=Bild');
       applicantImg.alt = applicantFieldData.name || "Bewerberbild";
       applicantImg.onerror = () => { applicantImg.src = 'https://placehold.co/92x92/E0E0E0/BDBDBD?text=Fehler'; };
-      imgWrapper.appendChild(applicantImg); 
+      imgWrapper.appendChild(applicantImg);
     }
 
     if (applicantFieldData["plus-mitglied"]) {
-      const plusTagDivOnImage = document.createElement("div"); // Renamed to avoid confusion with favorite tag
-      plusTagDivOnImage.classList.add("db-plus-tag"); // This class is for the bolt icon on the image
-
+      const plusTagDivOnImage = document.createElement("div");
+      plusTagDivOnImage.classList.add("db-plus-tag");
       const plusIcon = document.createElement("img");
       plusIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/678a291ddc6029abd5904169_bolt-filled.svg";
-      plusIcon.classList.add("db-icon-18"); 
+      plusIcon.classList.add("db-icon-18");
       plusIcon.alt = "Plus Mitglied Icon";
       plusTagDivOnImage.appendChild(plusIcon);
-
-      imgWrapper.appendChild(plusTagDivOnImage); 
+      imgWrapper.appendChild(plusTagDivOnImage);
     }
-    
-    profileInfoDiv.appendChild(imgWrapper); 
+    profileInfoDiv.appendChild(imgWrapper);
 
     const namePlusStatusDiv = document.createElement("div");
-    namePlusStatusDiv.classList.add("is-flexbox-vertical"); 
-    // Margins entfernt: namePlusStatusDiv.style.marginRight = "8px"; 
-    // namePlusStatusDiv.style.marginLeft = "8px"; 
-
-
+    namePlusStatusDiv.classList.add("is-flexbox-vertical");
     const nameSpan = document.createElement("span");
     nameSpan.textContent = applicantFieldData.name || "Unbekannter Bewerber";
     nameSpan.classList.add("truncate");
     namePlusStatusDiv.appendChild(nameSpan);
-    
     profileInfoDiv.appendChild(namePlusStatusDiv);
 
-    // --- DEBUGGING START ---
-    // console.log(`[Favoriten-Check] Applicant Name: ${applicantFieldData.name}, Applicant ID: ${applicantId}`);
-    // if (jobFieldDataForTooltip) {
-    //     console.log("[Favoriten-Check] jobFieldDataForTooltip vorhanden.");
-    //     console.log("[Favoriten-Check] jobFieldDataForTooltip['job-favoriten']:", jobFieldDataForTooltip["job-favoriten"]);
-    //     console.log("[Favoriten-Check] Ist 'job-favoriten' ein Array?:", Array.isArray(jobFieldDataForTooltip["job-favoriten"]));
-    //     if (Array.isArray(jobFieldDataForTooltip["job-favoriten"])) {
-    //         console.log(`[Favoriten-Check] Enthält '${applicantId}'?:`, jobFieldDataForTooltip["job-favoriten"].includes(applicantId));
-    //     }
-    // } else {
-    //     console.log("[Favoriten-Check] jobFieldDataForTooltip ist NICHT vorhanden.");
-    // }
-    // --- DEBUGGING END ---
+    // Initiales Setzen des Favoriten-Icons
+    const isInitiallyFavorite = window.WEBFLOW_API.core && window.WEBFLOW_API.core.favoriteService
+      ? window.WEBFLOW_API.core.favoriteService.isFavorite(jobId, applicantId)
+      : (jobFieldDataForTooltip && Array.isArray(jobFieldDataForTooltip["job-favoriten"]) && applicantId && jobFieldDataForTooltip["job-favoriten"].includes(applicantId));
 
-    const isFavorite = jobFieldDataForTooltip && 
-                       Array.isArray(jobFieldDataForTooltip["job-favoriten"]) && 
-                       applicantId && 
-                       jobFieldDataForTooltip["job-favoriten"].includes(applicantId);
-    
-    // --- DEBUGGING START (Result) ---
-    // console.log(`[Favoriten-Check] Result für ${applicantFieldData.name}: isFavorite = ${isFavorite}`);
-    // --- DEBUGGING END (Result) ---
 
-    if (isFavorite) {
-      const favoriteTagDiv = document.createElement("div"); // Parent div for the star
-      favoriteTagDiv.classList.add("db-plus-tag"); // Using the same class as requested
-
+    if (isInitiallyFavorite) {
+      const favoriteTagDiv = document.createElement("div");
+      favoriteTagDiv.classList.add("db-plus-tag", "favorite-star-tag"); // Eindeutige Klasse
       const favoriteStarIcon = document.createElement("img");
-      favoriteStarIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/662246de06d5827a9de8850f_star-Filled.svg"; // Updated star icon
-      favoriteStarIcon.classList.add("db-icon-18"); 
+      favoriteStarIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/662246de06d5827a9de8850f_star-Filled.svg";
+      favoriteStarIcon.classList.add("db-icon-18");
       favoriteStarIcon.alt = "Favorit";
-      
+      favoriteStarIcon.style.marginLeft = "4px";
       favoriteTagDiv.appendChild(favoriteStarIcon);
-      profileInfoDiv.appendChild(favoriteTagDiv);
+      // Füge das Stern-Icon direkt nach dem Namen-Wrapper (namePlusStatusDiv) ein
+        if (namePlusStatusDiv.nextSibling) {
+            profileInfoDiv.insertBefore(favoriteTagDiv, namePlusStatusDiv.nextSibling);
+        } else {
+            profileInfoDiv.appendChild(favoriteTagDiv);
+        }
     }
-    
     applicantDiv.appendChild(profileInfoDiv);
 
     const locationDiv = document.createElement("div");
@@ -131,7 +159,7 @@
     const categoryCell = document.createElement("div");
     categoryCell.classList.add("db-table-row-item");
     const categoryTag = document.createElement("span");
-    categoryTag.classList.add("job-tag", "customer"); 
+    categoryTag.classList.add("job-tag", "customer");
     categoryTag.textContent = applicantFieldData["creator-main-categorie"] || "K.A.";
     categoryCell.appendChild(categoryTag);
     applicantDiv.appendChild(categoryCell);
@@ -139,7 +167,7 @@
     const creatorTypeCell = document.createElement("div");
     creatorTypeCell.classList.add("db-table-row-item");
     const creatorTypeTag = document.createElement("span");
-    creatorTypeTag.classList.add("job-tag", "customer"); 
+    creatorTypeTag.classList.add("job-tag", "customer");
     const creatorTypeId = applicantFieldData["creator-type"];
     creatorTypeTag.textContent = (MAPPINGS.creatorTypen && MAPPINGS.creatorTypen[creatorTypeId]) || (creatorTypeId ? creatorTypeId.substring(0,10)+'...' : "K.A.");
     creatorTypeCell.appendChild(creatorTypeTag);
@@ -147,29 +175,29 @@
 
     const socialCell = document.createElement("div");
     socialCell.classList.add("db-table-row-item");
-    socialCell.style.display = "flex"; 
+    socialCell.style.display = "flex";
     socialCell.style.alignItems = "center";
-
     const socialPlatforms = [
       { key: "instagram", name: "Instagram", iconUrl: "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e8d979b71d2a7e5db3_Instagram.svg" },
       { key: "tiktok", name: "TikTok", iconUrl: "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e99dce86c2b6ba83fe_Tiktok.svg" },
       { key: "youtube", name: "YouTube", iconUrl: "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e9b00d0480ffe289dc_YouTube.svg" }
     ];
+    const normalizeUrlFn = typeof normalizeUrl === 'function' ? normalizeUrl : (url) => url; // Fallback
     socialPlatforms.forEach(platform => {
       const platformUrlValue = applicantFieldData[platform.key];
-      const normalizedPlatformUrl = normalizeUrl(platformUrlValue); 
+      const normalizedPlatformUrl = normalizeUrlFn(platformUrlValue);
       if (normalizedPlatformUrl) {
         const socialLink = document.createElement("a");
         socialLink.href = normalizedPlatformUrl;
-        socialLink.classList.add("db-application-option", "no-icon", "w-inline-block"); 
-        socialLink.style.marginRight = "4px"; 
+        socialLink.classList.add("db-application-option", "no-icon", "w-inline-block");
+        socialLink.style.marginRight = "4px";
         socialLink.target = "_blank";
         socialLink.rel = "noopener noreferrer";
-        socialLink.addEventListener('click', (e) => e.stopPropagation()); 
+        socialLink.addEventListener('click', (e) => e.stopPropagation());
         const iconImg = document.createElement("img");
         iconImg.src = platform.iconUrl;
         iconImg.alt = `${platform.name} Profil`;
-        iconImg.classList.add("db-icon-18"); 
+        iconImg.classList.add("db-icon-18");
         socialLink.appendChild(iconImg);
         socialCell.appendChild(socialLink);
       }
@@ -179,7 +207,7 @@
     const followerCell = document.createElement("div");
     followerCell.classList.add("db-table-row-item");
     const followerTag = document.createElement("span");
-    followerTag.classList.add("job-tag", "customer"); 
+    followerTag.classList.add("job-tag", "customer");
     const followerId = applicantFieldData["creator-follower"];
     followerTag.textContent = (MAPPINGS.followerRanges && MAPPINGS.followerRanges[followerId]) || (followerId ? followerId.substring(0,10)+'...' : "K.A.");
     followerCell.appendChild(followerTag);
@@ -188,7 +216,7 @@
     const ageCell = document.createElement("div");
     ageCell.classList.add("db-table-row-item");
     const ageTag = document.createElement("span");
-    ageTag.classList.add("job-tag", "customer"); 
+    ageTag.classList.add("job-tag", "customer");
     const ageId = applicantFieldData["creator-age"];
     ageTag.textContent = (MAPPINGS.altersgruppen && MAPPINGS.altersgruppen[ageId]) || (ageId ? ageId.substring(0,10)+'...' : "K.A.");
     ageCell.appendChild(ageTag);
@@ -200,16 +228,15 @@
   function createApplicantTableHeaderElement() {
     const headerDiv = document.createElement("div");
     headerDiv.classList.add("db-table-header", "db-table-applicant");
-
     const columns = ["Creator", "Location", "Kategorie", "Creator Type", "Social Media", "Follower", "Alter"];
     columns.forEach((colText, index) => {
       const colDiv = document.createElement("div");
       colDiv.classList.add("db-table-row-item");
-      if (index === 0) { 
-          colDiv.style.flex = "1.8"; 
+      if (index === 0) {
+          colDiv.style.flex = "1.8";
       }
       const textSpan = document.createElement("span");
-      textSpan.classList.add("is-txt-16", "is-txt-bold"); 
+      textSpan.classList.add("is-txt-16", "is-txt-bold");
       textSpan.textContent = colText;
       colDiv.appendChild(textSpan);
       headerDiv.appendChild(colDiv);
@@ -219,20 +246,17 @@
 
   function createActiveFilterBadgeUI(jobId, filterType, filterValue, filterText, applicantsListContainer, paginationWrapper) {
     const badgeWrapper = document.createElement("div");
-    badgeWrapper.classList.add("db-table-filter-wrapper", "active-filter-badge"); 
-
+    badgeWrapper.classList.add("db-table-filter-wrapper", "active-filter-badge");
     const filterNameSpan = document.createElement("span");
     filterNameSpan.classList.add("is-txt-16");
     filterNameSpan.textContent = filterText;
     badgeWrapper.appendChild(filterNameSpan);
-
     const removeIcon = document.createElement("img");
     removeIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/68304c51fb2c1a32a1f2ef77_xmark.svg";
-    removeIcon.classList.add("db-icon-18", "remove-filter-icon"); 
+    removeIcon.classList.add("db-icon-18", "remove-filter-icon");
     removeIcon.alt = "Filter entfernen";
     removeIcon.style.cursor = "pointer";
     removeIcon.style.marginLeft = "5px";
-
     removeIcon.addEventListener('click', async () => {
         let checkboxId;
         if (filterType === 'relevantOnly' || filterType === 'plusOnly') {
@@ -240,7 +264,6 @@
         } else {
             checkboxId = `filter-${jobId}-${filterType}-${filterValue.replace(/\s+/g, '-')}`;
         }
-        
         const checkbox = document.getElementById(checkboxId);
         if (checkbox && checkbox.checked) {
             checkbox.checked = false;
@@ -267,111 +290,91 @@
             }
         }
     });
-
     badgeWrapper.appendChild(removeIcon);
     return badgeWrapper;
   }
 
   function renderActiveFilterBadgesUI(jobId, badgesContainer, applicantsListContainer, paginationWrapper) {
-    badgesContainer.innerHTML = ''; 
+    badgesContainer.innerHTML = '';
     const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
     if (!jobCache || !jobCache.activeFilters) return;
-
     const activeFilters = jobCache.activeFilters;
-
     activeFilters.follower?.forEach(value => {
         const text = MAPPINGS.followerRanges?.[value] || value;
         const badge = createActiveFilterBadgeUI(jobId, 'follower', value, text, applicantsListContainer, paginationWrapper);
         badgesContainer.appendChild(badge);
     });
-
     activeFilters.category?.forEach(value => {
         const badge = createActiveFilterBadgeUI(jobId, 'category', value, value, applicantsListContainer, paginationWrapper);
         badgesContainer.appendChild(badge);
     });
-
     activeFilters.creatorType?.forEach(value => {
         const text = MAPPINGS.creatorTypen?.[value] || value;
         const badge = createActiveFilterBadgeUI(jobId, 'creatorType', value, text, applicantsListContainer, paginationWrapper);
         badgesContainer.appendChild(badge);
     });
-    
     if (activeFilters.relevantOnly) {
         const badge = createActiveFilterBadgeUI(jobId, 'relevantOnly', true, "Nur Relevante", applicantsListContainer, paginationWrapper);
         badgesContainer.appendChild(badge);
     }
-
-    if (activeFilters.plusOnly) { // Badge for the new "Plus Only" filter
+    if (activeFilters.plusOnly) {
         const badge = createActiveFilterBadgeUI(jobId, 'plusOnly', true, "Nur Plus Mitglieder", applicantsListContainer, paginationWrapper);
         badgesContainer.appendChild(badge);
     }
   }
   window.WEBFLOW_API.ui.renderActiveFilterBadgesUI = renderActiveFilterBadgesUI;
 
-
   function createFilterDropdown(jobId, filterType, filterLabel, optionsSource, applicantsListContainer, paginationWrapper, isDynamicOptions = false) {
-    const filterParentDiv = document.createElement("div"); 
-    filterParentDiv.classList.add("db-table-filter"); 
-
-    const filterTriggerWrapper = document.createElement("div"); 
-    filterTriggerWrapper.classList.add("db-table-filter-wrapper"); 
-
-    const filterTextSpan = document.createElement("span"); 
+    const filterParentDiv = document.createElement("div");
+    filterParentDiv.classList.add("db-table-filter");
+    const filterTriggerWrapper = document.createElement("div");
+    filterTriggerWrapper.classList.add("db-table-filter-wrapper");
+    const filterTextSpan = document.createElement("span");
     filterTextSpan.classList.add("is-txt-16");
     filterTextSpan.textContent = filterLabel;
     filterTriggerWrapper.appendChild(filterTextSpan);
-
     const filterIcon = document.createElement("img");
-    filterIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/682c5e5b84cac09c56cdbebe_angle-down-small.svg"; 
-    filterIcon.classList.add("db-icon-18"); 
+    filterIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/682c5e5b84cac09c56cdbebe_angle-down-small.svg";
+    filterIcon.classList.add("db-icon-18");
     filterTriggerWrapper.appendChild(filterIcon);
-    
-    filterParentDiv.appendChild(filterTriggerWrapper); 
-
+    filterParentDiv.appendChild(filterTriggerWrapper);
     const dropdownList = document.createElement("div");
-    dropdownList.classList.add("db-filter-dropdown-list"); 
-    dropdownList.style.display = "none"; 
-
+    dropdownList.classList.add("db-filter-dropdown-list");
+    dropdownList.style.display = "none";
     let options = {};
     if (isDynamicOptions) {
         const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
         if (jobCache && jobCache.allItems) {
             const uniqueValues = new Set();
             jobCache.allItems.forEach(item => {
-                if (item.fieldData && item.fieldData[optionsSource] && !item.error) { 
+                if (item.fieldData && item.fieldData[optionsSource] && !item.error) {
                     uniqueValues.add(item.fieldData[optionsSource]);
                 }
             });
             uniqueValues.forEach(value => {
-                options[value] = value; 
+                options[value] = value;
             });
         }
     } else {
         options = optionsSource;
     }
-
     Object.entries(options).forEach(([id, text]) => {
-        if (filterType === "follower" && text === "0") return; 
-
+        if (filterType === "follower" && text === "0") return;
         const optionDiv = document.createElement("div");
-        optionDiv.classList.add("db-filter-option"); 
-
+        optionDiv.classList.add("db-filter-option");
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
-        checkbox.classList.add("db-filter-checkbox"); 
+        checkbox.classList.add("db-filter-checkbox");
         checkbox.id = `filter-${jobId}-${filterType}-${id.replace(/\s+/g, '-')}`;
-        checkbox.dataset.filterValue = id; 
+        checkbox.dataset.filterValue = id;
         checkbox.dataset.filterType = filterType;
-
         const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
         if (jobCache?.activeFilters?.[filterType]?.includes(id)) {
             checkbox.checked = true;
         }
-
-        const optionTextSpan = document.createElement("span"); 
-        optionTextSpan.classList.add("is-txt-16"); 
+        const optionTextSpan = document.createElement("span");
+        optionTextSpan.classList.add("is-txt-16");
         optionTextSpan.textContent = text;
-        
         optionDiv.addEventListener('click', (e) => {
             if (e.target !== checkbox) {
                 checkbox.checked = !checkbox.checked;
@@ -379,7 +382,6 @@
                 checkbox.dispatchEvent(changeEvent);
             }
         });
-        
         checkbox.addEventListener("change", async () => {
             if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
                 await window.WEBFLOW_API.core.applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper);
@@ -387,21 +389,16 @@
                 console.error("applyAndReloadApplicants Funktion nicht gefunden.");
             }
         });
-
         optionDiv.appendChild(checkbox);
-        optionDiv.appendChild(optionTextSpan); 
+        optionDiv.appendChild(optionTextSpan);
         dropdownList.appendChild(optionDiv);
     });
-    
-    filterParentDiv.appendChild(dropdownList); 
-
+    filterParentDiv.appendChild(dropdownList);
     filterTriggerWrapper.addEventListener("click", (e) => {
-      e.stopPropagation(); 
+      e.stopPropagation();
       const parentFilterElement = e.currentTarget.closest('.db-table-filter');
       const currentDropdownList = parentFilterElement ? parentFilterElement.querySelector('.db-filter-dropdown-list') : null;
-
       if (!currentDropdownList) return;
-
       const allFilterDropdownTriggers = filterParentDiv.parentElement.querySelectorAll('.db-table-filter .db-filter-dropdown-list');
       allFilterDropdownTriggers.forEach(otherDropdown => {
           if (otherDropdown !== currentDropdownList) {
@@ -410,43 +407,33 @@
       });
       currentDropdownList.style.display = currentDropdownList.style.display === "none" ? "block" : "none";
     });
-    return filterParentDiv; 
+    return filterParentDiv;
   }
 
-  /**
-   * Helper function to create a toggle switch.
-   */
   function createToggleSwitch(jobId, filterType, labelText, applicantsListContainer, paginationWrapper) {
     const toggleWrapper = document.createElement('div');
-    toggleWrapper.classList.add('db-filter-toggle-wrapper'); // Wrapper for label and text
-
+    toggleWrapper.classList.add('db-filter-toggle-wrapper');
     const labelElement = document.createElement('label');
     labelElement.classList.add('toggle-show-list');
-
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.classList.add('checkbox-toggle');
     checkbox.id = `filter-${jobId}-${filterType}`;
     checkbox.dataset.filterType = filterType;
-
     const sliderSpan = document.createElement('span');
     sliderSpan.classList.add('toggle-slider-show-list');
-
     labelElement.appendChild(checkbox);
     labelElement.appendChild(sliderSpan);
     toggleWrapper.appendChild(labelElement);
-
     const textElement = document.createElement('span');
-    textElement.classList.add('is-txt-16'); // Assuming same text style as other filters
+    textElement.classList.add('is-txt-16');
     textElement.textContent = labelText;
-    textElement.style.marginLeft = '8px'; // Space between toggle and text
+    textElement.style.marginLeft = '8px';
     toggleWrapper.appendChild(textElement);
-
     const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
     if (jobCache?.activeFilters?.[filterType] === true) {
         checkbox.checked = true;
     }
-    
     checkbox.addEventListener('change', async () => {
         if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
             await window.WEBFLOW_API.core.applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper);
@@ -457,42 +444,29 @@
     return toggleWrapper;
   }
 
-
   function createFilterRowElement(jobId, applicantsListContainer, paginationWrapper) {
-    const filterRowElement = document.createElement("div"); 
-    filterRowElement.classList.add("db-table-filter-row"); 
-
-    const controlsWrapper = document.createElement("div"); 
-    controlsWrapper.classList.add("db-table-filter-row-wrapper"); 
+    const filterRowElement = document.createElement("div");
+    filterRowElement.classList.add("db-table-filter-row");
+    const controlsWrapper = document.createElement("div");
+    controlsWrapper.classList.add("db-table-filter-row-wrapper");
     filterRowElement.appendChild(controlsWrapper);
-
     const activeFiltersDisplayContainer = document.createElement("div");
-    activeFiltersDisplayContainer.classList.add("db-active-filters-display"); 
-    filterRowElement.appendChild(activeFiltersDisplayContainer); 
-
-
+    activeFiltersDisplayContainer.classList.add("db-active-filters-display");
+    filterRowElement.appendChild(activeFiltersDisplayContainer);
     if (MAPPINGS && MAPPINGS.followerRanges) {
         const followerFilterElement = createFilterDropdown(jobId, "follower", "Follower", MAPPINGS.followerRanges, applicantsListContainer, paginationWrapper);
-        controlsWrapper.appendChild(followerFilterElement); 
+        controlsWrapper.appendChild(followerFilterElement);
     }
-
     const categoryFilterElement = createFilterDropdown(jobId, "category", "Kategorie", "creator-main-categorie", applicantsListContainer, paginationWrapper, true);
-    controlsWrapper.appendChild(categoryFilterElement); 
-    
+    controlsWrapper.appendChild(categoryFilterElement);
     if (MAPPINGS && MAPPINGS.creatorTypen) {
         const creatorTypeFilterElement = createFilterDropdown(jobId, "creatorType", "Creator Typ", MAPPINGS.creatorTypen, applicantsListContainer, paginationWrapper);
-        controlsWrapper.appendChild(creatorTypeFilterElement); 
+        controlsWrapper.appendChild(creatorTypeFilterElement);
     }
-
-    // Create "Nur relevante Bewerber" toggle using the new helper function
     const relevantToggle = createToggleSwitch(jobId, "relevantOnly", "Nur relevante Bewerber", applicantsListContainer, paginationWrapper);
     controlsWrapper.appendChild(relevantToggle);
-
-    // Create "Nur Plus Mitglieder" toggle using the new helper function
     const plusOnlyToggle = createToggleSwitch(jobId, "plusOnly", "Nur Plus Mitglieder", applicantsListContainer, paginationWrapper);
     controlsWrapper.appendChild(plusOnlyToggle);
-
-
     document.addEventListener("click", (e) => {
         if (!e.target.closest('.db-table-filter') && !e.target.closest('.db-filter-toggle-wrapper')) {
             const allDropdownLists = controlsWrapper.querySelectorAll('.db-filter-dropdown-list');
@@ -504,9 +478,17 @@
     return filterRowElement;
   }
 
+  // Event-Listener für das globale 'favoritesUpdated' Event
+  document.addEventListener('favoritesUpdated', function(event) {
+    const { jobId, applicantId, isFavorite } = event.detail;
+    // console.log(`Event 'favoritesUpdated' empfangen: Job ${jobId}, Applicant ${applicantId}, IsFavorite: ${isFavorite}`);
+    updateApplicantFavoriteIcon(jobId, applicantId, isFavorite);
+  });
 
   window.WEBFLOW_API.ui.createApplicantRowElement = createApplicantRowElement;
   window.WEBFLOW_API.ui.createApplicantTableHeaderElement = createApplicantTableHeaderElement;
   window.WEBFLOW_API.ui.createFilterRowElement = createFilterRowElement;
+  window.WEBFLOW_API.ui.updateApplicantFavoriteIcon = updateApplicantFavoriteIcon; // Exponieren für direkten Aufruf falls nötig
 
+  console.log("Applicant Elements UI (applicantElements-2.0.js) wurde aktualisiert für Favoriten-Icon Updates.");
 })();

@@ -55,24 +55,24 @@
     }
 
     if (applicantFieldData["plus-mitglied"]) {
-      const plusTagDiv = document.createElement("div");
-      plusTagDiv.classList.add("db-plus-tag");
+      const plusTagDivOnImage = document.createElement("div"); // Renamed to avoid confusion with favorite tag
+      plusTagDivOnImage.classList.add("db-plus-tag"); // This class is for the bolt icon on the image
 
       const plusIcon = document.createElement("img");
       plusIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/678a291ddc6029abd5904169_bolt-filled.svg";
       plusIcon.classList.add("db-icon-18"); 
       plusIcon.alt = "Plus Mitglied Icon";
-      plusTagDiv.appendChild(plusIcon);
+      plusTagDivOnImage.appendChild(plusIcon);
 
-      imgWrapper.appendChild(plusTagDiv); 
+      imgWrapper.appendChild(plusTagDivOnImage); 
     }
     
     profileInfoDiv.appendChild(imgWrapper); 
 
     const namePlusStatusDiv = document.createElement("div");
     namePlusStatusDiv.classList.add("is-flexbox-vertical"); 
-    namePlusStatusDiv.style.marginRight = "8px"; 
-    namePlusStatusDiv.style.marginLeft = "8px"; 
+    // Margins entfernt: namePlusStatusDiv.style.marginRight = "8px"; 
+    // namePlusStatusDiv.style.marginLeft = "8px"; 
 
 
     const nameSpan = document.createElement("span");
@@ -83,34 +83,39 @@
     profileInfoDiv.appendChild(namePlusStatusDiv);
 
     // --- DEBUGGING START ---
-    console.log(`[Favoriten-Check] Applicant Name: ${applicantFieldData.name}, Applicant ID: ${applicantId}`);
-    if (jobFieldDataForTooltip) {
-        console.log("[Favoriten-Check] jobFieldDataForTooltip vorhanden.");
-        console.log("[Favoriten-Check] jobFieldDataForTooltip['job-favoriten']:", jobFieldDataForTooltip["job-favoriten"]);
-        console.log("[Favoriten-Check] Ist 'job-favoriten' ein Array?:", Array.isArray(jobFieldDataForTooltip["job-favoriten"]));
-        if (Array.isArray(jobFieldDataForTooltip["job-favoriten"])) {
-            console.log(`[Favoriten-Check] Enthält '${applicantId}'?:`, jobFieldDataForTooltip["job-favoriten"].includes(applicantId));
-        }
-    } else {
-        console.log("[Favoriten-Check] jobFieldDataForTooltip ist NICHT vorhanden.");
-    }
+    // console.log(`[Favoriten-Check] Applicant Name: ${applicantFieldData.name}, Applicant ID: ${applicantId}`);
+    // if (jobFieldDataForTooltip) {
+    //     console.log("[Favoriten-Check] jobFieldDataForTooltip vorhanden.");
+    //     console.log("[Favoriten-Check] jobFieldDataForTooltip['job-favoriten']:", jobFieldDataForTooltip["job-favoriten"]);
+    //     console.log("[Favoriten-Check] Ist 'job-favoriten' ein Array?:", Array.isArray(jobFieldDataForTooltip["job-favoriten"]));
+    //     if (Array.isArray(jobFieldDataForTooltip["job-favoriten"])) {
+    //         console.log(`[Favoriten-Check] Enthält '${applicantId}'?:`, jobFieldDataForTooltip["job-favoriten"].includes(applicantId));
+    //     }
+    // } else {
+    //     console.log("[Favoriten-Check] jobFieldDataForTooltip ist NICHT vorhanden.");
+    // }
     // --- DEBUGGING END ---
 
     const isFavorite = jobFieldDataForTooltip && 
                        Array.isArray(jobFieldDataForTooltip["job-favoriten"]) && 
-                       applicantId && // Stellt sicher, dass applicantId jetzt einen Wert hat
+                       applicantId && 
                        jobFieldDataForTooltip["job-favoriten"].includes(applicantId);
     
     // --- DEBUGGING START (Result) ---
-    console.log(`[Favoriten-Check] Result für ${applicantFieldData.name}: isFavorite = ${isFavorite}`);
+    // console.log(`[Favoriten-Check] Result für ${applicantFieldData.name}: isFavorite = ${isFavorite}`);
     // --- DEBUGGING END (Result) ---
 
     if (isFavorite) {
+      const favoriteTagDiv = document.createElement("div"); // Parent div for the star
+      favoriteTagDiv.classList.add("db-plus-tag"); // Using the same class as requested
+
       const favoriteStarIcon = document.createElement("img");
-      favoriteStarIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/661cf386ae10eea98ee337f6_star-Regular.svg";
+      favoriteStarIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/662246de06d5827a9de8850f_star-Filled.svg"; // Updated star icon
       favoriteStarIcon.classList.add("db-icon-18"); 
       favoriteStarIcon.alt = "Favorit";
-      profileInfoDiv.appendChild(favoriteStarIcon);
+      
+      favoriteTagDiv.appendChild(favoriteStarIcon);
+      profileInfoDiv.appendChild(favoriteTagDiv);
     }
     
     applicantDiv.appendChild(profileInfoDiv);
@@ -229,19 +234,32 @@
     removeIcon.style.marginLeft = "5px";
 
     removeIcon.addEventListener('click', async () => {
-        const checkboxId = `filter-${jobId}-${filterType}-${filterValue.replace(/\s+/g, '-')}`;
+        let checkboxId;
+        if (filterType === 'relevantOnly' || filterType === 'plusOnly') {
+            checkboxId = `filter-${jobId}-${filterType}`;
+        } else {
+            checkboxId = `filter-${jobId}-${filterType}-${filterValue.replace(/\s+/g, '-')}`;
+        }
+        
         const checkbox = document.getElementById(checkboxId);
         if (checkbox && checkbox.checked) {
             checkbox.checked = false;
             const changeEvent = new Event('change', { bubbles: true });
             checkbox.dispatchEvent(changeEvent);
         } else {
-            console.warn(`Checkbox für Filter ${filterType}: ${filterValue} nicht gefunden oder nicht aktiv.`);
+            console.warn(`Checkbox für Filter ${filterType}: ${filterValue || ''} nicht gefunden oder nicht aktiv.`);
             const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
-            if (jobCache && jobCache.activeFilters && jobCache.activeFilters[filterType]) {
-                const index = jobCache.activeFilters[filterType].indexOf(filterValue);
-                if (index > -1) {
-                    jobCache.activeFilters[filterType].splice(index, 1);
+            if (jobCache && jobCache.activeFilters) {
+                if (filterType === 'relevantOnly' || filterType === 'plusOnly') {
+                    delete jobCache.activeFilters[filterType];
+                } else if (jobCache.activeFilters[filterType]) {
+                    const index = jobCache.activeFilters[filterType].indexOf(filterValue);
+                    if (index > -1) {
+                        jobCache.activeFilters[filterType].splice(index, 1);
+                        if(jobCache.activeFilters[filterType].length === 0) {
+                            delete jobCache.activeFilters[filterType];
+                        }
+                    }
                 }
                 if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
                     await window.WEBFLOW_API.core.applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper);
@@ -279,30 +297,13 @@
     });
     
     if (activeFilters.relevantOnly) {
-        const relevantBadgeWrapper = document.createElement("div");
-        relevantBadgeWrapper.classList.add("db-table-filter-wrapper", "active-filter-badge");
-        const relevantTextSpan = document.createElement("span");
-        relevantTextSpan.classList.add("is-txt-16");
-        relevantTextSpan.textContent = "Nur Relevante";
-        relevantBadgeWrapper.appendChild(relevantTextSpan);
-        
-        const removeRelevantIcon = document.createElement("img");
-        removeRelevantIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/68304c51fb2c1a32a1f2ef77_xmark.svg";
-        removeRelevantIcon.classList.add("db-icon-18", "remove-filter-icon");
-        removeRelevantIcon.alt = "Filter 'Nur Relevante' entfernen";
-        removeRelevantIcon.style.cursor = "pointer";
-        removeRelevantIcon.style.marginLeft = "5px";
+        const badge = createActiveFilterBadgeUI(jobId, 'relevantOnly', true, "Nur Relevante", applicantsListContainer, paginationWrapper);
+        badgesContainer.appendChild(badge);
+    }
 
-        removeRelevantIcon.addEventListener('click', async () => {
-            const relevantToggleCheckbox = document.getElementById(`filter-${jobId}-relevantOnly`);
-            if (relevantToggleCheckbox && relevantToggleCheckbox.checked) {
-                relevantToggleCheckbox.checked = false;
-                const changeEvent = new Event('change', { bubbles: true });
-                relevantToggleCheckbox.dispatchEvent(changeEvent);
-            }
-        });
-        relevantBadgeWrapper.appendChild(removeRelevantIcon);
-        badgesContainer.appendChild(relevantBadgeWrapper);
+    if (activeFilters.plusOnly) { // Badge for the new "Plus Only" filter
+        const badge = createActiveFilterBadgeUI(jobId, 'plusOnly', true, "Nur Plus Mitglieder", applicantsListContainer, paginationWrapper);
+        badgesContainer.appendChild(badge);
     }
   }
   window.WEBFLOW_API.ui.renderActiveFilterBadgesUI = renderActiveFilterBadgesUI;
@@ -412,6 +413,51 @@
     return filterParentDiv; 
   }
 
+  /**
+   * Helper function to create a toggle switch.
+   */
+  function createToggleSwitch(jobId, filterType, labelText, applicantsListContainer, paginationWrapper) {
+    const toggleWrapper = document.createElement('div');
+    toggleWrapper.classList.add('db-filter-toggle-wrapper'); // Wrapper for label and text
+
+    const labelElement = document.createElement('label');
+    labelElement.classList.add('toggle-show-list');
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.classList.add('checkbox-toggle');
+    checkbox.id = `filter-${jobId}-${filterType}`;
+    checkbox.dataset.filterType = filterType;
+
+    const sliderSpan = document.createElement('span');
+    sliderSpan.classList.add('toggle-slider-show-list');
+
+    labelElement.appendChild(checkbox);
+    labelElement.appendChild(sliderSpan);
+    toggleWrapper.appendChild(labelElement);
+
+    const textElement = document.createElement('span');
+    textElement.classList.add('is-txt-16'); // Assuming same text style as other filters
+    textElement.textContent = labelText;
+    textElement.style.marginLeft = '8px'; // Space between toggle and text
+    toggleWrapper.appendChild(textElement);
+
+    const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
+    if (jobCache?.activeFilters?.[filterType] === true) {
+        checkbox.checked = true;
+    }
+    
+    checkbox.addEventListener('change', async () => {
+        if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
+            await window.WEBFLOW_API.core.applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper);
+        } else {
+            console.error("applyAndReloadApplicants Funktion nicht gefunden.");
+        }
+    });
+    return toggleWrapper;
+  }
+
+
   function createFilterRowElement(jobId, applicantsListContainer, paginationWrapper) {
     const filterRowElement = document.createElement("div"); 
     filterRowElement.classList.add("db-table-filter-row"); 
@@ -438,36 +484,13 @@
         controlsWrapper.appendChild(creatorTypeFilterElement); 
     }
 
-    const relevantToggleWrapper = document.createElement('div');
-    relevantToggleWrapper.classList.add('db-filter-toggle-wrapper'); 
+    // Create "Nur relevante Bewerber" toggle using the new helper function
+    const relevantToggle = createToggleSwitch(jobId, "relevantOnly", "Nur relevante Bewerber", applicantsListContainer, paginationWrapper);
+    controlsWrapper.appendChild(relevantToggle);
 
-    const relevantToggleCheckbox = document.createElement('input');
-    relevantToggleCheckbox.type = 'checkbox';
-    relevantToggleCheckbox.id = `filter-${jobId}-relevantOnly`;
-    relevantToggleCheckbox.dataset.filterType = 'relevantOnly'; 
-    relevantToggleCheckbox.classList.add('db-filter-checkbox'); 
-
-    const relevantToggleLabel = document.createElement('label');
-    relevantToggleLabel.htmlFor = relevantToggleCheckbox.id; 
-    relevantToggleLabel.classList.add('is-txt-16');
-    relevantToggleLabel.textContent = 'Nur relevante Bewerber'; 
-
-    const jobCache = window.WEBFLOW_API.cache.jobDataCache[jobId];
-    if (jobCache?.activeFilters?.relevantOnly === true) {
-        relevantToggleCheckbox.checked = true;
-    }
-    
-    relevantToggleCheckbox.addEventListener('change', async () => {
-        if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
-            await window.WEBFLOW_API.core.applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper);
-        } else {
-            console.error("applyAndReloadApplicants Funktion nicht gefunden.");
-        }
-    });
-
-    relevantToggleWrapper.appendChild(relevantToggleCheckbox);
-    relevantToggleWrapper.appendChild(relevantToggleLabel); 
-    controlsWrapper.appendChild(relevantToggleWrapper); 
+    // Create "Nur Plus Mitglieder" toggle using the new helper function
+    const plusOnlyToggle = createToggleSwitch(jobId, "plusOnly", "Nur Plus Mitglieder", applicantsListContainer, paginationWrapper);
+    controlsWrapper.appendChild(plusOnlyToggle);
 
 
     document.addEventListener("click", (e) => {

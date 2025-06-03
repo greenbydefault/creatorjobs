@@ -8,6 +8,10 @@
   
   function createApplicantRowElement(applicantItemWithScoreInfo, jobFieldDataForTooltip, allJobApplicantsForThisJob, currentIndexInList, jobId) {
     const applicantFieldData = applicantItemWithScoreInfo.fieldData;
+    // Assuming applicantItemWithScoreInfo has an _id property for the applicant's unique ID.
+    // If the ID is stored elsewhere (e.g., within fieldData), this needs to be adjusted.
+    const applicantId = applicantItemWithScoreInfo._id; 
+
     const applicantDiv = document.createElement("div");
     applicantDiv.classList.add("db-table-row", "db-table-applicant", "job-entry");
     applicantDiv.style.cursor = 'pointer'; 
@@ -34,6 +38,11 @@
 
     const profileInfoDiv = document.createElement("div");
     profileInfoDiv.classList.add("db-table-row-item", "justify-left");
+    // Ensure items within profileInfoDiv are vertically centered if mixing text and icons of different sizes
+    profileInfoDiv.style.display = "flex";
+    profileInfoDiv.style.alignItems = "center";
+
+
     const profileImageField = applicantFieldData["image-thumbnail-small-92px"] || applicantFieldData["user-profile-img"];
     if (profileImageField) {
       const applicantImg = document.createElement("img");
@@ -43,17 +52,67 @@
       applicantImg.onerror = () => { applicantImg.src = 'https://placehold.co/92x92/E0E0E0/BDBDBD?text=Fehler'; };
       profileInfoDiv.appendChild(applicantImg);
     }
+
     const namePlusStatusDiv = document.createElement("div");
-    namePlusStatusDiv.classList.add("is-flexbox-vertical");
+    namePlusStatusDiv.classList.add("is-flexbox-vertical"); // This class might imply display:flex; flex-direction:column.
+                                                          // If it's just for the name now, it could be simplified.
+                                                          // Adding a margin to separate name from subsequent icons/tags.
+    namePlusStatusDiv.style.marginRight = "8px";
+
+
     const nameSpan = document.createElement("span");
     nameSpan.textContent = applicantFieldData.name || "Unbekannter Bewerber";
     nameSpan.classList.add("truncate");
     namePlusStatusDiv.appendChild(nameSpan);
-    const plusStatusSpan = document.createElement("span");
-    plusStatusSpan.classList.add("is-txt-tiny");
-    plusStatusSpan.textContent = applicantFieldData["plus-mitglied"] ? "Plus Mitglied" : "Standard";
-    namePlusStatusDiv.appendChild(plusStatusSpan);
+
+    // Plus status text is removed from here as per requirements.
+    // const plusStatusSpan = document.createElement("span");
+    // plusStatusSpan.classList.add("is-txt-tiny");
+    // plusStatusSpan.textContent = applicantFieldData["plus-mitglied"] ? "Plus Mitglied" : "Standard";
+    // namePlusStatusDiv.appendChild(plusStatusSpan);
+    
     profileInfoDiv.appendChild(namePlusStatusDiv);
+
+    // Add Favorite Star Icon if applicable
+    // Check if jobFieldDataForTooltip and job-favoriten exist, and if applicantId is in the list.
+    const isFavorite = jobFieldDataForTooltip && 
+                       Array.isArray(jobFieldDataForTooltip["job-favoriten"]) && 
+                       applicantId && 
+                       jobFieldDataForTooltip["job-favoriten"].includes(applicantId);
+
+    if (isFavorite) {
+      const favoriteStarIcon = document.createElement("img");
+      favoriteStarIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/661cf386ae10eea98ee337f6_star-Regular.svg";
+      favoriteStarIcon.classList.add("db-icon-18"); // Using db-icon-18 for consistency with other small icons
+      favoriteStarIcon.alt = "Favorit";
+      favoriteStarIcon.style.marginRight = "8px"; // Space before the next element (Plus Member tag or end)
+      // favoriteStarIcon.style.verticalAlign = "middle"; // Ensure alignment if needed
+      profileInfoDiv.appendChild(favoriteStarIcon);
+    }
+
+    // Add Plus Member Tag if applicable
+    if (applicantFieldData["plus-mitglied"]) {
+      const plusTagDiv = document.createElement("div");
+      plusTagDiv.classList.add("db-plus-tag");
+      plusTagDiv.style.display = "flex";
+      plusTagDiv.style.alignItems = "center";
+      // plusTagDiv.style.marginLeft = "8px"; // Margin is handled by preceding elements or general spacing
+
+      const plusIcon = document.createElement("img");
+      plusIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/678a291ddc6029abd5904169_bolt-filled.svg";
+      plusIcon.classList.add("db-icon-24");
+      plusIcon.alt = "Plus Mitglied Icon";
+      plusTagDiv.appendChild(plusIcon);
+
+      const plusText = document.createElement("span");
+      plusText.classList.add("db-plus-tag-text");
+      plusText.textContent = "Plus Member";
+      plusText.style.marginLeft = "4px"; // Space between bolt icon and text
+      plusTagDiv.appendChild(plusText);
+
+      profileInfoDiv.appendChild(plusTagDiv);
+    }
+    
     applicantDiv.appendChild(profileInfoDiv);
 
     const locationDiv = document.createElement("div");
@@ -83,6 +142,9 @@
 
     const socialCell = document.createElement("div");
     socialCell.classList.add("db-table-row-item");
+    socialCell.style.display = "flex"; // Ensure icons are in a row
+    socialCell.style.alignItems = "center";
+
     const socialPlatforms = [
       { key: "instagram", name: "Instagram", iconUrl: "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e8d979b71d2a7e5db3_Instagram.svg" },
       { key: "tiktok", name: "TikTok", iconUrl: "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e99dce86c2b6ba83fe_Tiktok.svg" },
@@ -95,6 +157,7 @@
         const socialLink = document.createElement("a");
         socialLink.href = normalizedPlatformUrl;
         socialLink.classList.add("db-application-option", "no-icon", "w-inline-block"); 
+        socialLink.style.marginRight = "4px"; // Add some space between social icons
         socialLink.target = "_blank";
         socialLink.rel = "noopener noreferrer";
         socialLink.addEventListener('click', (e) => e.stopPropagation()); 
@@ -138,7 +201,8 @@
       const colDiv = document.createElement("div");
       colDiv.classList.add("db-table-row-item");
       if (index === 0) { 
-         colDiv.style.flexGrow = "1.5"; 
+          // Make the "Creator" column wider to accommodate potential new icons/tags
+          colDiv.style.flex = "1.8"; // Increased from 1.5 or adjust as needed
       }
       const textSpan = document.createElement("span");
       textSpan.classList.add("is-txt-16", "is-txt-bold"); 
@@ -151,7 +215,6 @@
 
   function createActiveFilterBadgeUI(jobId, filterType, filterValue, filterText, applicantsListContainer, paginationWrapper) {
     const badgeWrapper = document.createElement("div");
-    // Jedes Badge bekommt die Klasse "db-table-filter-wrapper" und "active-filter-badge"
     badgeWrapper.classList.add("db-table-filter-wrapper", "active-filter-badge"); 
 
     const filterNameSpan = document.createElement("span");
@@ -217,7 +280,6 @@
     });
     
     if (activeFilters.relevantOnly) {
-        // Für den "Nur Relevante" Toggle wird ein Badge mit der Klasse "db-table-filter-wrapper" erstellt
         const relevantBadgeWrapper = document.createElement("div");
         relevantBadgeWrapper.classList.add("db-table-filter-wrapper", "active-filter-badge");
         const relevantTextSpan = document.createElement("span");
@@ -225,7 +287,6 @@
         relevantTextSpan.textContent = "Nur Relevante";
         relevantBadgeWrapper.appendChild(relevantTextSpan);
         
-        // X-Icon zum Entfernen des "Nur Relevante" Filters
         const removeRelevantIcon = document.createElement("img");
         removeRelevantIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/68304c51fb2c1a32a1f2ef77_xmark.svg";
         removeRelevantIcon.classList.add("db-icon-18", "remove-filter-icon");
@@ -250,10 +311,10 @@
 
   function createFilterDropdown(jobId, filterType, filterLabel, optionsSource, applicantsListContainer, paginationWrapper, isDynamicOptions = false) {
     const filterParentDiv = document.createElement("div"); 
-    filterParentDiv.classList.add("db-table-filter"); // Dies ist das Parent-Element für jeden einzelnen Filter-Dropdown
+    filterParentDiv.classList.add("db-table-filter"); 
 
     const filterTriggerWrapper = document.createElement("div"); 
-    filterTriggerWrapper.classList.add("db-table-filter-wrapper"); // Wrapper für Text und Icon des Triggers
+    filterTriggerWrapper.classList.add("db-table-filter-wrapper"); 
 
     const filterTextSpan = document.createElement("span"); 
     filterTextSpan.classList.add("is-txt-16");
@@ -321,7 +382,7 @@
         
         checkbox.addEventListener("change", async () => {
             if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.applyAndReloadApplicants) {
-               await window.WEBFLOW_API.core.applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper);
+                await window.WEBFLOW_API.core.applyAndReloadApplicants(jobId, applicantsListContainer, paginationWrapper);
             } else {
                 console.error("applyAndReloadApplicants Funktion nicht gefunden.");
             }
@@ -341,7 +402,6 @@
 
       if (!currentDropdownList) return;
 
-      // Schließe alle anderen Dropdowns, die Geschwister des aktuellen .db-table-filter sind
       const allFilterDropdownTriggers = filterParentDiv.parentElement.querySelectorAll('.db-table-filter .db-filter-dropdown-list');
       allFilterDropdownTriggers.forEach(otherDropdown => {
           if (otherDropdown !== currentDropdownList) {
@@ -353,39 +413,32 @@
     return filterParentDiv; 
   }
 
-  /**
-   * Erstellt das DOM-Element für die gesamte Filterzeile.
-   */
   function createFilterRowElement(jobId, applicantsListContainer, paginationWrapper) {
-    const filterRowElement = document.createElement("div"); // Das äußerste Element der gesamten Filterzeile
+    const filterRowElement = document.createElement("div"); 
     filterRowElement.classList.add("db-table-filter-row"); 
 
-    // Wrapper für die Filter-Dropdowns und den Toggle-Switch
     const controlsWrapper = document.createElement("div"); 
-    controlsWrapper.classList.add("db-table-filter-row-wrapper"); // Dein gewünschter Parent für die Filter-Controls
+    controlsWrapper.classList.add("db-table-filter-row-wrapper"); 
     filterRowElement.appendChild(controlsWrapper);
 
-    // Container für aktive Filter-Badges (als Geschwister zum controlsWrapper)
     const activeFiltersDisplayContainer = document.createElement("div");
     activeFiltersDisplayContainer.classList.add("db-active-filters-display"); 
     filterRowElement.appendChild(activeFiltersDisplayContainer); 
 
 
-    // Erstelle und füge die Filter-Dropdowns zum controlsWrapper hinzu
     if (MAPPINGS && MAPPINGS.followerRanges) {
         const followerFilterElement = createFilterDropdown(jobId, "follower", "Follower", MAPPINGS.followerRanges, applicantsListContainer, paginationWrapper);
-        controlsWrapper.appendChild(followerFilterElement); // Zum controlsWrapper hinzufügen
+        controlsWrapper.appendChild(followerFilterElement); 
     }
 
     const categoryFilterElement = createFilterDropdown(jobId, "category", "Kategorie", "creator-main-categorie", applicantsListContainer, paginationWrapper, true);
-    controlsWrapper.appendChild(categoryFilterElement); // Zum controlsWrapper hinzufügen
+    controlsWrapper.appendChild(categoryFilterElement); 
     
     if (MAPPINGS && MAPPINGS.creatorTypen) {
         const creatorTypeFilterElement = createFilterDropdown(jobId, "creatorType", "Creator Typ", MAPPINGS.creatorTypen, applicantsListContainer, paginationWrapper);
-        controlsWrapper.appendChild(creatorTypeFilterElement); // Zum controlsWrapper hinzufügen
+        controlsWrapper.appendChild(creatorTypeFilterElement); 
     }
 
-    // Erstelle und füge den "Nur relevante Bewerber"-Toggle zum controlsWrapper hinzu
     const relevantToggleWrapper = document.createElement('div');
     relevantToggleWrapper.classList.add('db-filter-toggle-wrapper'); 
 
@@ -415,13 +468,10 @@
 
     relevantToggleWrapper.appendChild(relevantToggleCheckbox);
     relevantToggleWrapper.appendChild(relevantToggleLabel); 
-    controlsWrapper.appendChild(relevantToggleWrapper); // Toggle zum controlsWrapper hinzufügen
+    controlsWrapper.appendChild(relevantToggleWrapper); 
 
 
-    // Schließen der Dropdowns, wenn außerhalb geklickt wird
     document.addEventListener("click", (e) => {
-        // Prüft, ob der Klick außerhalb *jedes* .db-table-filter Elements (Dropdown-Trigger + Liste) war
-        // UND auch außerhalb des Toggle-Wrappers
         if (!e.target.closest('.db-table-filter') && !e.target.closest('.db-filter-toggle-wrapper')) {
             const allDropdownLists = controlsWrapper.querySelectorAll('.db-filter-dropdown-list');
             allDropdownLists.forEach(dd => {

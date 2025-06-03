@@ -9,7 +9,7 @@
   function createApplicantRowElement(applicantItemWithScoreInfo, jobFieldDataForTooltip, allJobApplicantsForThisJob, currentIndexInList, jobId) {
     const applicantFieldData = applicantItemWithScoreInfo.fieldData;
     // Assuming applicantItemWithScoreInfo has an _id property for the applicant's unique ID.
-    // If the ID is stored elsewhere (e.g., within fieldData), this needs to be adjusted.
+    // This ID is used to check against the "job-favoriten" list.
     const applicantId = applicantItemWithScoreInfo._id; 
 
     const applicantDiv = document.createElement("div");
@@ -38,24 +38,42 @@
 
     const profileInfoDiv = document.createElement("div");
     profileInfoDiv.classList.add("db-table-row-item", "justify-left");
-    // Ensure items within profileInfoDiv are vertically centered if mixing text and icons of different sizes
     profileInfoDiv.style.display = "flex";
     profileInfoDiv.style.alignItems = "center";
 
+    // Create the image wrapper
+    const imgWrapper = document.createElement("div");
+    imgWrapper.classList.add("db-table-img-wrapper");
 
     const profileImageField = applicantFieldData["image-thumbnail-small-92px"] || applicantFieldData["user-profile-img"];
     if (profileImageField) {
       const applicantImg = document.createElement("img");
-      applicantImg.classList.add("db-table-img"); // "is-margin-right-12" entfernt
+      applicantImg.classList.add("db-table-img"); 
       applicantImg.src = typeof profileImageField === 'string' ? profileImageField : (profileImageField?.url || 'https://placehold.co/92x92/E0E0E0/BDBDBD?text=Bild');
       applicantImg.alt = applicantFieldData.name || "Bewerberbild";
       applicantImg.onerror = () => { applicantImg.src = 'https://placehold.co/92x92/E0E0E0/BDBDBD?text=Fehler'; };
-      profileInfoDiv.appendChild(applicantImg);
+      imgWrapper.appendChild(applicantImg); 
     }
+
+    if (applicantFieldData["plus-mitglied"]) {
+      const plusTagDiv = document.createElement("div");
+      plusTagDiv.classList.add("db-plus-tag");
+
+      const plusIcon = document.createElement("img");
+      plusIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/678a291ddc6029abd5904169_bolt-filled.svg";
+      plusIcon.classList.add("db-icon-18"); 
+      plusIcon.alt = "Plus Mitglied Icon";
+      plusTagDiv.appendChild(plusIcon);
+
+      imgWrapper.appendChild(plusTagDiv); 
+    }
+    
+    profileInfoDiv.appendChild(imgWrapper); 
 
     const namePlusStatusDiv = document.createElement("div");
     namePlusStatusDiv.classList.add("is-flexbox-vertical"); 
-    namePlusStatusDiv.style.marginRight = "8px";
+    namePlusStatusDiv.style.marginRight = "8px"; 
+    namePlusStatusDiv.style.marginLeft = "8px"; 
 
 
     const nameSpan = document.createElement("span");
@@ -65,40 +83,35 @@
     
     profileInfoDiv.appendChild(namePlusStatusDiv);
 
-    // Add Favorite Star Icon if applicable
+    // --- DEBUGGING START ---
+    console.log(`[Favoriten-Check] Applicant Name: ${applicantFieldData.name}, Applicant ID: ${applicantId}`);
+    if (jobFieldDataForTooltip) {
+        console.log("[Favoriten-Check] jobFieldDataForTooltip vorhanden.");
+        console.log("[Favoriten-Check] jobFieldDataForTooltip['job-favoriten']:", jobFieldDataForTooltip["job-favoriten"]);
+        console.log("[Favoriten-Check] Ist 'job-favoriten' ein Array?:", Array.isArray(jobFieldDataForTooltip["job-favoriten"]));
+        if (Array.isArray(jobFieldDataForTooltip["job-favoriten"])) {
+            console.log(`[Favoriten-Check] Enthält '${applicantId}'?:`, jobFieldDataForTooltip["job-favoriten"].includes(applicantId));
+        }
+    } else {
+        console.log("[Favoriten-Check] jobFieldDataForTooltip ist NICHT vorhanden.");
+    }
+    // --- DEBUGGING END ---
+
     const isFavorite = jobFieldDataForTooltip && 
                        Array.isArray(jobFieldDataForTooltip["job-favoriten"]) && 
                        applicantId && 
                        jobFieldDataForTooltip["job-favoriten"].includes(applicantId);
+    
+    // --- DEBUGGING START (Result) ---
+    console.log(`[Favoriten-Check] Result für ${applicantFieldData.name}: isFavorite = ${isFavorite}`);
+    // --- DEBUGGING END (Result) ---
 
     if (isFavorite) {
       const favoriteStarIcon = document.createElement("img");
       favoriteStarIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/661cf386ae10eea98ee337f6_star-Regular.svg";
       favoriteStarIcon.classList.add("db-icon-18"); 
       favoriteStarIcon.alt = "Favorit";
-      favoriteStarIcon.style.marginRight = "8px"; 
       profileInfoDiv.appendChild(favoriteStarIcon);
-    }
-
-    // Add Plus Member Tag if applicable
-    if (applicantFieldData["plus-mitglied"]) {
-      const plusTagDiv = document.createElement("div");
-      plusTagDiv.classList.add("db-plus-tag");
-      // Inline styles entfernt: plusTagDiv.style.display = "flex"; plusTagDiv.style.alignItems = "center";
-
-      const plusIcon = document.createElement("img");
-      plusIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/678a291ddc6029abd5904169_bolt-filled.svg";
-      plusIcon.classList.add("db-icon-18"); // Geändert von db-icon-24
-      plusIcon.alt = "Plus Mitglied Icon";
-      plusTagDiv.appendChild(plusIcon);
-
-      const plusText = document.createElement("span");
-      plusText.classList.add("db-plus-tag-text");
-      plusText.textContent = "Plus Member";
-      // Inline style entfernt: plusText.style.marginLeft = "4px"; 
-      plusTagDiv.appendChild(plusText);
-
-      profileInfoDiv.appendChild(plusTagDiv);
     }
     
     applicantDiv.appendChild(profileInfoDiv);

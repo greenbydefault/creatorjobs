@@ -1,3 +1,4 @@
+// brands/campaign/src/ui/sidebar-3.9.js
 (function () {
   'use strict';
   window.WEBFLOW_API = window.WEBFLOW_API || {};
@@ -5,20 +6,13 @@
   window.WEBFLOW_API.utils = window.WEBFLOW_API.utils || {};
 
   let currentSidebarJobId = null;
+  let currentSidebarApplicantId = null; // Speichert die Webflow Member ID des aktuellen Creators
   let currentSidebarApplicants = [];
   let currentSidebarIndex = -1;
-  // let overlayElement = null; // Entfernt
-  let sidebarWrapperElement = null; // Globale Referenz zur Sidebar
+  let sidebarWrapperElement = null;
+  let favoritButtonElement = null; // Referenz zum Favorit-Button
 
-  // ensureOverlay() und toggleOverlay() wurden entfernt
-
-  function closeSidebar() {
-    if (sidebarWrapperElement && sidebarWrapperElement.classList.contains('is-open')) {
-      sidebarWrapperElement.classList.remove('is-open');
-      document.body.style.overflow = ''; // Erlaubt Scrollen des Body wieder
-    }
-  }
-
+  // Sicherstellen, dass normalizeUrl verfügbar ist
   if (!window.WEBFLOW_API.utils.normalizeUrl) {
     window.WEBFLOW_API.utils.normalizeUrl = function(url) {
       if (!url) return '';
@@ -28,6 +22,19 @@
       if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) return `https://${trimmedUrl}`;
       return trimmedUrl;
     };
+  }
+
+  function closeSidebar() {
+    if (sidebarWrapperElement && sidebarWrapperElement.classList.contains('is-open')) {
+      sidebarWrapperElement.classList.remove('is-open');
+      document.body.style.overflow = '';
+      // Event-Listener vom Favorit-Button entfernen, um Memory-Leaks zu vermeiden
+      if (favoritButtonElement) {
+        const newFavoritButton = favoritButtonElement.cloneNode(true);
+        favoritButtonElement.parentNode.replaceChild(newFavoritButton, favoritButtonElement);
+        favoritButtonElement = null; // Referenz löschen
+      }
+    }
   }
 
   function formatFollowerCount(numStr) {
@@ -42,6 +49,50 @@
     return (millions % 1 !== 0 ? millions.toFixed(1) : millions.toFixed(0)) + 'M';
   }
 
+  /**
+   * Aktualisiert den Favoriten-Button in der Sidebar.
+   * @param {boolean} isFavorite - True, wenn der Creator ein Favorit ist.
+   */
+  function updateFavoriteButtonUI(isFavorite) {
+    if (favoritButtonElement) {
+      const favoritButtonText = favoritButtonElement.querySelector('.db-button-text');
+      if (favoritButtonText) {
+        favoritButtonText.textContent = isFavorite ? 'Entfernen' : 'Favorit';
+      }
+      // Optional: Klassen für unterschiedliches Styling hinzufügen/entfernen
+      favoritButtonElement.classList.toggle('is-favorite', isFavorite);
+    }
+  }
+
+  /**
+   * Behandelt den Klick auf den Favoriten-Button.
+   */
+  async function handleFavoriteToggle() {
+    if (!currentSidebarJobId || !currentSidebarApplicantId) {
+      console.warn('handleFavoriteToggle: JobID oder ApplicantID nicht gesetzt.');
+      return;
+    }
+    if (!window.WEBFLOW_API.core || !window.WEBFLOW_API.core.favoriteService) {
+      console.error('handleFavoriteToggle: favoriteService nicht verfügbar.');
+      return;
+    }
+
+    // Button deaktivieren, um doppelte Klicks zu verhindern
+    if (favoritButtonElement) favoritButtonElement.disabled = true;
+
+    const newFavoriteStatus = await window.WEBFLOW_API.core.favoriteService.toggleFavorite(currentSidebarJobId, currentSidebarApplicantId);
+
+    if (newFavoriteStatus !== null) {
+      updateFavoriteButtonUI(newFavoriteStatus);
+    } else {
+      // Fehlerfall, vielleicht eine Meldung anzeigen
+      alert('Fehler beim Aktualisieren des Favoritenstatus.');
+    }
+    // Button wieder aktivieren
+    if (favoritButtonElement) favoritButtonElement.disabled = false;
+  }
+
+
   function showCreatorSidebar(applicantItem, allJobApplicants, applicantIndex, jobId) {
     const MAPPINGS = window.WEBFLOW_API.MAPPINGS || {};
     const creatorTypesMapping = MAPPINGS.creatorTypen || {};
@@ -52,6 +103,14 @@
     currentSidebarIndex = applicantIndex;
     const applicantFieldData = applicantItem.fieldData;
 
+    // Wichtig: Die Webflow Member ID des Bewerbers speichern
+    currentSidebarApplicantId = applicantFieldData['webflow-member-id'];
+    if (!currentSidebarApplicantId) {
+        console.error("showCreatorSidebar: Konnte 'webflow-member-id' des Bewerbers nicht finden. Favoritenfunktion wird nicht korrekt arbeiten.", applicantFieldData);
+        // Optional: Funktion abbrechen oder Fehlermeldung anzeigen
+    }
+
+
     sidebarWrapperElement = document.getElementById('db-modal-creator-wrapper-dynamic');
     if (!sidebarWrapperElement) {
       sidebarWrapperElement = document.createElement('div');
@@ -61,13 +120,10 @@
     }
     sidebarWrapperElement.innerHTML = '';
 
-    // --- 1. Headline Area (Image, Name, Type/Category, Action Buttons, Close Button) ---
     const creatorHeadlineOverallDiv = document.createElement('div');
     creatorHeadlineOverallDiv.classList.add('db-modal-creator-headline');
-
     const imgNameTypeWrapper = document.createElement('div');
     imgNameTypeWrapper.classList.add('db-modal-creator-img-name-type-wrapper');
-
     const imgWrapperDiv = document.createElement('div');
     imgWrapperDiv.classList.add('db-modal-creator-img-wrapper');
     const profileImageField = applicantFieldData["image-thumbnail-small-92px"] || applicantFieldData["user-profile-img"];
@@ -80,7 +136,6 @@
       imgWrapperDiv.appendChild(profileImg);
     }
     imgNameTypeWrapper.appendChild(imgWrapperDiv);
-
     const creatorInfoFlexDiv = document.createElement('div');
     creatorInfoFlexDiv.classList.add('is-flexbox-vertical');
     const nameSpan = document.createElement('span');
@@ -110,7 +165,6 @@
 
     const headlineActionsWrapper = document.createElement('div');
     headlineActionsWrapper.classList.add('db-modal-creator-headline-actions');
-
     const zusagenLink = document.createElement('a');
     zusagenLink.classList.add('db-button-medium-gradient-pink', 'size-auto');
     zusagenLink.href = '#';
@@ -120,39 +174,56 @@
     zusagenLink.appendChild(zusagenButtonText);
     headlineActionsWrapper.appendChild(zusagenLink);
 
-    const favoritButton = document.createElement('a');
-    favoritButton.classList.add('db-button-medium-white-border', 'size-auto');
-    favoritButton.href = '#';
+    // Favorit-Button erstellen und Event-Listener hinzufügen
+    favoritButtonElement = document.createElement('a'); // Globale Referenz setzen
+    favoritButtonElement.classList.add('db-button-medium-white-border', 'size-auto');
+    favoritButtonElement.href = '#'; // Verhindert Standardverhalten, aber Klick wird abgefangen
+    favoritButtonElement.id = 'sidebar-favorit-button'; // Eindeutige ID für den Button
     const favoritButtonText = document.createElement('span');
     favoritButtonText.classList.add('db-button-text');
-    favoritButtonText.textContent = 'Favorit';
-    favoritButton.appendChild(favoritButtonText);
-    headlineActionsWrapper.appendChild(favoritButton);
-    creatorHeadlineOverallDiv.appendChild(headlineActionsWrapper);
+    // Text wird durch updateFavoriteButtonUI gesetzt
+    favoritButtonElement.appendChild(favoritButtonText);
+    headlineActionsWrapper.appendChild(favoritButtonElement);
 
+    // Event-Listener für den Favoriten-Button hinzufügen
+    // Wichtig: Alten Listener entfernen, falls vorhanden, um Duplikate zu vermeiden
+    // (wird jetzt in closeSidebar gehandhabt, aber hier initial setzen)
+    favoritButtonElement.addEventListener('click', (e) => {
+        e.preventDefault(); // Verhindert, dass der Link tatsächlich navigiert
+        handleFavoriteToggle();
+    });
+
+
+    // Initialen Zustand des Favoriten-Buttons setzen
+    if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.favoriteService && currentSidebarJobId && currentSidebarApplicantId) {
+      const isCurrentlyFavorite = window.WEBFLOW_API.core.favoriteService.isFavorite(currentSidebarJobId, currentSidebarApplicantId);
+      updateFavoriteButtonUI(isCurrentlyFavorite);
+    } else {
+      updateFavoriteButtonUI(false); // Fallback
+      if (!(window.WEBFLOW_API.core && window.WEBFLOW_API.core.favoriteService)) {
+        console.warn("showCreatorSidebar: favoriteService nicht verfügbar für initialen Button-Status.");
+      }
+    }
+
+    creatorHeadlineOverallDiv.appendChild(headlineActionsWrapper);
     const closeButtonElement = document.createElement('div');
     closeButtonElement.classList.add('db-modal-close-button');
     closeButtonElement.innerHTML = '&times;';
     closeButtonElement.title = 'Schließen';
     closeButtonElement.addEventListener('click', closeSidebar);
     creatorHeadlineOverallDiv.appendChild(closeButtonElement);
-
     sidebarWrapperElement.appendChild(creatorHeadlineOverallDiv);
 
-    // --- Main Content Area (Social Media, Videos) ---
     const contentArea = document.createElement('div');
     contentArea.classList.add('db-modal-creator-content');
     contentArea.id = 'sidebar-creator-content-dynamic';
     sidebarWrapperElement.appendChild(contentArea);
-
     const socialMediaDetailsWrapper = document.createElement('div');
     socialMediaDetailsWrapper.classList.add('db-modal-creator-details');
-
     const socialMediaHeadline = document.createElement('div');
     socialMediaHeadline.classList.add('is-txt-16', 'is-txt-medium', 'text-color-dark');
     socialMediaHeadline.textContent = 'Social Media';
     socialMediaDetailsWrapper.appendChild(socialMediaHeadline);
-
     const socialMediaOuterWrapper = document.createElement('div');
     socialMediaOuterWrapper.classList.add('db-profile-social');
     const socialPlatforms = [
@@ -270,39 +341,31 @@
         noVideosMessageP.style.display = '';
     }
     
-    // --- Navigation Buttons (Prev/Next) - Positioned at the very bottom, wrapped in db-modal-creator-controls ---
-    const bottomNavControlsWrapper = document.createElement('div'); // Neuer Parent-Wrapper
-    bottomNavControlsWrapper.classList.add('db-modal-creator-controls'); // Klasse wie bei den oberen Action-Buttons
-
+    const bottomNavControlsWrapper = document.createElement('div');
+    bottomNavControlsWrapper.classList.add('db-modal-creator-controls');
     const navButtonsWrapperBottom = document.createElement('div');
     navButtonsWrapperBottom.classList.add('db-modal-control-buttons', 'bottom-nav');
-
     const prevButtonBottom = document.createElement('div');
     prevButtonBottom.classList.add('db-modal-prev');
     prevButtonBottom.id = 'sidebar-prev-applicant-bottom';
     prevButtonBottom.textContent = 'Zurück';
     prevButtonBottom.title = "Vorheriger Creator";
     navButtonsWrapperBottom.appendChild(prevButtonBottom);
-
     const nextButtonBottom = document.createElement('div');
     nextButtonBottom.classList.add('db-modal-next');
     nextButtonBottom.id = 'sidebar-next-applicant-bottom';
     nextButtonBottom.textContent = 'Weiter';
     nextButtonBottom.title = "Nächster Creator";
     navButtonsWrapperBottom.appendChild(nextButtonBottom);
-    
-    bottomNavControlsWrapper.appendChild(navButtonsWrapperBottom); // Nav-Buttons in den neuen Parent
-    sidebarWrapperElement.appendChild(bottomNavControlsWrapper); // Parent an die Sidebar anhängen
-
+    bottomNavControlsWrapper.appendChild(navButtonsWrapperBottom);
+    sidebarWrapperElement.appendChild(bottomNavControlsWrapper);
     prevButtonBottom.addEventListener('click', navigatePrev);
     nextButtonBottom.addEventListener('click', navigateNext);
-
     prevButtonBottom.classList.toggle('disabled', currentSidebarIndex === 0);
     nextButtonBottom.classList.toggle('disabled', currentSidebarIndex === currentSidebarApplicants.length - 1);
     
     sidebarWrapperElement.classList.add('is-open');
-    // toggleOverlay(true); // Entfernt, da kein Overlay mehr
-    document.body.style.overflow = 'hidden'; // Scrollen des Body verhindern, wenn Sidebar offen ist
+    document.body.style.overflow = 'hidden';
   }
 
   function navigatePrev() {
@@ -345,5 +408,6 @@
   }
   
   window.WEBFLOW_API.ui.showCreatorSidebar = showCreatorSidebar;
+  console.log("Sidebar UI (sidebar-3.9.js) wurde aktualisiert für Favoriten-Funktion.");
 
 })();

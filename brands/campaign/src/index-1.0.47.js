@@ -10,7 +10,7 @@ import './core/cache-1.1.js';
 import './core/planStatusChecker-1.01.js';
 
 // Services, die Konfiguration und Utils verwenden
-import './services/webflowService.js';
+import './services/webflowService-1.0.js';
 import './services/chatService-1.2.js'; 
 // Kernlogik (Scoring, Datenverarbeitung)
 // import './core/matchScoring.js';
@@ -21,15 +21,15 @@ import './services/chatService-1.2.js';
 
 // UI Elemente
 import './ui/skeleton.js';
-import './ui/applicantElements-2.0.js';
+import './ui/applicantElements-2.1.js';
 import './ui/pagination.js';
 import './ui/jobElements-1.5.js';
-import './ui/sidebar-3.9.js';
+import './ui/sidebar-4.0.js';
 import './ui/notesSidebar.js';
 // Kernlogik, die UI-Elemente und Services verwendet
 // dataProcessing hier, da es ui.applicantElements (für Filter-Callback-Setup) und appLogic (für Reload) referenziert
 import './core/dataProcessing-2.1.js';
-
+import './core/favoriteService.js';
 
 // Hauptanwendungslogik, die viele der obigen Module orchestriert
 import './appLogic-1.8.js';
@@ -47,3 +47,11 @@ import './main-1.2.js';
 // bereitgestellt werden. In diesem Fall werden die meisten Abhängigkeiten
 // erst zur Laufzeit innerhalb der Funktionen aufgelöst, was die strikte Reihenfolge
 // etwas weniger kritisch macht, aber eine logische Reihenfolge ist dennoch gut.
+
+// Logging, um sicherzustellen, dass der Favorite Service registriert wurde
+if (window.WEBFLOW_API && window.WEBFLOW_API.core && window.WEBFLOW_API.core.favoriteService) {
+  console.log("FavoriteService erfolgreich in index.js registriert und unter window.WEBFLOW_API.core.favoriteService verfügbar.");
+} else {
+  console.error("FEHLER: FavoriteService konnte nicht in index.js registriert werden!");
+}
+

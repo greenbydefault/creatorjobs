@@ -13,6 +13,25 @@
   let favoritButtonElement = null;
   let zusagenButtonElement = null;
 
+  function ensureSidebarStyles() {
+    if (document.getElementById('creator-sidebar-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'creator-sidebar-styles';
+    style.textContent = `
+      .db-modal-creator-wrapper {
+        transform: translateX(100%);
+        transition: transform 0.3s ease-in-out;
+      }
+      .db-modal-creator-wrapper.is-open {
+        transform: translateX(0);
+      }
+      .db-modal-creator-wrapper.creator-sidebar-shifted {
+        transform: translateX(-300px);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   // HTML-Code für den CSS-Spinner (CSS wird jetzt extern erwartet)
   const SPINNER_ICON_HTML = '<span class="button-css-spinner"></span>';
   const SUCCESS_ICON_HTML = '<span class="button-icon-success" style="margin-right: 5px;">✓</span>';
@@ -32,6 +51,7 @@
   function closeSidebar() {
     if (sidebarWrapperElement && sidebarWrapperElement.classList.contains('is-open')) {
       sidebarWrapperElement.classList.remove('is-open');
+      sidebarWrapperElement.style.transform = 'translateX(100%)';
       document.body.style.overflow = '';
       if (favoritButtonElement) {
         const newFavoritButton = favoritButtonElement.cloneNode(true);
@@ -194,11 +214,13 @@
         }
     }
 
+    ensureSidebarStyles();
     sidebarWrapperElement = document.getElementById('db-modal-creator-wrapper-dynamic');
     if (!sidebarWrapperElement) {
       sidebarWrapperElement = document.createElement('div');
       sidebarWrapperElement.id = 'db-modal-creator-wrapper-dynamic';
       sidebarWrapperElement.classList.add('db-modal-creator-wrapper');
+      sidebarWrapperElement.style.transform = 'translateX(100%)';
       document.body.appendChild(sidebarWrapperElement);
     }
     sidebarWrapperElement.innerHTML = '';
@@ -439,8 +461,9 @@
     nextButtonBottom.addEventListener('click', navigateNext);
     prevButtonBottom.classList.toggle('disabled', currentSidebarIndex === 0);
     nextButtonBottom.classList.toggle('disabled', currentSidebarIndex === currentSidebarApplicants.length - 1);
-    
+
     sidebarWrapperElement.classList.add('is-open');
+    sidebarWrapperElement.style.transform = 'translateX(0)';
     document.body.style.overflow = 'hidden';
   }
 

@@ -33,7 +33,7 @@ import './core/favoriteService.js';
 import './core/bookingService.js';
 
 // Hauptanwendungslogik, die viele der obigen Module orchestriert
-import './appLogic-1.8.js';
+import './appLogic-1.9.js';
 
 // Initialisierungsskript, das die appLogic startet
 import './main-1.2.js';

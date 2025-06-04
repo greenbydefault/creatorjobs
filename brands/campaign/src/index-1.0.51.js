@@ -21,7 +21,7 @@ import './services/chatService-1.2.js';
 
 // UI Elemente
 import './ui/skeleton.js';
-import './ui/applicantElements-2.1.js';
+import './ui/applicantElements-2.2.js';
 import './ui/pagination.js';
 import './ui/jobElements-1.5.js';
 import './ui/sidebar-4.3.js';

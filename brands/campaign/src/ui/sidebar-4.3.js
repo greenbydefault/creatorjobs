@@ -58,18 +58,26 @@
     return (millions % 1 !== 0 ? millions.toFixed(1) : millions.toFixed(0)) + 'M';
   }
 
+  function animateButtonTextChange(span, newHtml) {
+    span.style.transition = 'opacity 150ms';
+    span.style.opacity = '0';
+    setTimeout(() => {
+      span.innerHTML = newHtml;
+      span.style.opacity = '1';
+    }, 150);
+  }
+
   function setButtonState(button, text, isLoading = false, isSuccess = false, isError = false, isDisabled = false) {
     if (!button) return;
     const buttonTextSpan = button.querySelector('.db-button-text');
     if (!buttonTextSpan) return;
     let prefix = '';
     if (isLoading) {
-        // Die Funktion ensureSpinnerStyles() wird nicht mehr hier aufgerufen
         prefix = SPINNER_ICON_HTML;
     }
     else if (isSuccess) prefix = SUCCESS_ICON_HTML;
     else if (isError) prefix = ERROR_ICON_HTML;
-    buttonTextSpan.innerHTML = `${prefix}${text}`;
+    animateButtonTextChange(buttonTextSpan, `${prefix}${text}`);
     button.disabled = isDisabled;
     button.classList.toggle('is-disabled-processing', isDisabled);
   }
@@ -110,13 +118,13 @@
 
     const favoriteService = window.WEBFLOW_API.core.favoriteService;
     const isCurrentlyFavorite = favoriteService.isFavorite(currentSidebarJobId, currentSidebarApplicantId);
-    const actionText = isCurrentlyFavorite ? "Wird entfernt..." : "Wird hinzugefügt...";
+    const actionText = isCurrentlyFavorite ? "Entferne..." : "Speichere...";
     setButtonState(favoritButtonElement, actionText, true, false, false, true);
 
     const newFavoriteStatus = await favoriteService.toggleFavorite(currentSidebarJobId, currentSidebarApplicantId);
 
     if (newFavoriteStatus !== null) {
-      const successText = newFavoriteStatus ? "Gespeichert!" : "Entfernt!";
+      const successText = newFavoriteStatus ? "Gespeichert" : "Entfernt";
       setButtonState(favoritButtonElement, successText, false, true, false, true);
       setTimeout(() => {
         updateFavoriteButtonUI(newFavoriteStatus, true);
@@ -135,13 +143,13 @@
 
     const bookingService = window.WEBFLOW_API.core.bookingService;
     const isCurrentlyBooked = bookingService.isBooked(currentSidebarJobId, currentSidebarApplicantId);
-    const actionText = isCurrentlyBooked ? "Buchung storniert..." : "Wird gebucht...";
+    const actionText = isCurrentlyBooked ? "Storniere..." : "Buche...";
     setButtonState(zusagenButtonElement, actionText, true, false, false, true);
 
     const newBookingStatus = await bookingService.toggleBooking(currentSidebarJobId, currentSidebarApplicantId);
 
     if (newBookingStatus !== null) {
-      const successText = newBookingStatus ? "Gebucht!" : "Storniert!";
+      const successText = newBookingStatus ? "Gebucht" : "Storniert";
       setButtonState(zusagenButtonElement, successText, false, true, false, true);
       setTimeout(() => {
         updateBookingButtonUI(newBookingStatus, true);

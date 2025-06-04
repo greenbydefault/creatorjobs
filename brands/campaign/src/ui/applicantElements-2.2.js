@@ -14,64 +14,59 @@
    * @param {boolean} isFavorite - Der neue Favoritenstatus.
    */
   function updateApplicantFavoriteIcon(jobId, applicantId, isFavorite) {
-    // Finde die entsprechende Bewerberzeile im DOM
-    // Die Zeile könnte eine data-attribute wie data-applicant-id haben oder wir müssen durch die Job-Container iterieren.
-    // Annahme: Jede applicantDiv hat ein data-applicant-id Attribut.
     const applicantRow = document.querySelector(`.my-job-item[data-job-id="${jobId}"] .db-table-applicant[data-applicant-id="${applicantId}"]`);
 
     if (applicantRow) {
-      const profileInfoDiv = applicantRow.querySelector(".db-table-row-item.justify-left"); // Der erste Container mit Bild und Name
+      const profileInfoDiv = applicantRow.querySelector(".db-table-row-item.justify-left");
       if (!profileInfoDiv) return;
 
-      // Entferne ein eventuell vorhandenes altes Favoriten-Tag
-      const existingFavoriteTag = profileInfoDiv.querySelector(".db-plus-tag.favorite-star-tag"); // Spezifischere Klasse
+      const existingFavoriteTag = profileInfoDiv.querySelector(".db-plus-tag.favorite-star-tag");
       if (existingFavoriteTag) {
         existingFavoriteTag.remove();
       }
 
       if (isFavorite) {
         const favoriteTagDiv = document.createElement("div");
-        favoriteTagDiv.classList.add("db-plus-tag", "favorite-star-tag"); // Eindeutige Klasse für das Stern-Tag
+        favoriteTagDiv.classList.add("db-plus-tag", "favorite-star-tag");
 
         const favoriteStarIcon = document.createElement("img");
         favoriteStarIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/662246de06d5827a9de8850f_star-Filled.svg";
         favoriteStarIcon.classList.add("db-icon-18");
         favoriteStarIcon.alt = "Favorit";
-        favoriteStarIcon.style.marginLeft = "4px"; // Etwas Abstand zum Namen
+        favoriteStarIcon.style.marginLeft = "4px";
 
         favoriteTagDiv.appendChild(favoriteStarIcon);
         
-        // Füge das Stern-Icon direkt nach dem Namen-Wrapper (namePlusStatusDiv) ein
         const nameWrapper = profileInfoDiv.querySelector(".is-flexbox-vertical");
         if (nameWrapper && nameWrapper.nextSibling) {
             profileInfoDiv.insertBefore(favoriteTagDiv, nameWrapper.nextSibling);
         } else if (nameWrapper) {
             profileInfoDiv.appendChild(favoriteTagDiv);
-        } else { // Fallback, falls nameWrapper nicht gefunden wird
+        } else { 
             profileInfoDiv.appendChild(favoriteTagDiv);
         }
       }
-    } else {
-      // console.warn(`updateApplicantFavoriteIcon: Bewerberzeile für Applicant ${applicantId} in Job ${jobId} nicht gefunden.`);
     }
   }
 
 
   function createApplicantRowElement(applicantItemWithScoreInfo, jobFieldDataForTooltip, allJobApplicantsForThisJob, currentIndexInList, jobId) {
     const applicantFieldData = applicantItemWithScoreInfo.fieldData;
-    const applicantId = applicantFieldData["webflow-member-id"]; // Webflow Member ID
+    const applicantId = applicantFieldData["webflow-member-id"]; 
 
     const applicantDiv = document.createElement("div");
     applicantDiv.classList.add("db-table-row", "db-table-applicant", "job-entry");
     applicantDiv.style.cursor = 'pointer';
-    applicantDiv.dataset.applicantId = applicantId; // Wichtig für das spätere Finden der Zeile
+    applicantDiv.dataset.applicantId = applicantId;
 
     applicantDiv.addEventListener('click', (event) => {
       if (event.target.closest('a') || event.target.closest('button') || event.target.closest('input')) {
         return;
       }
       if (window.WEBFLOW_API.ui && window.WEBFLOW_API.ui.showCreatorSidebar) {
-        window.WEBFLOW_API.ui.showCreatorSidebar(applicantItemWithScoreInfo, allJobApplicantsForThisJob, currentIndexInList, jobId);
+        // Wichtig: showCreatorSidebar ist jetzt async
+        window.WEBFLOW_API.ui.showCreatorSidebar(applicantItemWithScoreInfo, allJobApplicantsForThisJob, currentIndexInList, jobId)
+          .catch(err => console.error("Fehler beim Öffnen der Creator Sidebar:", err));
       } else {
         console.error("showCreatorSidebar function not found on window.WEBFLOW_API.ui");
       }
@@ -124,27 +119,45 @@
     namePlusStatusDiv.appendChild(nameSpan);
     profileInfoDiv.appendChild(namePlusStatusDiv);
 
-    // Initiales Setzen des Favoriten-Icons
-    const isInitiallyFavorite = window.WEBFLOW_API.core && window.WEBFLOW_API.core.favoriteService
-      ? window.WEBFLOW_API.core.favoriteService.isFavorite(jobId, applicantId)
-      : (jobFieldDataForTooltip && Array.isArray(jobFieldDataForTooltip["job-favoriten"]) && applicantId && jobFieldDataForTooltip["job-favoriten"].includes(applicantId));
+    // --- Debug-Logging für Favoritenstatus ---
+    const favService = window.WEBFLOW_API.core?.favoriteService;
+    let serviceAvailable = false;
+    let serviceSaysFavorite = false;
 
+    if (favService && typeof favService.isFavorite === 'function') {
+        serviceAvailable = true;
+        // Wichtig: Stelle sicher, dass der Cache für diesen Job bereits die jobDetails enthält,
+        // bevor isFavorite hier zuverlässig funktioniert.
+        // favoriteService.isFavorite prüft intern den Cache: this.cache.jobDataCache[jobId].jobDetails
+        serviceSaysFavorite = favService.isFavorite(jobId, applicantId);
+    }
+
+    const tooltipHasFavorite = jobFieldDataForTooltip && Array.isArray(jobFieldDataForTooltip["job-favoriten"]) && applicantId && jobFieldDataForTooltip["job-favoriten"].includes(applicantId);
+
+    // console.log(`DEBUG createApplicantRowElement - Applicant: ${applicantFieldData.name} (ID: ${applicantId}), Job: ${jobId}`);
+    // console.log(`  DEBUG FavoriteService available: ${serviceAvailable}`);
+    // console.log(`  DEBUG FavoriteService says isFavorite: ${serviceSaysFavorite}`);
+    // console.log(`  DEBUG jobFieldDataForTooltip['job-favoriten'] raw:`, jobFieldDataForTooltip ? jobFieldDataForTooltip["job-favoriten"] : 'jobFieldDataForTooltip is undefined');
+    // console.log(`  DEBUG Tooltip check says isFavorite: ${tooltipHasFavorite}`);
+
+    const isInitiallyFavorite = serviceAvailable ? serviceSaysFavorite : tooltipHasFavorite;
+    // console.log(`  DEBUG Final isInitiallyFavorite for ${applicantFieldData.name}: ${isInitiallyFavorite}`);
+    // --- Ende Debug-Logging ---
 
     if (isInitiallyFavorite) {
       const favoriteTagDiv = document.createElement("div");
-      favoriteTagDiv.classList.add("db-plus-tag", "favorite-star-tag"); // Eindeutige Klasse
+      favoriteTagDiv.classList.add("db-plus-tag", "favorite-star-tag");
       const favoriteStarIcon = document.createElement("img");
       favoriteStarIcon.src = "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/662246de06d5827a9de8850f_star-Filled.svg";
       favoriteStarIcon.classList.add("db-icon-18");
       favoriteStarIcon.alt = "Favorit";
       favoriteStarIcon.style.marginLeft = "4px";
       favoriteTagDiv.appendChild(favoriteStarIcon);
-      // Füge das Stern-Icon direkt nach dem Namen-Wrapper (namePlusStatusDiv) ein
-        if (namePlusStatusDiv.nextSibling) {
-            profileInfoDiv.insertBefore(favoriteTagDiv, namePlusStatusDiv.nextSibling);
-        } else {
-            profileInfoDiv.appendChild(favoriteTagDiv);
-        }
+      if (namePlusStatusDiv.nextSibling) {
+          profileInfoDiv.insertBefore(favoriteTagDiv, namePlusStatusDiv.nextSibling);
+      } else {
+          profileInfoDiv.appendChild(favoriteTagDiv);
+      }
     }
     applicantDiv.appendChild(profileInfoDiv);
 
@@ -182,7 +195,7 @@
       { key: "tiktok", name: "TikTok", iconUrl: "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e99dce86c2b6ba83fe_Tiktok.svg" },
       { key: "youtube", name: "YouTube", iconUrl: "https://cdn.prod.website-files.com/63db7d558cd2e4be56cd7e2f/640219e9b00d0480ffe289dc_YouTube.svg" }
     ];
-    const normalizeUrlFn = typeof normalizeUrl === 'function' ? normalizeUrl : (url) => url; // Fallback
+    const normalizeUrlFn = typeof normalizeUrl === 'function' ? normalizeUrl : (url) => url;
     socialPlatforms.forEach(platform => {
       const platformUrlValue = applicantFieldData[platform.key];
       const normalizedPlatformUrl = normalizeUrlFn(platformUrlValue);
@@ -478,17 +491,15 @@
     return filterRowElement;
   }
 
-  // Event-Listener für das globale 'favoritesUpdated' Event
   document.addEventListener('favoritesUpdated', function(event) {
     const { jobId, applicantId, isFavorite } = event.detail;
-    // console.log(`Event 'favoritesUpdated' empfangen: Job ${jobId}, Applicant ${applicantId}, IsFavorite: ${isFavorite}`);
     updateApplicantFavoriteIcon(jobId, applicantId, isFavorite);
   });
 
   window.WEBFLOW_API.ui.createApplicantRowElement = createApplicantRowElement;
   window.WEBFLOW_API.ui.createApplicantTableHeaderElement = createApplicantTableHeaderElement;
   window.WEBFLOW_API.ui.createFilterRowElement = createFilterRowElement;
-  window.WEBFLOW_API.ui.updateApplicantFavoriteIcon = updateApplicantFavoriteIcon; // Exponieren für direkten Aufruf falls nötig
+  window.WEBFLOW_API.ui.updateApplicantFavoriteIcon = updateApplicantFavoriteIcon;
 
   console.log("Applicant Elements UI (applicantElements-2.0.js) wurde aktualisiert für Favoriten-Icon Updates.");
 })();

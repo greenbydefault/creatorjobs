@@ -1,16 +1,18 @@
+// brands/campaign/src/appLogic-1.8.js
 (function () {
   'use strict';
   window.WEBFLOW_API = window.WEBFLOW_API || {};
   window.WEBFLOW_API.appLogic = window.WEBFLOW_API.appLogic || {};
 
+  // Hilfsfunktion, um den Job-Status zu ermitteln
   function getJobStatus(jobFieldData) {
     const jobEndDateString = jobFieldData["job-date-end"];
     if (jobEndDateString) {
       try {
         const jobEndDate = new Date(jobEndDateString);
-        jobEndDate.setHours(23, 59, 59, 999); 
+        jobEndDate.setHours(23, 59, 59, 999);
         const today = new Date();
-        today.setHours(0, 0, 0, 0); 
+        today.setHours(0, 0, 0, 0);
         if (jobEndDate >= today) {
           return "Aktiv";
         } else {
@@ -24,37 +26,50 @@
     return "Unbekannt";
   }
 
+  /**
+   * Lädt und zeigt Bewerber für einen bestimmten Job an, inklusive Paginierung und Filter.
+   * Stellt sicher, dass die Job-Details (insb. Favoriten) aktuell sind.
+   * @param {string} jobId - Die ID des Jobs.
+   * @param {HTMLElement} applicantsListContainer - Der DOM-Container für die Bewerberliste.
+   * @param {HTMLElement} paginationWrapper - Der DOM-Container für die Paginierungssteuerung.
+   * @param {number} [pageNumber=1] - Die anzuzeigende Seitenzahl.
+   */
   async function loadAndDisplayApplicantsForJob(jobId, applicantsListContainer, paginationWrapper, pageNumber = 1) {
-    // console.log(`DEBUG: loadAndDisplayApplicantsForJob START - Job ID: ${jobId}, Page: ${pageNumber}`);
-    
+    console.log(`loadAndDisplayApplicantsForJob: START - Job ID: ${jobId}, Page: ${pageNumber}`);
+
     const cacheModule = window.WEBFLOW_API.cache;
     const uiModule = window.WEBFLOW_API.ui;
+    const servicesModule = window.WEBFLOW_API.services;
+    const configModule = window.WEBFLOW_API.config;
 
-    if (!cacheModule || !uiModule || 
-        !uiModule.createFilterRowElement || 
+    if (!cacheModule || !uiModule || !servicesModule || !configModule ||
+        !uiModule.createFilterRowElement ||
         !uiModule.createApplicantTableHeaderElement ||
         !uiModule.createApplicantRowElement ||
         !uiModule.renderPaginationControls ||
-        !uiModule.renderActiveFilterBadgesUI) {
-        console.error("loadAndDisplayApplicantsForJob: Cache oder UI-Funktionen nicht verfügbar.");
+        !uiModule.renderActiveFilterBadgesUI ||
+        !servicesModule.fetchWebflowItem) {
+        console.error("loadAndDisplayApplicantsForJob: Kritische Module oder Funktionen (cache, ui, services, config) nicht verfügbar.");
         const mainToggleButtonError = document.querySelector(`.my-job-item[data-job-id="${jobId}"] .checkbox-toggle`);
         if (mainToggleButtonError) mainToggleButtonError.disabled = false;
+        if(applicantsListContainer) applicantsListContainer.innerHTML = "<p class='applicants-message error-message'>Fehler beim Laden der Bewerber (fehlende Module).</p>";
         return;
     }
 
-    const { jobDataCache, currentApplicantPageSize } = cacheModule;
+    const { jobDataCache, currentApplicantPageSize, updateJobCacheWithJobDetails, getJobDataFromCache } = cacheModule;
     const { createFilterRowElement, createApplicantTableHeaderElement, createApplicantRowElement, renderPaginationControls, renderActiveFilterBadgesUI } = uiModule;
-    
-    const mainToggleButton = document.querySelector(`.my-job-item[data-job-id="${jobId}"] .checkbox-toggle`); 
+    const { fetchWebflowItem } = servicesModule;
+    const { JOB_COLLECTION_ID_MJ } = configModule;
+
+    const mainToggleButton = document.querySelector(`.my-job-item[data-job-id="${jobId}"] .checkbox-toggle`);
     if (mainToggleButton) mainToggleButton.disabled = true;
 
     let filterRow = applicantsListContainer.querySelector(".db-table-filter-row");
     if (!filterRow) {
       const newFilterRow = createFilterRowElement(jobId, applicantsListContainer, paginationWrapper);
       applicantsListContainer.insertBefore(newFilterRow, applicantsListContainer.firstChild);
-      filterRow = newFilterRow; 
+      filterRow = newFilterRow;
     }
-    
     const activeFiltersDisplayContainer = filterRow.querySelector(".db-active-filters-display");
 
     if (!applicantsListContainer.querySelector(".db-table-header.db-table-applicant")) {
@@ -76,56 +91,84 @@
       const header = applicantsListContainer.querySelector(".db-table-header.db-table-applicant");
       if (header && header.nextSibling) {
         applicantsListContainer.insertBefore(applicantsContentElement, header.nextSibling);
-      } else if (header) { 
+      } else if (header) {
         applicantsListContainer.appendChild(applicantsContentElement);
-      } else { 
+      } else {
         applicantsListContainer.appendChild(applicantsContentElement);
       }
     }
-
-    applicantsContentElement.innerHTML = ''; 
+    applicantsContentElement.innerHTML = '';
     applicantsListContainer.dataset.currentPage = pageNumber;
 
     const spinnerDiv = document.createElement("div");
-    spinnerDiv.classList.add("spinner-table-small"); 
-    spinnerDiv.style.margin = "20px auto"; 
-    spinnerDiv.style.display = "block"; 
+    spinnerDiv.classList.add("spinner-table-small");
+    spinnerDiv.style.margin = "20px auto";
+    spinnerDiv.style.display = "block";
     applicantsContentElement.appendChild(spinnerDiv);
 
-    const jobCache = jobDataCache ? jobDataCache[jobId] : null;
-    if (!jobCache || !jobCache.sortedAndFilteredItems) {
-      console.error(`DEBUG: Keine sortierten/gefilterten Daten im Cache für Job ${jobId}. JobCache:`, jobCache);
-      spinnerDiv.remove(); 
-      const errorText = document.createElement("p");
-      errorText.classList.add("applicants-message");
-      errorText.textContent = 'Fehler: Bewerberdaten konnten nicht geladen werden (Cache-Problem).';
-      applicantsContentElement.appendChild(errorText);
-      if (mainToggleButton) mainToggleButton.disabled = false;
-      return;
+    let jobCache = getJobDataFromCache(jobId); // Stellt sicher, dass der Cache-Eintrag initialisiert ist
+
+    // NEU: Sicherstellen, dass jobDetails aktuell sind, bevor sie verwendet werden
+    if (!jobCache.jobDetails || !jobCache.jobDetails.fieldData || !jobCache.jobDetails.fieldData['job-favoriten']) { // Prüfe explizit auf job-favoriten
+        console.warn(`loadAndDisplayApplicantsForJob: Job-Details (insb. Favoriten) für Job ${jobId} unvollständig im Cache. Lade nach...`);
+        const fetchedJob = await fetchWebflowItem(JOB_COLLECTION_ID_MJ, jobId);
+        if (fetchedJob && !fetchedJob.error && fetchedJob.fieldData) {
+            updateJobCacheWithJobDetails(jobId, fetchedJob); // Cache mit den frischen Daten aktualisieren
+            jobCache.jobDetails = fetchedJob; // Lokale Variable auch aktualisieren
+            console.log(`loadAndDisplayApplicantsForJob: Job-Details für Job ${jobId} nachgeladen und Cache aktualisiert.`);
+        } else {
+            console.error(`loadAndDisplayApplicantsForJob: Konnte Job-Details für Job ${jobId} nicht nachladen. Fehler:`, fetchedJob?.message);
+            // Fehlerbehandlung: Spinner entfernen und Meldung anzeigen
+            spinnerDiv.remove();
+            applicantsContentElement.innerHTML = "<p class='applicants-message error-message'>Fehler: Job-Informationen konnten nicht geladen werden.</p>";
+            if (mainToggleButton) mainToggleButton.disabled = false;
+            return;
+        }
     }
 
-    const jobDetailsForRows = jobCache.jobDetails; 
-    const allSortedAndFilteredItems = jobCache.sortedAndFilteredItems; 
+    if (!jobCache.sortedAndFilteredItems) {
+        console.warn(`loadAndDisplayApplicantsForJob: Keine sortierten/gefilterten Daten im Cache für Job ${jobId}. Es wird versucht, sie jetzt zu erstellen.`);
+        if (window.WEBFLOW_API.core && window.WEBFLOW_API.core.filterAndSortApplicants) {
+            window.WEBFLOW_API.core.filterAndSortApplicants(jobId); // Dies sollte sortedAndFilteredItems im Cache setzen
+            jobCache = getJobDataFromCache(jobId); // Cache erneut holen, um sicherzustellen, dass sortedAndFilteredItems da sind
+             if (!jobCache.sortedAndFilteredItems) {
+                console.error(`loadAndDisplayApplicantsForJob: Auch nach filterAndSortApplicants keine sortierten Daten für Job ${jobId}.`);
+                spinnerDiv.remove();
+                applicantsContentElement.innerHTML = "<p class='applicants-message error-message'>Fehler: Bewerberdaten konnten nicht sortiert/gefiltert werden.</p>";
+                if (mainToggleButton) mainToggleButton.disabled = false;
+                return;
+            }
+        } else {
+            console.error("loadAndDisplayApplicantsForJob: filterAndSortApplicants Funktion nicht verfügbar.");
+             spinnerDiv.remove();
+            applicantsContentElement.innerHTML = "<p class='applicants-message error-message'>Fehler: Filterfunktion nicht verfügbar.</p>";
+            if (mainToggleButton) mainToggleButton.disabled = false;
+            return;
+        }
+    }
+    
+    // Verwende die (potenziell) gerade aktualisierten jobDetails
+    const jobDetailsForRows = jobCache.jobDetails;
+    const allSortedAndFilteredItems = jobCache.sortedAndFilteredItems;
     const totalPages = Math.ceil(allSortedAndFilteredItems.length / currentApplicantPageSize);
     const offset = (pageNumber - 1) * currentApplicantPageSize;
     const pageItems = allSortedAndFilteredItems.slice(offset, offset + currentApplicantPageSize);
-    
-    spinnerDiv.remove(); 
+
+    spinnerDiv.remove();
 
     let validApplicantsRenderedOnThisPage = 0;
     if (pageItems.length > 0) {
-      pageItems.forEach((applicantItemWithScore, indexOnPage) => { 
-        if (applicantItemWithScore && applicantItemWithScore.fieldData && !applicantItemWithScore.error) {
+      pageItems.forEach((applicantItemWithScoreInfo, indexOnPage) => {
+        if (applicantItemWithScoreInfo && applicantItemWithScoreInfo.fieldData && !applicantItemWithScoreInfo.error) {
           const globalIndexInAllItems = offset + indexOnPage;
           const applicantRow = createApplicantRowElement(
-            applicantItemWithScore, 
-            jobDetailsForRows, 
-            allSortedAndFilteredItems, 
-            globalIndexInAllItems,      
-            jobId                  
+            applicantItemWithScoreInfo,
+            jobDetailsForRows, // Hier werden die aktuellen jobDetails übergeben
+            allSortedAndFilteredItems,
+            globalIndexInAllItems,
+            jobId
           );
           applicantsContentElement.appendChild(applicantRow);
-          
           requestAnimationFrame(() => {
             applicantRow.style.opacity = "0";
             requestAnimationFrame(() => {
@@ -134,15 +177,15 @@
             });
           });
           validApplicantsRenderedOnThisPage++;
-        } else if (applicantItemWithScore && applicantItemWithScore.error) {
+        } else if (applicantItemWithScoreInfo && applicantItemWithScoreInfo.error) {
           const errorMsg = document.createElement("p");
-          errorMsg.classList.add("applicants-message", "error-message-small"); 
-          errorMsg.textContent = applicantItemWithScore.message || `Daten für Bewerber ${applicantItemWithScore.id || 'unbekannt'} konnten nicht geladen werden.`;
+          errorMsg.classList.add("applicants-message", "error-message-small");
+          errorMsg.textContent = applicantItemWithScoreInfo.message || `Daten für Bewerber ${applicantItemWithScoreInfo.id || 'unbekannt'} konnten nicht geladen werden.`;
           applicantsContentElement.appendChild(errorMsg);
         }
       });
     }
-    
+
     if (validApplicantsRenderedOnThisPage === 0 && allSortedAndFilteredItems.length > 0 && pageItems.length > 0) {
         const noDataMsg = document.createElement("p");
         noDataMsg.classList.add("applicants-message");
@@ -163,134 +206,42 @@
     }
 
     await renderPaginationControls(jobId, allSortedAndFilteredItems, applicantsContentElement, paginationWrapper, pageNumber, totalPages);
-    
+
     if (activeFiltersDisplayContainer && renderActiveFilterBadgesUI) {
         renderActiveFilterBadgesUI(jobId, activeFiltersDisplayContainer, applicantsListContainer, paginationWrapper);
     }
 
-    if (mainToggleButton) mainToggleButton.disabled = false; 
+    if (mainToggleButton) mainToggleButton.disabled = false;
+    console.log(`loadAndDisplayApplicantsForJob: END - Job ID: ${jobId}, Page: ${pageNumber}`);
   }
 
   /**
-   * Renders a list of job items into a specified container.
-   * @param {Array<Object>} jobItemsToRender - Array of job items to display.
-   * @param {string} containerId - The ID of the DOM element to render jobs into.
+   * Filtert die globale Jobliste und rendert die entsprechenden UI-Sektionen neu.
    */
-  function renderMyJobsList(jobItemsToRender, containerId) { 
-    const uiModule = window.WEBFLOW_API.ui;
-    if (!uiModule || !uiModule.createJobEntryElement) {
-        console.error(`renderMyJobsList: UI-Modul oder createJobEntryElement nicht verfügbar für Container ${containerId}.`);
-        return;
-    }
-    const { createJobEntryElement } = uiModule;
-    const container = document.getElementById(containerId);
-    if (!container) {
-      console.error(`❌ Container '${containerId}' nicht gefunden für renderMyJobsList.`);
-      return;
-    }
-
-    container.querySelectorAll(".my-job-item, .job-entry.info-message, .job-entry.error-message").forEach(item => item.remove());
-
-    if (!jobItemsToRender || jobItemsToRender.length === 0) {
-      const noJobsMsg = document.createElement("p");
-      noJobsMsg.textContent = "Keine Jobs entsprechen den aktuellen Kriterien."; 
-      noJobsMsg.classList.add("job-entry", "visible", "info-message"); 
-      container.appendChild(noJobsMsg);
-      if (window.WEBFLOW_API.planLogic && typeof window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling === 'function') {
-        window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling();
-      }
-      return;
-    }
-
-    const fragment = document.createDocumentFragment();
-    let globalRateLimitMessageShown = false; 
-
-    jobItemsToRender.forEach(jobItem => {
-      if (jobItem.error && jobItem.status === 429) {
-        if (!globalRateLimitMessageShown && !document.getElementById(`global-rate-limit-message-${containerId}`)) { 
-          const globalRateLimitInfo = document.createElement("p");
-          globalRateLimitInfo.id = `global-rate-limit-message-${containerId}`;
-          globalRateLimitInfo.textContent = "Hinweis: Einige Jobdaten konnten aufgrund von API-Anfragelimits nicht geladen werden.";
-          globalRateLimitInfo.classList.add("job-entry", "visible", "error-message");
-          container.insertBefore(globalRateLimitInfo, container.firstChild);
-          globalRateLimitMessageShown = true; 
-        }
-        return; 
-      }
-      
-      if (jobItem.error && jobItem.status === 404) {
-          return; 
-      }
-
-      if (createJobEntryElement) {
-          const jobElement = createJobEntryElement(jobItem); 
-          if (jobElement) { 
-            fragment.appendChild(jobElement);
-          }
-      }
-    });
-
-    container.appendChild(fragment);
-
-    requestAnimationFrame(() => {
-      container.querySelectorAll(".my-job-item.job-entry:not(.job-error)").forEach(entry => {
-        if (!entry.classList.contains("visible")) {
-            entry.style.opacity = "0";
-            requestAnimationFrame(() => {
-                entry.style.transition = "opacity 0.5s ease-out";
-                entry.style.opacity = "1";
-                entry.classList.add("visible");
-            });
-        } else { 
-            entry.style.opacity = "1";
-        }
-      });
-      container.querySelectorAll(".job-entry.error-message, .job-entry.info-message").forEach(msg => {
-          if (!msg.classList.contains("visible")) {
-              msg.classList.add("visible"); 
-          }
-      });
-    });
-
-    if (window.WEBFLOW_API.planLogic && typeof window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling === 'function') {
-      window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling(); 
-    } else {
-      console.warn(`renderMyJobsList: window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling Funktion nicht gefunden für Container '${containerId}'.`);
-    }
-  }
-
   function filterAndRenderJobs() {
     const cache = window.WEBFLOW_API.cache;
     if (!cache || !cache.allMyJobsData_MJ) {
         console.warn("Keine Job-Rohdaten im Cache zum Filtern vorhanden.");
-        renderMyJobsList([], "jobs-list-active"); 
-        renderMyJobsList([], "jobs-list-closed");
-        renderMyJobsList([], "jobs-list"); 
+        if (window.WEBFLOW_API.ui && window.WEBFLOW_API.ui.renderMyJobsList) {
+            window.WEBFLOW_API.ui.renderMyJobsList([], "jobs-list-active");
+            window.WEBFLOW_API.ui.renderMyJobsList([], "jobs-list-closed");
+            window.WEBFLOW_API.ui.renderMyJobsList([], "jobs-list");
+        }
         return;
     }
-
-    // Die Checkboxen werden hier nicht mehr verwendet, um die Anzeige der Tab-Container zu steuern.
-    // Sie könnten für eine zusätzliche Filterung innerhalb des "Alle Jobs"-Tabs verwendet werden,
-    // aber das ist hier nicht implementiert.
-    // const showActiveCheckbox = document.getElementById('job-status-active');
-    // const showDoneCheckbox = document.getElementById('job-status-done');
-    // const shouldDisplayActive = showActiveCheckbox ? showActiveCheckbox.checked : true; 
-    // const shouldDisplayDone = showDoneCheckbox ? showDoneCheckbox.checked : true; 
 
     const searchInput = document.getElementById('filter-search');
     const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : "";
 
-    // console.log(`Filter-Status (Checkboxes ignoriert für Tab-Befüllung): Suche='${searchTerm}'`);
-
     let allJobsMatchingSearch = cache.allMyJobsData_MJ.filter(jobItem => {
-        if (jobItem.error || !jobItem.fieldData) return false; 
+        if (jobItem.error || !jobItem.fieldData) return false;
         if (searchTerm) {
             const jobName = jobItem.fieldData.name ? jobItem.fieldData.name.toLowerCase() : "";
             if (!jobName.includes(searchTerm)) {
                 return false;
             }
         }
-        return true; 
+        return true;
     });
 
     const activeJobs = [];
@@ -305,36 +256,36 @@
         }
     });
 
-    // Render "Alle Jobs" Liste (gefiltert nach Suche)
-    if (document.getElementById('jobs-list')) {
-        console.log(`filterAndRenderJobs: Rendere ${allJobsMatchingSearch.length} (durch Suche gefilterten) Jobs in #jobs-list.`);
-        renderMyJobsList(allJobsMatchingSearch, "jobs-list");
-    }
-
-    // Render "Aktive Jobs" Liste IMMER (wenn Container existiert)
-    if (document.getElementById('jobs-list-active')) {
-        console.log(`filterAndRenderJobs: Rendere ${activeJobs.length} aktive Jobs in #jobs-list-active.`);
-        renderMyJobsList(activeJobs, "jobs-list-active");
-    }
-    
-    // Render "Beendete Jobs" Liste IMMER (wenn Container existiert)
-    if (document.getElementById('jobs-list-closed')) {
-        console.log(`filterAndRenderJobs: Rendere ${closedJobs.length} beendete Jobs in #jobs-list-closed.`);
-        renderMyJobsList(closedJobs, "jobs-list-closed");
+    if (window.WEBFLOW_API.ui && window.WEBFLOW_API.ui.renderMyJobsList) {
+        const { renderMyJobsList } = window.WEBFLOW_API.ui;
+        if (document.getElementById('jobs-list')) {
+            renderMyJobsList(allJobsMatchingSearch, "jobs-list");
+        }
+        if (document.getElementById('jobs-list-active')) {
+            renderMyJobsList(activeJobs, "jobs-list-active");
+        }
+        if (document.getElementById('jobs-list-closed')) {
+            renderMyJobsList(closedJobs, "jobs-list-closed");
+        }
     }
   }
 
+  /**
+   * Initialisiert die Anzeige der "Meine Jobs"-Liste.
+   * Lädt die Jobs des aktuellen Nutzers und rendert sie.
+   */
   async function initializeMyJobsDisplay() {
+    console.log("initializeMyJobsDisplay: Start");
     if (!window.WEBFLOW_API.config) {
         console.error("❌ Konfigurationsmodul nicht geladen. Breche initializeMyJobsDisplay ab.");
-        const container = document.getElementById("jobs-list") || document.getElementById("jobs-list-active"); 
+        const container = document.getElementById("jobs-list") || document.getElementById("jobs-list-active");
         if (container) container.innerHTML = "<p class='error-message job-entry visible'>Fehler: Konfiguration konnte nicht geladen werden.</p>";
         return;
     }
     const { API_CALL_DELAY_MS, USER_COLLECTION_ID_MJ, JOB_COLLECTION_ID_MJ, SKELETON_JOBS_COUNT_MJ } = window.WEBFLOW_API.config;
-    
+
     const cache = window.WEBFLOW_API.cache;
-    if (!cache) { 
+    if (!cache) {
         console.error("❌ Cache-Modul nicht geladen. Breche initializeMyJobsDisplay ab.");
         const container = document.getElementById("jobs-list") || document.getElementById("jobs-list-active");
         if (container) container.innerHTML = "<p class='error-message job-entry visible'>Fehler: Cache konnte nicht geladen werden.</p>";
@@ -351,7 +302,7 @@
     const { fetchWebflowItem } = services;
 
     const utilsModule = window.WEBFLOW_API.utils;
-    const delay = utilsModule && typeof utilsModule.delay === 'function' ? utilsModule.delay : (ms => new Promise(resolve => setTimeout(resolve, ms)));  
+    const delay = utilsModule && typeof utilsModule.delay === 'function' ? utilsModule.delay : (ms => new Promise(resolve => setTimeout(resolve, ms)));
 
     const ui = window.WEBFLOW_API.ui;
     if (!ui || !ui.renderMyJobsSkeletonLoader || !ui.createMyJobsTableHeaderElement) {
@@ -362,19 +313,19 @@
     }
     const { renderMyJobsSkeletonLoader, createMyJobsTableHeaderElement } = ui;
 
-    let initialContainer = document.getElementById("jobs-list") || document.getElementById("jobs-list-active"); 
+    let initialContainer = document.getElementById("jobs-list") || document.getElementById("jobs-list-active");
     if (!initialContainer && document.getElementById("jobs-list-closed")) initialContainer = document.getElementById("jobs-list-closed");
 
     if (!initialContainer) {
-      console.error("❌ Keinen initialen Job-Container (jobs-list, jobs-list-active, oder jobs-list-closed) für initializeMyJobsDisplay gefunden.");
-      return;
+      console.warn("Keinen initialen Job-Container für initializeMyJobsDisplay gefunden. Überspringe Skeleton/Header.");
+    } else {
+        if (!initialContainer.querySelector(".db-table-header.db-table-my-jobs")) {
+            const myJobsHeader = createMyJobsTableHeaderElement ? createMyJobsTableHeaderElement() : null;
+            if (myJobsHeader) initialContainer.appendChild(myJobsHeader);
+        }
+        if (renderMyJobsSkeletonLoader) renderMyJobsSkeletonLoader(initialContainer, SKELETON_JOBS_COUNT_MJ);
     }
-    
-    if (!initialContainer.querySelector(".db-table-header.db-table-my-jobs")) {
-        const myJobsHeader = createMyJobsTableHeaderElement ? createMyJobsTableHeaderElement() : null;
-        if (myJobsHeader) initialContainer.appendChild(myJobsHeader);
-    }
-    if (renderMyJobsSkeletonLoader) renderMyJobsSkeletonLoader(initialContainer, SKELETON_JOBS_COUNT_MJ); 
+
 
     try {
       if (typeof window.$memberstackDom === 'undefined') {
@@ -387,59 +338,73 @@
           }, 100);
         });
       }
-      
+
       const member = await window.$memberstackDom.getCurrentMember();
       cache.currentWebflowMemberId_MJ = member?.data?.customFields?.['webflow-member-id'];
 
       if (!cache.currentWebflowMemberId_MJ) {
         console.error("❌ Kein 'webflow-member-id' im Memberstack-Profil gefunden.");
-        initialContainer.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
-        initialContainer.innerHTML += "<p class='error-message job-entry visible'>Benutzer-Identifikation fehlgeschlagen.</p>";
+        document.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
+        if (initialContainer) initialContainer.innerHTML += "<p class='error-message job-entry visible'>Benutzer-Identifikation fehlgeschlagen.</p>";
         return;
       }
 
-      await delay(API_CALL_DELAY_MS); 
+      await delay(API_CALL_DELAY_MS);
       const currentUserItem = await fetchWebflowItem(USER_COLLECTION_ID_MJ, cache.currentWebflowMemberId_MJ);
 
       if (!currentUserItem || (currentUserItem.error && currentUserItem.status !== 429 && currentUserItem.status !== 404)) {
         let errorMsgText = "Deine Benutzerdaten konnten nicht geladen werden.";
         if(currentUserItem && currentUserItem.message) errorMsgText += ` Fehler: ${currentUserItem.message}`;
-        initialContainer.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
-        initialContainer.innerHTML += `<p class='error-message job-entry visible'>${errorMsgText}</p>`;
+        document.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
+        if (initialContainer) initialContainer.innerHTML += `<p class='error-message job-entry visible'>${errorMsgText}</p>`;
         return;
       }
-      
+
       const postedJobIds = currentUserItem.fieldData ? currentUserItem.fieldData["posted-jobs"] || [] : [];
       if (postedJobIds.length === 0) {
-        document.querySelectorAll("#jobs-list .my-job-item-skeleton, #jobs-list-active .my-job-item-skeleton, #jobs-list-closed .my-job-item-skeleton").forEach(el => el.remove());
-        filterAndRenderJobs(); 
+        document.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
+        filterAndRenderJobs();
         return;
       }
 
       let myJobItemsPromises = postedJobIds.map(async (jobId, index) => {
-        await delay(index * API_CALL_DELAY_MS); 
+        await delay(index * API_CALL_DELAY_MS);
         const jobItem = await fetchWebflowItem(JOB_COLLECTION_ID_MJ, jobId);
+        // WICHTIG: Hier werden die Job-Details (inkl. job-favoriten) in den Cache geschrieben.
+        if (jobItem && !jobItem.error && jobItem.fieldData) {
+            cache.updateJobCacheWithJobDetails(jobId, jobItem); // Stellt sicher, dass jobDetails im Cache sind
+        }
         return jobItem || { id: jobId, error: true, status: 'fetch_null_error', message: `Unerwartete null-Antwort.` };
       });
-      
+
       const myJobItemsResults = await Promise.all(myJobItemsPromises);
-      cache.allMyJobsData_MJ = myJobItemsResults.filter(item => item !== null); 
-      
-      document.querySelectorAll("#jobs-list .my-job-item-skeleton, #jobs-list-active .my-job-item-skeleton, #jobs-list-closed .my-job-item-skeleton").forEach(el => el.remove());
-      filterAndRenderJobs(); 
+      // cache.allMyJobsData_MJ wird jetzt nicht mehr direkt verwendet,
+      // da die Details bereits im jobDataCache sind.
+      // Stattdessen stellen wir sicher, dass alle Jobs im Cache sind.
+      myJobItemsResults.forEach(jobItem => {
+          if (jobItem && jobItem.id && !jobItem.error) {
+              if (!cache.jobDataCache[jobItem.id] || !cache.jobDataCache[jobItem.id].jobDetails) {
+                  cache.updateJobCacheWithJobDetails(jobItem.id, jobItem);
+              }
+          }
+      });
+      // Für filterAndRenderJobs benötigen wir eine Liste aller Job-Items (können auch Fehlerobjekte sein)
+      cache.allMyJobsData_MJ = myJobItemsResults.filter(item => item !== null);
+
+
+      document.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
+      filterAndRenderJobs();
 
     } catch (error) {
       console.error("❌ Schwerwiegender Fehler in initializeMyJobsDisplay:", error);
-      const errorContainer = document.getElementById("jobs-list") || document.getElementById("jobs-list-active") || document.getElementById("jobs-list-closed");
-      if (errorContainer) {
-          errorContainer.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
-          errorContainer.innerHTML += `<p class='error-message job-entry visible'>Ein allgemeiner Fehler ist aufgetreten.</p>`;
-      }
+      document.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
+      if (initialContainer) initialContainer.innerHTML += `<p class='error-message job-entry visible'>Ein allgemeiner Fehler ist aufgetreten.</p>`;
     }
   }
 
   window.WEBFLOW_API.appLogic.loadAndDisplayApplicantsForJob = loadAndDisplayApplicantsForJob;
-  window.WEBFLOW_API.appLogic.filterAndRenderJobs = filterAndRenderJobs; 
+  window.WEBFLOW_API.appLogic.filterAndRenderJobs = filterAndRenderJobs;
   window.WEBFLOW_API.appLogic.initializeMyJobsDisplay = initializeMyJobsDisplay;
 
+  console.log("AppLogic (appLogic-1.8.js) wurde aktualisiert mit Cache-Aktualisierung für Job-Details.");
 })();

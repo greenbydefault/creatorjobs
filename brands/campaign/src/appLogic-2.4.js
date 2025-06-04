@@ -219,12 +219,10 @@
    */
   function renderMyJobsList(jobItemsToRender, containerId) {
     const uiModule = window.WEBFLOW_API.ui;
-    // *** HINZUGEFÜGTES LOGGING ***
     console.log(`renderMyJobsList: Aufgerufen für Container '${containerId}'. Anzahl Items zum Rendern: ${jobItemsToRender ? jobItemsToRender.length : 'null/undefined'}`);
     if (jobItemsToRender && jobItemsToRender.length > 0) {
         console.log(`renderMyJobsList: Erstes Item für '${containerId}':`, JSON.parse(JSON.stringify(jobItemsToRender[0])));
     }
-    // *** ENDE HINZUGEFÜGTES LOGGING ***
 
     if (!uiModule || !uiModule.createJobEntryElement) {
       console.error(`renderMyJobsList: UI-Modul oder createJobEntryElement nicht verfügbar für Container ${containerId}.`);
@@ -232,7 +230,7 @@
       if (errContainer) errContainer.innerHTML = "<p class='error-message job-entry visible'>Render-Fehler (UI-Modul fehlt).</p>";
       return;
     }
-    const { createJobEntryElement } = uiModule; // Diese Funktion kommt aus jobElements-1.5.js
+    const { createJobEntryElement } = uiModule; 
     const container = document.getElementById(containerId);
     if (!container) {
       console.error(`❌ Container '${containerId}' nicht gefunden für renderMyJobsList.`);
@@ -255,7 +253,7 @@
 
     const fragment = document.createDocumentFragment();
     let globalRateLimitMessageShown = false;
-    let successfullyCreatedElementsCount = 0; // Zähler für erfolgreich erstellte Elemente
+    let successfullyCreatedElementsCount = 0; 
 
     jobItemsToRender.forEach((jobItem, index) => {
       if (jobItem.error && jobItem.status === 429) {
@@ -273,31 +271,27 @@
           return;
       }
 
-      if (createJobEntryElement) { // Diese Prüfung ist etwas redundant, da sie oben schon erfolgt
-          const jobElement = createJobEntryElement(jobItem); // jobItem hier ist aus allMyJobsData_MJ
-          // *** HINZUGEFÜGTES LOGGING ***
-          if (jobElement) {
-            // console.log(`renderMyJobsList: Job-Element für Item ${index} in '${containerId}' erstellt. Wird angehängt.`);
-            fragment.appendChild(jobElement);
-            successfullyCreatedElementsCount++;
-          } else {
-            console.warn(`renderMyJobsList: createJobEntryElement hat null/undefined zurückgegeben für Item ${index} in '${containerId}'. Item-Daten:`, JSON.parse(JSON.stringify(jobItem)));
-          }
-          // *** ENDE HINZUGEFÜGTES LOGGING ***
+      // Hier wird createJobEntryElement direkt verwendet, da es im Scope ist.
+      // Die Prüfung auf uiModule.createJobEntryElement ist oben erfolgt.
+      const jobElement = createJobEntryElement(jobItem); 
+      if (jobElement) {
+        fragment.appendChild(jobElement);
+        successfullyCreatedElementsCount++;
+      } else {
+        console.warn(`renderMyJobsList: createJobEntryElement hat null/undefined zurückgegeben für Item ${index} in '${containerId}'. Item-Daten:`, JSON.parse(JSON.stringify(jobItem)));
       }
     });
 
     console.log(`renderMyJobsList: ${successfullyCreatedElementsCount} Job-Elemente für '${containerId}' erstellt und zum Fragment hinzugefügt.`);
     if (successfullyCreatedElementsCount > 0) {
         container.appendChild(fragment);
-    } else if (jobItemsToRender.length > 0) { // Wenn Items da waren, aber keine Elemente erstellt wurden
+    } else if (jobItemsToRender.length > 0) { 
         console.warn(`renderMyJobsList: Obwohl ${jobItemsToRender.length} Items vorhanden waren, wurden keine Elemente für '${containerId}' erstellt. Überprüfe createJobEntryElement.`);
         const noJobsRenderedMsg = document.createElement("p");
         noJobsRenderedMsg.textContent = "Jobs konnten nicht angezeigt werden (Render-Problem).";
         noJobsRenderedMsg.classList.add("job-entry", "visible", "error-message");
         container.appendChild(noJobsRenderedMsg);
     }
-
 
     requestAnimationFrame(() => {
       container.querySelectorAll(".my-job-item.job-entry:not(.job-error)").forEach(entry => {
@@ -331,11 +325,10 @@
     const cache = window.WEBFLOW_API.cache;
     if (!cache || !cache.allMyJobsData_MJ) {
         console.warn("filterAndRenderJobs: Keine Job-Rohdaten im Cache (allMyJobsData_MJ) zum Filtern vorhanden.");
-        if (window.WEBFLOW_API.ui && window.WEBFLOW_API.ui.renderMyJobsList) {
-            window.WEBFLOW_API.ui.renderMyJobsList([], "jobs-list-active");
-            window.WEBFLOW_API.ui.renderMyJobsList([], "jobs-list-closed");
-            window.WEBFLOW_API.ui.renderMyJobsList([], "jobs-list");
-        }
+        // Rufe renderMyJobsList direkt auf, da es im selben Scope ist
+        renderMyJobsList([], "jobs-list-active");
+        renderMyJobsList([], "jobs-list-closed");
+        renderMyJobsList([], "jobs-list");
         return;
     }
     console.log("filterAndRenderJobs: Starte Filterung mit allMyJobsData_MJ:", JSON.parse(JSON.stringify(cache.allMyJobsData_MJ)));
@@ -373,17 +366,15 @@
         }
     });
 
-    if (window.WEBFLOW_API.ui && window.WEBFLOW_API.ui.renderMyJobsList) {
-        const { renderMyJobsList } = window.WEBFLOW_API.ui;
-        if (document.getElementById('jobs-list')) {
-            renderMyJobsList(allJobsMatchingSearch, "jobs-list");
-        }
-        if (document.getElementById('jobs-list-active')) {
-            renderMyJobsList(activeJobs, "jobs-list-active");
-        }
-        if (document.getElementById('jobs-list-closed')) {
-            renderMyJobsList(closedJobs, "jobs-list-closed");
-        }
+    // Rufe renderMyJobsList direkt auf
+    if (document.getElementById('jobs-list')) {
+        renderMyJobsList(allJobsMatchingSearch, "jobs-list");
+    }
+    if (document.getElementById('jobs-list-active')) {
+        renderMyJobsList(activeJobs, "jobs-list-active");
+    }
+    if (document.getElementById('jobs-list-closed')) {
+        renderMyJobsList(closedJobs, "jobs-list-closed");
     }
   }
 

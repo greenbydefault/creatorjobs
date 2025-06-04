@@ -13,8 +13,8 @@
   let favoritButtonElement = null;
   let zusagenButtonElement = null;
 
-  // Placeholder für Spinner/Icons - ersetze diese durch deine echten Icons/Spinner
-  const SPINNER_ICON_HTML = '<span class="button-spinner" style="margin-right: 5px;">(Lädt...)</span>'; // Einfacher Text-Spinner
+  // HTML-Code für den CSS-Spinner (CSS wird jetzt extern erwartet)
+  const SPINNER_ICON_HTML = '<span class="button-css-spinner"></span>';
   const SUCCESS_ICON_HTML = '<span class="button-icon-success" style="margin-right: 5px;">✓</span>';
   const ERROR_ICON_HTML = '<span class="button-icon-error" style="margin-right: 5px;">X</span>';
 
@@ -33,7 +33,6 @@
     if (sidebarWrapperElement && sidebarWrapperElement.classList.contains('is-open')) {
       sidebarWrapperElement.classList.remove('is-open');
       document.body.style.overflow = '';
-      // Event-Listener sicher entfernen
       if (favoritButtonElement) {
         const newFavoritButton = favoritButtonElement.cloneNode(true);
         favoritButtonElement.parentNode.replaceChild(newFavoritButton, favoritButtonElement);
@@ -59,39 +58,26 @@
     return (millions % 1 !== 0 ? millions.toFixed(1) : millions.toFixed(0)) + 'M';
   }
 
-  /**
-   * Helper-Funktion zum Setzen des Button-Zustands (Text, Icon, Deaktiviert).
-   * @param {HTMLElement} button - Das Button-Element.
-   * @param {string} text - Der anzuzeigende Text.
-   * @param {boolean} isLoading - Ob ein Ladezustand angezeigt werden soll.
-   * @param {boolean} isSuccess - Ob ein Erfolgszustand angezeigt werden soll (kurzzeitig).
-   * @param {boolean} isError - Ob ein Fehlerzustand angezeigt werden soll (kurzzeitig).
-   * @param {boolean} isDisabled - Ob der Button deaktiviert sein soll.
-   */
   function setButtonState(button, text, isLoading = false, isSuccess = false, isError = false, isDisabled = false) {
     if (!button) return;
     const buttonTextSpan = button.querySelector('.db-button-text');
     if (!buttonTextSpan) return;
-
     let prefix = '';
-    if (isLoading) prefix = SPINNER_ICON_HTML;
+    if (isLoading) {
+        // Die Funktion ensureSpinnerStyles() wird nicht mehr hier aufgerufen
+        prefix = SPINNER_ICON_HTML;
+    }
     else if (isSuccess) prefix = SUCCESS_ICON_HTML;
     else if (isError) prefix = ERROR_ICON_HTML;
-
     buttonTextSpan.innerHTML = `${prefix}${text}`;
     button.disabled = isDisabled;
-    if (isDisabled) {
-        button.classList.add('is-disabled-processing'); // Eigene Klasse für Styling während Deaktivierung
-    } else {
-        button.classList.remove('is-disabled-processing');
-    }
+    button.classList.toggle('is-disabled-processing', isDisabled);
   }
-
 
   function updateFavoriteButtonUI(isFavorite, finalState = true) {
     if (favoritButtonElement) {
       const text = isFavorite ? 'Entfernen' : 'Favorit';
-      if (finalState) { // Nur den finalen Text setzen, keine Icons
+      if (finalState) {
         setButtonState(favoritButtonElement, text, false, false, false, false);
       }
       favoritButtonElement.classList.toggle('is-favorite', isFavorite);
@@ -101,12 +87,11 @@
   function updateBookingButtonUI(isBooked, finalState = true) {
     if (zusagenButtonElement) {
       const text = isBooked ? 'Gebucht' : 'Zusagen';
-       if (finalState) { // Nur den finalen Text setzen, keine Icons
+      if (finalState) {
         setButtonState(zusagenButtonElement, text, false, false, false, false);
       }
       zusagenButtonElement.classList.toggle('is-booked', isBooked);
       const buttonTextSpan = zusagenButtonElement.querySelector('.db-button-text');
-
       if (isBooked) {
         zusagenButtonElement.classList.remove('db-button-medium-gradient-pink');
         zusagenButtonElement.classList.add('db-button-medium-white-border');
@@ -123,23 +108,23 @@
     if (!currentSidebarJobId || !currentSidebarApplicantId || !favoritButtonElement) return;
     if (!window.WEBFLOW_API.core || !window.WEBFLOW_API.core.favoriteService) return;
 
-    const isCurrentlyFavorite = window.WEBFLOW_API.core.favoriteService.isFavorite(currentSidebarJobId, currentSidebarApplicantId);
+    const favoriteService = window.WEBFLOW_API.core.favoriteService;
+    const isCurrentlyFavorite = favoriteService.isFavorite(currentSidebarJobId, currentSidebarApplicantId);
     const actionText = isCurrentlyFavorite ? "Wird entfernt..." : "Wird hinzugefügt...";
     setButtonState(favoritButtonElement, actionText, true, false, false, true);
 
-    const newFavoriteStatus = await window.WEBFLOW_API.core.favoriteService.toggleFavorite(currentSidebarJobId, currentSidebarApplicantId);
+    const newFavoriteStatus = await favoriteService.toggleFavorite(currentSidebarJobId, currentSidebarApplicantId);
 
     if (newFavoriteStatus !== null) {
       const successText = newFavoriteStatus ? "Gespeichert!" : "Entfernt!";
-      setButtonState(favoritButtonElement, successText, false, true, false, true); // Noch disabled für die kurze Erfolgsanzeige
+      setButtonState(favoritButtonElement, successText, false, true, false, true);
       setTimeout(() => {
-        updateFavoriteButtonUI(newFavoriteStatus, true); // Setzt den finalen Text und enabled
+        updateFavoriteButtonUI(newFavoriteStatus, true);
       }, 1500);
     } else {
-      setButtonState(favoritButtonElement, "Fehler!", false, false, true, true); // Noch disabled
-      alert('Fehler beim Aktualisieren des Favoritenstatus.');
+      setButtonState(favoritButtonElement, "Fehler!", false, false, true, true);
       setTimeout(() => {
-        updateFavoriteButtonUI(isCurrentlyFavorite, true); // Zurück zum vorherigen Zustand und enabled
+        updateFavoriteButtonUI(isCurrentlyFavorite, true);
       }, 1500);
     }
   }
@@ -148,11 +133,12 @@
     if (!currentSidebarJobId || !currentSidebarApplicantId || !zusagenButtonElement) return;
     if (!window.WEBFLOW_API.core || !window.WEBFLOW_API.core.bookingService) return;
 
-    const isCurrentlyBooked = window.WEBFLOW_API.core.bookingService.isBooked(currentSidebarJobId, currentSidebarApplicantId);
+    const bookingService = window.WEBFLOW_API.core.bookingService;
+    const isCurrentlyBooked = bookingService.isBooked(currentSidebarJobId, currentSidebarApplicantId);
     const actionText = isCurrentlyBooked ? "Buchung storniert..." : "Wird gebucht...";
     setButtonState(zusagenButtonElement, actionText, true, false, false, true);
 
-    const newBookingStatus = await window.WEBFLOW_API.core.bookingService.toggleBooking(currentSidebarJobId, currentSidebarApplicantId);
+    const newBookingStatus = await bookingService.toggleBooking(currentSidebarJobId, currentSidebarApplicantId);
 
     if (newBookingStatus !== null) {
       const successText = newBookingStatus ? "Gebucht!" : "Storniert!";
@@ -162,17 +148,19 @@
       }, 1500);
     } else {
       setButtonState(zusagenButtonElement, "Fehler!", false, false, true, true);
-      alert('Fehler beim Aktualisieren des Buchungsstatus.');
       setTimeout(() => {
         updateBookingButtonUI(isCurrentlyBooked, true);
       }, 1500);
     }
   }
 
-  function showCreatorSidebar(applicantItem, allJobApplicants, applicantIndex, jobId) {
+  async function showCreatorSidebar(applicantItem, allJobApplicants, applicantIndex, jobId) {
     const MAPPINGS = window.WEBFLOW_API.MAPPINGS || {};
     const creatorTypesMapping = MAPPINGS.creatorTypen || {};
     const creatorKategorienMapping = MAPPINGS.creatorKategorien || {};
+    const cache = window.WEBFLOW_API.cache;
+    const webflowService = window.WEBFLOW_API.services;
+    const config = window.WEBFLOW_API.config;
 
     currentSidebarJobId = jobId;
     currentSidebarApplicants = allJobApplicants;
@@ -184,6 +172,20 @@
         console.error("showCreatorSidebar: Konnte 'webflow-member-id' des Bewerbers nicht finden.");
     }
 
+    if (cache && webflowService && config) {
+        let jobCacheEntry = cache.getJobDataFromCache(jobId);
+        if (!jobCacheEntry.jobDetails || !jobCacheEntry.jobDetails.fieldData) {
+            console.log(`showCreatorSidebar: Job-Details für Job ${jobId} nicht vollständig im Cache. Lade nach...`);
+            const fetchedJob = await webflowService.fetchWebflowItem(config.JOB_COLLECTION_ID_MJ, jobId);
+            if (fetchedJob && !fetchedJob.error && fetchedJob.fieldData) {
+                cache.updateJobCacheWithJobDetails(jobId, fetchedJob);
+                console.log(`showCreatorSidebar: Job-Details für Job ${jobId} nachgeladen und im Cache aktualisiert.`);
+            } else {
+                console.error(`showCreatorSidebar: Konnte Job-Details für Job ${jobId} nicht nachladen.`);
+            }
+        }
+    }
+
     sidebarWrapperElement = document.getElementById('db-modal-creator-wrapper-dynamic');
     if (!sidebarWrapperElement) {
       sidebarWrapperElement = document.createElement('div');
@@ -191,11 +193,10 @@
       sidebarWrapperElement.classList.add('db-modal-creator-wrapper');
       document.body.appendChild(sidebarWrapperElement);
     }
-    sidebarWrapperElement.innerHTML = ''; // Vorherigen Inhalt leeren
+    sidebarWrapperElement.innerHTML = '';
 
     const creatorHeadlineOverallDiv = document.createElement('div');
     creatorHeadlineOverallDiv.classList.add('db-modal-creator-headline');
-    // ... (Restlicher Code zum Erstellen der Headline-Struktur bleibt gleich) ...
     const imgNameTypeWrapper = document.createElement('div');
     imgNameTypeWrapper.classList.add('db-modal-creator-img-name-type-wrapper');
     const imgWrapperDiv = document.createElement('div');
@@ -240,13 +241,12 @@
     const headlineActionsWrapper = document.createElement('div');
     headlineActionsWrapper.classList.add('db-modal-creator-headline-actions');
 
-    // Zusagen-Button
     zusagenButtonElement = document.createElement('a');
     zusagenButtonElement.href = '#';
     zusagenButtonElement.id = 'sidebar-zusagen-button';
-    zusagenButtonElement.classList.add('db-button-medium-gradient-pink', 'size-auto'); // Standard-Klassen
+    zusagenButtonElement.classList.add('db-button-medium-gradient-pink', 'size-auto');
     const zusagenButtonTextSpan = document.createElement('span');
-    zusagenButtonTextSpan.classList.add('db-button-text', 'white'); // Standard-Klassen
+    zusagenButtonTextSpan.classList.add('db-button-text', 'white');
     zusagenButtonElement.appendChild(zusagenButtonTextSpan);
     headlineActionsWrapper.appendChild(zusagenButtonElement);
     zusagenButtonElement.addEventListener('click', (e) => { e.preventDefault(); handleBookingToggle(); });
@@ -257,7 +257,6 @@
       updateBookingButtonUI(false, true);
     }
 
-    // Favorit-Button
     favoritButtonElement = document.createElement('a');
     favoritButtonElement.href = '#';
     favoritButtonElement.id = 'sidebar-favorit-button';
@@ -283,7 +282,6 @@
     creatorHeadlineOverallDiv.appendChild(closeButtonElement);
     sidebarWrapperElement.appendChild(creatorHeadlineOverallDiv);
 
-    // ... (Restlicher Code für Social Media, Videos, Navigation bleibt gleich) ...
     const contentArea = document.createElement('div');
     contentArea.classList.add('db-modal-creator-content');
     contentArea.id = 'sidebar-creator-content-dynamic';
@@ -438,15 +436,15 @@
     document.body.style.overflow = 'hidden';
   }
 
-  function navigatePrev() {
+  async function navigatePrev() {
     if (currentSidebarIndex > 0) {
-      showCreatorSidebar(currentSidebarApplicants[currentSidebarIndex - 1], currentSidebarApplicants, currentSidebarIndex - 1, currentSidebarJobId);
+      await showCreatorSidebar(currentSidebarApplicants[currentSidebarIndex - 1], currentSidebarApplicants, currentSidebarIndex - 1, currentSidebarJobId);
     }
   }
 
-  function navigateNext() {
+  async function navigateNext() {
     if (currentSidebarIndex < currentSidebarApplicants.length - 1) {
-      showCreatorSidebar(currentSidebarApplicants[currentSidebarIndex + 1], currentSidebarApplicants, currentSidebarIndex + 1, currentSidebarJobId);
+      await showCreatorSidebar(currentSidebarApplicants[currentSidebarIndex + 1], currentSidebarApplicants, currentSidebarIndex + 1, currentSidebarJobId);
     }
   }
 
@@ -474,7 +472,7 @@
     const { jobId, applicantId, isBooked } = event.detail;
     if (sidebarWrapperElement && sidebarWrapperElement.classList.contains('is-open') &&
         currentSidebarJobId === jobId && currentSidebarApplicantId === applicantId) {
-      updateBookingButtonUI(isBooked, true); // finalState true für den direkten Endzustand
+      updateBookingButtonUI(isBooked, true);
     }
   });
 
@@ -482,10 +480,10 @@
     const { jobId, applicantId, isFavorite } = event.detail;
      if (sidebarWrapperElement && sidebarWrapperElement.classList.contains('is-open') &&
         currentSidebarJobId === jobId && currentSidebarApplicantId === applicantId) {
-      updateFavoriteButtonUI(isFavorite, true); // finalState true für den direkten Endzustand
+      updateFavoriteButtonUI(isFavorite, true);
     }
   });
 
   window.WEBFLOW_API.ui.showCreatorSidebar = showCreatorSidebar;
-  console.log("Sidebar UI (sidebar-3.9.js) wurde aktualisiert mit Feedback-Logik für Buttons.");
+  console.log("Sidebar UI (sidebar-3.9.js) wurde aktualisiert (CSS-Spinner entfernt).");
 })();

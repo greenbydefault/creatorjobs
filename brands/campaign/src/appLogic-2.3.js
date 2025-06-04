@@ -212,6 +212,121 @@
     console.log(`loadAndDisplayApplicantsForJob: END - Job ID: ${jobId}, Page: ${pageNumber}`);
   }
 
+  /**
+   * Renders a list of job items into a specified container.
+   * @param {Array<Object>} jobItemsToRender - Array of job items to display.
+   * @param {string} containerId - The ID of the DOM element to render jobs into.
+   */
+  function renderMyJobsList(jobItemsToRender, containerId) {
+    const uiModule = window.WEBFLOW_API.ui;
+    // *** HINZUGEFÜGTES LOGGING ***
+    console.log(`renderMyJobsList: Aufgerufen für Container '${containerId}'. Anzahl Items zum Rendern: ${jobItemsToRender ? jobItemsToRender.length : 'null/undefined'}`);
+    if (jobItemsToRender && jobItemsToRender.length > 0) {
+        console.log(`renderMyJobsList: Erstes Item für '${containerId}':`, JSON.parse(JSON.stringify(jobItemsToRender[0])));
+    }
+    // *** ENDE HINZUGEFÜGTES LOGGING ***
+
+    if (!uiModule || !uiModule.createJobEntryElement) {
+      console.error(`renderMyJobsList: UI-Modul oder createJobEntryElement nicht verfügbar für Container ${containerId}.`);
+      const errContainer = document.getElementById(containerId);
+      if (errContainer) errContainer.innerHTML = "<p class='error-message job-entry visible'>Render-Fehler (UI-Modul fehlt).</p>";
+      return;
+    }
+    const { createJobEntryElement } = uiModule; // Diese Funktion kommt aus jobElements-1.5.js
+    const container = document.getElementById(containerId);
+    if (!container) {
+      console.error(`❌ Container '${containerId}' nicht gefunden für renderMyJobsList.`);
+      return;
+    }
+
+    container.querySelectorAll(".my-job-item, .job-entry.info-message, .job-entry.error-message").forEach(item => item.remove());
+
+    if (!jobItemsToRender || jobItemsToRender.length === 0) {
+      const noJobsMsg = document.createElement("p");
+      noJobsMsg.textContent = "Keine Jobs entsprechen den aktuellen Kriterien.";
+      noJobsMsg.classList.add("job-entry", "visible", "info-message");
+      container.appendChild(noJobsMsg);
+      if (window.WEBFLOW_API.planLogic && typeof window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling === 'function') {
+        window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling();
+      }
+      console.log(`renderMyJobsList: Keine Jobs zum Rendern für '${containerId}'. Nachricht angezeigt.`);
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    let globalRateLimitMessageShown = false;
+    let successfullyCreatedElementsCount = 0; // Zähler für erfolgreich erstellte Elemente
+
+    jobItemsToRender.forEach((jobItem, index) => {
+      if (jobItem.error && jobItem.status === 429) {
+        if (!globalRateLimitMessageShown && !document.getElementById(`global-rate-limit-message-${containerId}`)) {
+          const globalRateLimitInfo = document.createElement("p");
+          globalRateLimitInfo.id = `global-rate-limit-message-${containerId}`;
+          globalRateLimitInfo.textContent = "Hinweis: Einige Jobdaten konnten aufgrund von API-Anfragelimits nicht geladen werden.";
+          globalRateLimitInfo.classList.add("job-entry", "visible", "error-message");
+          container.insertBefore(globalRateLimitInfo, container.firstChild);
+          globalRateLimitMessageShown = true;
+        }
+        return;
+      }
+      if (jobItem.error && jobItem.status === 404) {
+          return;
+      }
+
+      if (createJobEntryElement) { // Diese Prüfung ist etwas redundant, da sie oben schon erfolgt
+          const jobElement = createJobEntryElement(jobItem); // jobItem hier ist aus allMyJobsData_MJ
+          // *** HINZUGEFÜGTES LOGGING ***
+          if (jobElement) {
+            // console.log(`renderMyJobsList: Job-Element für Item ${index} in '${containerId}' erstellt. Wird angehängt.`);
+            fragment.appendChild(jobElement);
+            successfullyCreatedElementsCount++;
+          } else {
+            console.warn(`renderMyJobsList: createJobEntryElement hat null/undefined zurückgegeben für Item ${index} in '${containerId}'. Item-Daten:`, JSON.parse(JSON.stringify(jobItem)));
+          }
+          // *** ENDE HINZUGEFÜGTES LOGGING ***
+      }
+    });
+
+    console.log(`renderMyJobsList: ${successfullyCreatedElementsCount} Job-Elemente für '${containerId}' erstellt und zum Fragment hinzugefügt.`);
+    if (successfullyCreatedElementsCount > 0) {
+        container.appendChild(fragment);
+    } else if (jobItemsToRender.length > 0) { // Wenn Items da waren, aber keine Elemente erstellt wurden
+        console.warn(`renderMyJobsList: Obwohl ${jobItemsToRender.length} Items vorhanden waren, wurden keine Elemente für '${containerId}' erstellt. Überprüfe createJobEntryElement.`);
+        const noJobsRenderedMsg = document.createElement("p");
+        noJobsRenderedMsg.textContent = "Jobs konnten nicht angezeigt werden (Render-Problem).";
+        noJobsRenderedMsg.classList.add("job-entry", "visible", "error-message");
+        container.appendChild(noJobsRenderedMsg);
+    }
+
+
+    requestAnimationFrame(() => {
+      container.querySelectorAll(".my-job-item.job-entry:not(.job-error)").forEach(entry => {
+        if (!entry.classList.contains("visible")) {
+            entry.style.opacity = "0";
+            requestAnimationFrame(() => {
+                entry.style.transition = "opacity 0.5s ease-out";
+                entry.style.opacity = "1";
+                entry.classList.add("visible");
+            });
+        } else {
+            entry.style.opacity = "1";
+        }
+      });
+      container.querySelectorAll(".job-entry.error-message, .job-entry.info-message").forEach(msg => {
+          if (!msg.classList.contains("visible")) {
+              msg.classList.add("visible");
+          }
+      });
+    });
+
+    if (window.WEBFLOW_API.planLogic && typeof window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling === 'function') {
+      window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling();
+    } else {
+      console.warn(`renderMyJobsList: window.WEBFLOW_API.planLogic.applyPlanBasedJobStyling Funktion nicht gefunden für Container '${containerId}'.`);
+    }
+  }
+
+
   function filterAndRenderJobs() {
     const cache = window.WEBFLOW_API.cache;
     if (!cache || !cache.allMyJobsData_MJ) {
@@ -223,7 +338,7 @@
         }
         return;
     }
-    console.log("filterAndRenderJobs: Starte Filterung mit allMyJobsData_MJ:", cache.allMyJobsData_MJ);
+    console.log("filterAndRenderJobs: Starte Filterung mit allMyJobsData_MJ:", JSON.parse(JSON.stringify(cache.allMyJobsData_MJ)));
 
 
     const searchInput = document.getElementById('filter-search');
@@ -231,7 +346,6 @@
 
     let allJobsMatchingSearch = cache.allMyJobsData_MJ.filter(jobItem => {
         if (jobItem.error || !jobItem.fieldData) {
-            // console.log(`filterAndRenderJobs: Job ${jobItem.id || 'Unbekannt'} wird wegen Fehler oder fehlender fieldData übersprungen.`);
             return false;
         }
         if (searchTerm) {
@@ -249,7 +363,6 @@
     const closedJobs = [];
 
     allJobsMatchingSearch.forEach(jobItem => {
-        // Stelle sicher, dass fieldData existiert, bevor getJobStatus aufgerufen wird
         if (jobItem && jobItem.fieldData) {
             const status = getJobStatus(jobItem.fieldData);
             if (status === "Aktiv") {
@@ -349,8 +462,7 @@
         return;
       }
 
-      // WICHTIG: currentUserItem hier definieren, BEVOR es verwendet wird.
-      await delay(API_CALL_DELAY_MS); // Kurze Verzögerung vor dem ersten API-Aufruf, falls nötig
+      await delay(API_CALL_DELAY_MS); 
       const currentUserItem = await fetchWebflowItem(USER_COLLECTION_ID_MJ, cache.currentWebflowMemberId_MJ);
 
       if (!currentUserItem || (currentUserItem.error && currentUserItem.status !== 429 && currentUserItem.status !== 404)) {

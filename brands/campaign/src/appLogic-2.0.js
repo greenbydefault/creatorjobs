@@ -115,7 +115,8 @@
         if (fetchedJob && !fetchedJob.error && fetchedJob.fieldData) {
             updateJobCacheWithJobDetails(jobId, fetchedJob); // Cache mit den frischen Daten aktualisieren
             jobCache.jobDetails = fetchedJob; // Lokale Variable auch aktualisieren
-            console.log(`loadAndDisplayApplicantsForJob: Job-Details für Job ${jobId} nachgeladen und Cache aktualisiert.`);
+            // HINZUGEFÜGTES LOGGING:
+            console.log(`loadAndDisplayApplicantsForJob: Job-Details für Job ${jobId} nachgeladen. Inhalt von 'job-favoriten' aus Webflow:`, JSON.stringify(fetchedJob.fieldData['job-favoriten']));
         } else {
             console.error(`loadAndDisplayApplicantsForJob: Konnte Job-Details für Job ${jobId} nicht nachladen. Fehler:`, fetchedJob?.message);
             // Fehlerbehandlung: Spinner entfernen und Meldung anzeigen
@@ -383,7 +384,7 @@
       // Stattdessen stellen wir sicher, dass alle Jobs im Cache sind.
       myJobItemsResults.forEach(jobItem => {
           if (jobItem && jobItem.id && !jobItem.error) {
-              if (!cache.jobDataCache[jobItem.id] || !cache.jobDataCache[jobItem.id].jobDetails) {
+              if (!cache.jobDataCache[jobItem.id] || !cache.jobDataCache[jobItem.id].jobDetails || !cache.jobDataCache[jobItem.id].jobDetails.fieldData) { // Zusätzliche Prüfung auf fieldData
                   cache.updateJobCacheWithJobDetails(jobItem.id, jobItem);
               }
           }

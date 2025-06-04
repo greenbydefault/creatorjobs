@@ -19,7 +19,7 @@
       notesSidebarWrapper = document.createElement('div');
       notesSidebarWrapper.id = 'db-modal-note-wrapper-dynamic';
       notesSidebarWrapper.classList.add('db-modal-note-wrapper'); 
-      // CSS steuert: position:fixed; top:0; right:0; width:300px; height:100vh; background:white; z-index:1001; (höher als Creator-Sidebar, wenn sie sich nicht verschieben würde)
+      // CSS steuert: position:fixed; top:0; right:0; width:35vw; height:100vh; background:white; z-index:1001; (höher als Creator-Sidebar, wenn sie sich nicht verschieben würde)
       // transform: translateX(100%); transition: transform 0.3s ease-in-out;
       // .is-open { transform: translateX(0); }
 

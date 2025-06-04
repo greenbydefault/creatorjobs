@@ -278,32 +278,95 @@
     console.log("initializeMyJobsDisplay: Start");
     if (!window.WEBFLOW_API.config) {
         console.error("❌ Konfigurationsmodul nicht geladen. Breche initializeMyJobsDisplay ab.");
-        // ... (Fehlerbehandlung für UI)
+        const container = document.getElementById("jobs-list") || document.getElementById("jobs-list-active");
+        if (container) container.innerHTML = "<p class='error-message job-entry visible'>Fehler: Konfiguration konnte nicht geladen werden.</p>";
         return;
     }
     const { API_CALL_DELAY_MS, USER_COLLECTION_ID_MJ, JOB_COLLECTION_ID_MJ, SKELETON_JOBS_COUNT_MJ } = window.WEBFLOW_API.config;
 
     const cache = window.WEBFLOW_API.cache;
-    // ... (Prüfungen für cache, services, ui)
+    if (!cache) {
+        console.error("❌ Cache-Modul nicht geladen. Breche initializeMyJobsDisplay ab.");
+        const container = document.getElementById("jobs-list") || document.getElementById("jobs-list-active");
+        if (container) container.innerHTML = "<p class='error-message job-entry visible'>Fehler: Cache konnte nicht geladen werden.</p>";
+        return;
+    }
 
-    // ... (Skeleton Loader Code)
+    const services = window.WEBFLOW_API.services;
+    if (!services || !services.fetchWebflowItem) {
+        console.error("❌ Service-Modul oder fetchWebflowItem nicht geladen. Breche initializeMyJobsDisplay ab.");
+        const container = document.getElementById("jobs-list") || document.getElementById("jobs-list-active");
+        if (container) container.innerHTML = "<p class='error-message job-entry visible'>Fehler: API-Services konnten nicht geladen werden.</p>";
+        return;
+    }
+    const { fetchWebflowItem } = services;
+
+    const utilsModule = window.WEBFLOW_API.utils;
+    const delay = utilsModule && typeof utilsModule.delay === 'function' ? utilsModule.delay : (ms => new Promise(resolve => setTimeout(resolve, ms)));
+
+    const ui = window.WEBFLOW_API.ui;
+    if (!ui || !ui.renderMyJobsSkeletonLoader || !ui.createMyJobsTableHeaderElement) {
+        console.error("❌ UI-Modul oder benötigte UI-Funktionen nicht geladen. Breche initializeMyJobsDisplay ab.");
+        const container = document.getElementById("jobs-list") || document.getElementById("jobs-list-active");
+        if (container) container.innerHTML = "<p class='error-message job-entry visible'>Fehler: UI-Komponenten konnten nicht geladen werden.</p>";
+        return;
+    }
+    const { renderMyJobsSkeletonLoader, createMyJobsTableHeaderElement } = ui;
+
     let initialContainer = document.getElementById("jobs-list") || document.getElementById("jobs-list-active");
     if (!initialContainer && document.getElementById("jobs-list-closed")) initialContainer = document.getElementById("jobs-list-closed");
 
     if (!initialContainer) {
       console.warn("Keinen initialen Job-Container für initializeMyJobsDisplay gefunden. Überspringe Skeleton/Header.");
     } else {
-        // ... (Header und Skeleton rendern)
+        if (!initialContainer.querySelector(".db-table-header.db-table-my-jobs")) {
+            const myJobsHeader = createMyJobsTableHeaderElement ? createMyJobsTableHeaderElement() : null;
+            if (myJobsHeader) initialContainer.appendChild(myJobsHeader);
+        }
+        if (renderMyJobsSkeletonLoader) renderMyJobsSkeletonLoader(initialContainer, SKELETON_JOBS_COUNT_MJ);
     }
 
+
     try {
-      // ... (Memberstack Logik) ...
+      if (typeof window.$memberstackDom === 'undefined') {
+        await new Promise(resolve => {
+          const interval = setInterval(() => {
+            if (typeof window.$memberstackDom !== 'undefined') {
+              clearInterval(interval);
+              resolve();
+            }
+          }, 100);
+        });
+      }
+
+      const member = await window.$memberstackDom.getCurrentMember();
+      cache.currentWebflowMemberId_MJ = member?.data?.customFields?.['webflow-member-id'];
+
+      if (!cache.currentWebflowMemberId_MJ) {
+        console.error("❌ Kein 'webflow-member-id' im Memberstack-Profil gefunden.");
+        document.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
+        if (initialContainer) initialContainer.innerHTML += "<p class='error-message job-entry visible'>Benutzer-Identifikation fehlgeschlagen.</p>";
+        return;
+      }
+
+      // WICHTIG: currentUserItem hier definieren, BEVOR es verwendet wird.
+      await delay(API_CALL_DELAY_MS); // Kurze Verzögerung vor dem ersten API-Aufruf, falls nötig
+      const currentUserItem = await fetchWebflowItem(USER_COLLECTION_ID_MJ, cache.currentWebflowMemberId_MJ);
+
+      if (!currentUserItem || (currentUserItem.error && currentUserItem.status !== 429 && currentUserItem.status !== 404)) {
+        let errorMsgText = "Deine Benutzerdaten konnten nicht geladen werden.";
+        if(currentUserItem && currentUserItem.message) errorMsgText += ` Fehler: ${currentUserItem.message}`;
+        document.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
+        if (initialContainer) initialContainer.innerHTML += `<p class='error-message job-entry visible'>${errorMsgText}</p>`;
+        return;
+      }
+      
       const postedJobIds = currentUserItem.fieldData ? currentUserItem.fieldData["posted-jobs"] || [] : [];
       console.log(`initializeMyJobsDisplay: Gefundene postedJobIds: ${postedJobIds.length}`, postedJobIds);
 
       if (postedJobIds.length === 0) {
         document.querySelectorAll(".my-job-item-skeleton").forEach(el => el.remove());
-        cache.allMyJobsData_MJ = []; // Wichtig: Cache leeren, wenn keine Jobs da sind
+        cache.allMyJobsData_MJ = []; 
         filterAndRenderJobs();
         return;
       }
@@ -311,7 +374,6 @@
       let myJobItemsPromises = postedJobIds.map(async (jobId, index) => {
         await delay(index * API_CALL_DELAY_MS);
         const jobItem = await fetchWebflowItem(JOB_COLLECTION_ID_MJ, jobId);
-        // *** ERWEITERTES LOGGING HIER ***
         if (jobItem && !jobItem.error && jobItem.fieldData) {
             console.log(`initializeMyJobsDisplay: Job ${jobId} erfolgreich von Webflow geladen. 'job-favoriten':`, JSON.stringify(jobItem.fieldData['job-favoriten']));
             cache.updateJobCacheWithJobDetails(jobId, jobItem);
@@ -328,20 +390,16 @@
 
 
       myJobItemsResults.forEach(jobItem => {
-          if (jobItem && jobItem.id && !jobItem.error && jobItem.fieldData) { // Sicherstellen, dass fieldData existiert
-              // Überprüfe, ob der Cache-Eintrag und jobDetails existieren, bevor auf fieldData zugegriffen wird
+          if (jobItem && jobItem.id && !jobItem.error && jobItem.fieldData) { 
               if (!cache.jobDataCache[jobItem.id] ||
                   !cache.jobDataCache[jobItem.id].jobDetails ||
-                  !cache.jobDataCache[jobItem.id].jobDetails.fieldData) { // Prüfe auch fieldData
+                  !cache.jobDataCache[jobItem.id].jobDetails.fieldData) { 
                   console.warn(`initializeMyJobsDisplay: Nach-Synchronisation (oder Erstbefüllung) für Job ${jobItem.id}, da Cache unvollständig war oder fieldData fehlte.`);
-                  cache.updateJobCacheWithJobDetails(jobItem.id, jobItem); // Dies sollte jobDetails korrekt setzen
-              } else {
-                  // Optional: Log, wenn Cache bereits okay war
-                  // console.log(`initializeMyJobsDisplay: Cache für Job ${jobItem.id} war bereits mit fieldData befüllt.`);
+                  cache.updateJobCacheWithJobDetails(jobItem.id, jobItem); 
               }
           }
       });
-      cache.allMyJobsData_MJ = myJobItemsResults.filter(item => item !== null && !item.error && item.fieldData); // Nur valide Jobs in allMyJobsData_MJ
+      cache.allMyJobsData_MJ = myJobItemsResults.filter(item => item !== null && !item.error && item.fieldData); 
       console.log("initializeMyJobsDisplay: Inhalt von cache.allMyJobsData_MJ nach Filterung:", JSON.parse(JSON.stringify(cache.allMyJobsData_MJ)));
 
 
@@ -359,5 +417,5 @@
   window.WEBFLOW_API.appLogic.filterAndRenderJobs = filterAndRenderJobs;
   window.WEBFLOW_API.appLogic.initializeMyJobsDisplay = initializeMyJobsDisplay;
 
-  console.log("AppLogic (appLogic-1.8.js) wurde aktualisiert mit erweitertem Logging.");
+  console.log("AppLogic (appLogic-1.8.js) wurde aktualisiert mit Fehlerbehebung für currentUserItem und erweitertem Logging.");
 })();

@@ -1,22 +1,19 @@
 // form-submission-handler.js
-// VERSION 19.1: Korrektur - Stellt die vollständige Uploadcare-Logik wieder her und integriert den Credit-Abzug.
-// - Fügt einen Aufruf an einen externen Worker hinzu, um Credits nach einem erfolgreichen Job-Post abzuziehen.
-// - Dies geschieht nur, wenn der Job-Post in Airtable und Webflow vollständig erfolgreich war.
-// - Der Memberstack API Key bleibt sicher auf dem Worker und wird nicht im Frontend exponiert.
+// VERSION 19.3: Stellt das vollständige Originalskript wieder her und integriert das korrigierte Credit-Abzug-Logging.
 
 (function() {
     'use strict';
 
     // --- Konfiguration ---
-    const WEBFLOW_CMS_POST_WORKER_URL = 'https://late-meadow-00bc.oliver-258.workers.dev'; // Basis-URL deines Workers (OHNE / am Ende)
+    const WEBFLOW_CMS_POST_WORKER_URL = 'https://late-meadow-00bc.oliver-258.workers.dev';
     const AIRTABLE_WORKER_URL = 'https://airtable-job-post.oliver-258.workers.dev/';
     const AIRTABLE_MEMBER_SEARCH_ENDPOINT = AIRTABLE_WORKER_URL + '/search-member';
-    const MEMBERSTACK_CREDIT_WORKER_URL = 'https://post-job-credit-update.oliver-258.workers.dev/'; // BITTE ANPASSEN! URL deines neuen Workers.
+    const MEMBERSTACK_CREDIT_WORKER_URL = 'https://post-job-credit-update.oliver-258.workers.dev/'; // Angepasst an deine URL
     const MAIN_FORM_ID = 'wf-form-post-job-form';
     const DATA_FIELD_ATTRIBUTE = 'data-preview-field';
-    const SUPPORT_EMAIL = 'support@yourcompany.com'; // BITTE ERSETZEN!
-    const UPLOADCARE_CTX_NAME = 'my-uploader'; // ctx-name of your Uploadcare widget
-    const UPLOADCARE_PROVIDER_ID = 'uploaderctx'; // ID of your <uc-upload-ctx-provider>
+    const SUPPORT_EMAIL = 'support@yourcompany.com';
+    const UPLOADCARE_CTX_NAME = 'my-uploader';
+    const UPLOADCARE_PROVIDER_ID = 'uploaderctx';
 
     const POPUP_WRAPPER_ATTR = '[data-error-target="popup-wrapper"]';
     const POPUP_TITLE_ATTR = '[data-error-target="popup-title"]';
@@ -108,7 +105,7 @@
         'webflowId': 'job-posted-by',
         'webflowIdForTextField': 'webflow-member-id',
         'memberstackId': 'ms-member-id',
-        'jobImageUpload': 'job-image', // Webflow field for the image
+        'jobImageUpload': 'job-image',
         'creatorCountOptional': 'creator-follower',
         'creatorAge': 'creator-alter',
         'genderOptional': 'creator-geschlecht',
@@ -151,7 +148,7 @@
         'memberEmail': 'Contact Mail',
         'webflowId': 'Webflow Member ID',
         'memberstackId': 'Member ID',
-        'jobImageUpload': 'Job Image', // Airtable field for the image
+        'jobImageUpload': 'Job Image',
         'creatorFollower': 'Creator Follower',
         'creatorCountOptional': 'Creator Follower',
         'creatorAge': 'Creator Age',
@@ -365,7 +362,6 @@
             }
         }
 
-        // --- START UPLOADCARE API INTEGRATION (RESTORED ORIGINAL) ---
         let uploadcareAPI = null;
         try {
             console.log(`[Uploadcare Debug] Attempting to get API via document.querySelector('#${UPLOADCARE_PROVIDER_ID}').getAPI()`);
@@ -468,7 +464,6 @@
         } catch (e) {
             console.error('Error during Uploadcare API integration:', e);
         }
-        // --- END UPLOADCARE API INTEGRATION ---
 
         if (formData['creatorLand'] && !Array.isArray(formData['creatorLand'])) {
             formData['creatorLand'] = [formData['creatorLand']];
@@ -784,7 +779,7 @@
                     else submitButton.value = finalSuccessText;
                 }
 
-                // --- NEU: Credit-Abzug nach erfolgreichem Post ---
+                // --- Credit-Abzug nach erfolgreichem Post ---
                 const memberstackId = rawFormData['memberstackId'];
                 if (memberstackId) {
                     console.log(`Versuche Credit für Memberstack ID ${memberstackId} abzuziehen...`);
@@ -796,9 +791,8 @@
                         });
                         const creditData = await creditResponse.json();
                         if (creditResponse.ok) {
-                            console.log('Antwort vom Credit-Worker:', creditData.message);
+                            console.log(`Antwort vom Credit-Worker: ${creditData.message} (Credits vorher: ${creditData.oldCredits}, nachher: ${creditData.newCredits})`);
                         } else {
-                            // Fehler wird nur in der Konsole geloggt, da der Hauptprozess erfolgreich war.
                             console.error('Fehler beim Abziehen des Credits:', creditData.error || 'Unbekannter Fehler vom Credit-Worker.');
                         }
                     } catch (creditError) {
@@ -878,7 +872,7 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            console.log(`Form Submission Handler v19.1 initialisiert für: #${MAIN_FORM_ID}`);
+            console.log(`Form Submission Handler v19.3 initialisiert für: #${MAIN_FORM_ID}`);
         } else {
             console.warn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }

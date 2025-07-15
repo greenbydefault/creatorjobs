@@ -1,10 +1,8 @@
 // form-submission-handler.js
-// VERSION 18: Anpassungen für Webflow & Fehlerbehandlung:
-// - Wenn das PATCHen des 'job-id'-Feldes in Webflow fehlschlägt, wird der Airtable-Eintrag gelöscht.
-// - Stellt sicher, dass der Worker unter WEBFLOW_CMS_POST_WORKER_URL PATCH-Requests an /<item-id> unterstützt.
-// - 'nutzungOptional' und 'channels' werden als kommaseparierter String gesendet.
-// - Slug des Webflow Items bleibt die airtableRecordId.
-// - Integriert Uploadcare: 1. #uploaderctx.getAPI(), 2. Global API, 3. Scoped element (v18.uc8 - User-friendly errors).
+// VERSION 19.1: Korrektur - Stellt die vollständige Uploadcare-Logik wieder her und integriert den Credit-Abzug.
+// - Fügt einen Aufruf an einen externen Worker hinzu, um Credits nach einem erfolgreichen Job-Post abzuziehen.
+// - Dies geschieht nur, wenn der Job-Post in Airtable und Webflow vollständig erfolgreich war.
+// - Der Memberstack API Key bleibt sicher auf dem Worker und wird nicht im Frontend exponiert.
 
 (function() {
     'use strict';
@@ -13,6 +11,7 @@
     const WEBFLOW_CMS_POST_WORKER_URL = 'https://late-meadow-00bc.oliver-258.workers.dev'; // Basis-URL deines Workers (OHNE / am Ende)
     const AIRTABLE_WORKER_URL = 'https://airtable-job-post.oliver-258.workers.dev/';
     const AIRTABLE_MEMBER_SEARCH_ENDPOINT = AIRTABLE_WORKER_URL + '/search-member';
+    const MEMBERSTACK_CREDIT_WORKER_URL = 'https://post-job-credit-update.oliver-258.workers.dev/'; // BITTE ANPASSEN! URL deines neuen Workers.
     const MAIN_FORM_ID = 'wf-form-post-job-form';
     const DATA_FIELD_ATTRIBUTE = 'data-preview-field';
     const SUPPORT_EMAIL = 'support@yourcompany.com'; // BITTE ERSETZEN!
@@ -255,7 +254,6 @@
         return dateObj.toISOString();
     }
 
-    // Helper function to generate user-friendly error information
     function getFriendlyErrorFieldInfo(errorMessage) {
         const result = { area: null, field: null, title: "Fehler bei Verarbeitung" };
         const lowerErrorMessage = errorMessage.toLowerCase();
@@ -285,7 +283,6 @@
                 'creator-geschlecht': 'Creator Geschlecht', 'video-dauer': 'Videodauer',
                 'format': 'Format', 'untertitel': 'Untertitel',
                 'dauer-nutzungsrechte': 'Dauer Nutzungsrechte',
-                // Add more as needed
             };
             for (const slug in webflowSlugToFriendlyName) {
                 if (lowerErrorMessage.includes(`field: ${slug}`) || lowerErrorMessage.includes(`'${slug}'`) || lowerErrorMessage.includes(`"${slug}"`)) {
@@ -298,7 +295,6 @@
         }
         return result;
     }
-
 
     function collectAndFormatFormData(formElement) {
         const formData = {};
@@ -369,7 +365,7 @@
             }
         }
 
-        // --- START UPLOADCARE API INTEGRATION ---
+        // --- START UPLOADCARE API INTEGRATION (RESTORED ORIGINAL) ---
         let uploadcareAPI = null;
         try {
             console.log(`[Uploadcare Debug] Attempting to get API via document.querySelector('#${UPLOADCARE_PROVIDER_ID}').getAPI()`);
@@ -465,9 +461,9 @@
                     }
                 }
             } else if (uploadcareAPI) { 
-                 console.error(`Uploadcare API: API instance was retrieved, but its getOutputCollectionState method is missing or not a function. Type is: ${typeof uploadcareAPI.getOutputCollectionState}`);
+                console.error(`Uploadcare API: API instance was retrieved, but its getOutputCollectionState method is missing or not a function. Type is: ${typeof uploadcareAPI.getOutputCollectionState}`);
             } else { 
-                 console.error(`Uploadcare API: Failed to obtain API instance through all available methods. Cannot process Uploadcare file.`);
+                console.error(`Uploadcare API: Failed to obtain API instance through all available methods. Cannot process Uploadcare file.`);
             }
         } catch (e) {
             console.error('Error during Uploadcare API integration:', e);
@@ -787,6 +783,32 @@
                     if (submitButton.tagName === 'BUTTON') submitButton.textContent = finalSuccessText;
                     else submitButton.value = finalSuccessText;
                 }
+
+                // --- NEU: Credit-Abzug nach erfolgreichem Post ---
+                const memberstackId = rawFormData['memberstackId'];
+                if (memberstackId) {
+                    console.log(`Versuche Credit für Memberstack ID ${memberstackId} abzuziehen...`);
+                    try {
+                        const creditResponse = await fetch(MEMBERSTACK_CREDIT_WORKER_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ memberId: memberstackId })
+                        });
+                        const creditData = await creditResponse.json();
+                        if (creditResponse.ok) {
+                            console.log('Antwort vom Credit-Worker:', creditData.message);
+                        } else {
+                            // Fehler wird nur in der Konsole geloggt, da der Hauptprozess erfolgreich war.
+                            console.error('Fehler beim Abziehen des Credits:', creditData.error || 'Unbekannter Fehler vom Credit-Worker.');
+                        }
+                    } catch (creditError) {
+                        console.error('Netzwerkfehler beim Aufruf des Credit-Workers:', creditError);
+                    }
+                } else {
+                    console.warn('Keine Memberstack ID gefunden, es konnte kein Credit abgezogen werden.');
+                }
+                // --- ENDE: Credit-Abzug ---
+
             } else {
                 throw new Error("Webflow Item Update war nicht erfolgreich, Airtable wurde nicht aktualisiert.");
             }
@@ -805,7 +827,6 @@
                 }
                 userDisplayMessage += " Bitte überprüfen Sie Ihre Eingaben oder kontaktieren Sie den Support, falls der Fehler weiterhin besteht.";
             } else {
-                // Generic message if no area could be determined by getFriendlyErrorFieldInfo
                 userDisplayMessage = "Es tut uns leid, leider ist ein unerwarteter Fehler bei der Verarbeitung Ihrer Anfrage aufgetreten. Bitte kontaktieren Sie den Support für weitere Hilfe.";
             }
             showCustomPopup(userDisplayMessage, 'error', friendlyInfo.title, technicalSupportDetails);
@@ -823,16 +844,16 @@
             if (submitButton && submitButton.disabled) {
                 const currentButtonText = submitButton.tagName === 'BUTTON' ? submitButton.textContent : submitButton.value;
                 if (currentButtonText === 'Wird gesendet...') {
-                     if (submitButton.tagName === 'BUTTON') submitButton.textContent = initialSubmitButtonText;
-                     else submitButton.value = initialSubmitButtonText;
-                     submitButton.disabled = false;
+                    if (submitButton.tagName === 'BUTTON') submitButton.textContent = initialSubmitButtonText;
+                    else submitButton.value = initialSubmitButtonText;
+                    submitButton.disabled = false;
                 }
             } else if (submitButton && !submitButton.disabled) {
-                 const currentButtonText = submitButton.tagName === 'BUTTON' ? submitButton.textContent : submitButton.value;
-                 if (currentButtonText === 'Wird gesendet...') {
-                      if (submitButton.tagName === 'BUTTON') submitButton.textContent = initialSubmitButtonText;
-                      else submitButton.value = initialSubmitButtonText;
-                 }
+                const currentButtonText = submitButton.tagName === 'BUTTON' ? submitButton.textContent : submitButton.value;
+                if (currentButtonText === 'Wird gesendet...') {
+                    if (submitButton.tagName === 'BUTTON') submitButton.textContent = initialSubmitButtonText;
+                    else submitButton.value = initialSubmitButtonText;
+                }
             }
         }
     }
@@ -857,7 +878,7 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            console.log(`Form Submission Handler v18.uc8 initialisiert für: #${MAIN_FORM_ID}`);
+            console.log(`Form Submission Handler v19.1 initialisiert für: #${MAIN_FORM_ID}`);
         } else {
             console.warn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }

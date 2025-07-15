@@ -1,5 +1,8 @@
 // form-submission-handler.js
-// VERSION 19.3: Stellt das vollständige Originalskript wieder her und integriert das korrigierte Credit-Abzug-Logging.
+// VERSION 20.0: User-Facing Messages
+// - Replaces all technical status messages (e.g., "saving to Airtable")
+//   with generic, user-friendly feedback (e.g., "Job-Details werden gespeichert...").
+// - The goal is to improve the user experience and abstract away the backend implementation details.
 
 (function() {
     'use strict';
@@ -8,7 +11,7 @@
     const WEBFLOW_CMS_POST_WORKER_URL = 'https://late-meadow-00bc.oliver-258.workers.dev';
     const AIRTABLE_WORKER_URL = 'https://airtable-job-post.oliver-258.workers.dev/';
     const AIRTABLE_MEMBER_SEARCH_ENDPOINT = AIRTABLE_WORKER_URL + '/search-member';
-    const MEMBERSTACK_CREDIT_WORKER_URL = 'https://post-job-credit-update.oliver-258.workers.dev/'; // Angepasst an deine URL
+    const MEMBERSTACK_CREDIT_WORKER_URL = 'https://post-job-credit-update.oliver-258.workers.dev/';
     const MAIN_FORM_ID = 'wf-form-post-job-form';
     const DATA_FIELD_ATTRIBUTE = 'data-preview-field';
     const SUPPORT_EMAIL = 'support@yourcompany.com';
@@ -559,7 +562,8 @@
             if (submitButton.tagName === 'BUTTON') submitButton.textContent = sendingText;
             else submitButton.value = sendingText;
         }
-        showCustomPopup('Daten werden gesammelt...', 'loading', 'Vorbereitung');
+        // MODIFIED MESSAGE
+        showCustomPopup('Deine Eingaben werden vorbereitet...', 'loading', 'Einen Moment bitte...');
 
         const rawFormData = testData ? testData : collectAndFormatFormData(form);
 
@@ -583,7 +587,8 @@
             }
             return;
         }
-        showCustomPopup('Suche zugehöriges Mitglied...', 'loading', 'Mitgliedersuche');
+        // MODIFIED MESSAGE
+        showCustomPopup('Dein Benutzerkonto wird überprüft...', 'loading', 'Benutzerprüfung');
 
         let airtableMemberRecordId = null;
         try {
@@ -599,7 +604,8 @@
             airtableMemberRecordId = memberSearchData.memberRecordId;
             console.log('Mitglied gefunden. Airtable Record ID des Mitglieds:', airtableMemberRecordId);
         } catch (error) {
-            showCustomPopup("Die Überprüfung Ihrer Benutzerdaten ist fehlgeschlagen. Bitte kontaktieren Sie den Support.", 'error', 'Fehler bei Benutzerprüfung', `Fehler bei Mitgliedersuche: ${error.message}`);
+            // MODIFIED MESSAGE
+            showCustomPopup("Dein Benutzerkonto konnte nicht überprüft werden. Bitte lade die Seite neu oder kontaktiere den Support.", 'error', 'Fehler bei der Benutzerprüfung', `Fehler bei Mitgliedersuche: ${error.message}`);
             if (submitButton) {
                 submitButton.disabled = false;
                 if (submitButton.tagName === 'BUTTON') submitButton.textContent = initialSubmitButtonText;
@@ -626,7 +632,8 @@
                  airtableJobDetails[adminTestAirtableKey] = rawFormData['admin-test'] === undefined ? true : rawFormData['admin-test'];
             }
 
-            showCustomPopup('Daten werden in Airtable gespeichert...', 'loading', 'Airtable Speicherung');
+            // MODIFIED MESSAGE
+            showCustomPopup('Deine Job-Details werden gespeichert...', 'loading', 'Speichervorgang');
             const airtableCreateResponse = await fetch(AIRTABLE_WORKER_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -641,7 +648,8 @@
                 throw new Error('Airtable Record ID nicht erhalten nach Erstellung.');
             }
             console.log('Airtable Job Record erstellt mit ID:', airtableRecordId);
-            showCustomPopup('In Airtable gespeichert. Erstelle Item in Webflow...', 'loading', 'Webflow Erstellung');
+            // MODIFIED MESSAGE
+            showCustomPopup('Job-Details gespeichert. Dein Job wird jetzt veröffentlicht...', 'loading', 'Veröffentlichung');
 
             webflowFieldData['name'] = rawFormData['job-title'] || rawFormData['projectName'] || 'Unbenannter Job';
             webflowFieldData['slug'] = airtableRecordId;
@@ -726,7 +734,8 @@
             const jobSlugInWebflowToUpdate = WEBFLOW_FIELD_SLUG_MAPPINGS['airtableJobIdForWebflow'];
             let webflowItemUpdateSuccess = false;
             if (jobSlugInWebflowToUpdate) {
-                showCustomPopup('Aktualisiere Webflow Item mit Job ID...', 'loading', 'Webflow Update');
+                // MODIFIED MESSAGE
+                showCustomPopup('Letzte Anpassungen werden vorgenommen...', 'loading', 'Abschluss');
                 console.log(`Versuche Webflow Item ${webflowItemId} zu aktualisieren: Feld '${jobSlugInWebflowToUpdate}' = ${webflowItemId}`);
                 const updatePayload = { fields: { [jobSlugInWebflowToUpdate]: webflowItemId } };
                 try {
@@ -753,7 +762,8 @@
             }
 
             if (webflowItemUpdateSuccess) {
-                showCustomPopup('Aktualisiere Airtable mit Webflow ID...', 'loading', 'Airtable Aktualisierung');
+                // MODIFIED MESSAGE
+                showCustomPopup('Die Veröffentlichung wird abgeschlossen...', 'loading', 'Finalisierung');
                 const airtableUpdatePayload = { recordId: airtableRecordId, webflowId: webflowItemId };
                 const airtableWebflowIdField = AIRTABLE_FIELD_MAPPINGS['webflowItemIdFieldAirtable'];
                 if (airtableWebflowIdField) {
@@ -772,7 +782,8 @@
                     throw new Error(`Airtable Update Fehler (${airtableUpdateResponse.status}): ${JSON.stringify(airtableUpdateResponseData)}`);
                 }
                 console.log('Airtable Record aktualisiert mit Webflow Item ID.');
-                showCustomPopup('Job erfolgreich in Webflow und Airtable gespeichert!', 'success', 'Erfolgreich');
+                // MODIFIED MESSAGE
+                showCustomPopup('Dein Job wurde erfolgreich veröffentlicht!', 'success', 'Fertig!');
                 if (submitButton) {
                     const finalSuccessText = 'Erfolgreich gesendet!';
                     if (submitButton.tagName === 'BUTTON') submitButton.textContent = finalSuccessText;
@@ -815,7 +826,7 @@
             let userDisplayMessage;
 
             if (friendlyInfo.area) {
-                userDisplayMessage = `Es tut uns leid, ein Fehler ist im Bereich "${friendlyInfo.area}" aufgetreten.`;
+                userDisplayMessage = `Es tut uns leid, ein Fehler ist aufgetreten.`;
                 if (friendlyInfo.field) {
                     userDisplayMessage += ` Möglicherweise betrifft es das Feld "${friendlyInfo.field}".`;
                 }
@@ -872,7 +883,7 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            console.log(`Form Submission Handler v19.3 initialisiert für: #${MAIN_FORM_ID}`);
+            console.log(`Form Submission Handler v20.0 initialisiert für: #${MAIN_FORM_ID}`);
         } else {
             console.warn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }

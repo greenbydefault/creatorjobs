@@ -25,6 +25,7 @@
     const CLASS_JOB_TITLE_ERROR = 'job-title-error-border'; // Specific for job title error
     const CLASS_JOB_TITLE_SUCCESS = 'job-title-success-border'; // Specific for job title success
     const CLASS_INDICATOR_REACHABLE = 'reachable';
+    const CLASS_MSG_CONTAINER = 'msg-container'; // *** NEU: Klasse für den Nachrichten-Container
 
     // Toggle Attributes
     const DATA_ATTR_TOGGLE_CONTROL = 'data-toggle-control';
@@ -76,43 +77,67 @@
     const showElement = (element) => removeClass(element, CLASS_HIDE);
     const hideElement = (element) => addClass(element, CLASS_HIDE);
 
+    /**
+     * *** NEU: Funktion zur Anzeige von Validierungsnachrichten ***
+     * Zeigt eine Nachricht im dafür vorgesehenen Container an.
+     * @param {string} message - Die anzuzeigende Nachricht.
+     * @param {'success' | 'error' | 'clear'} type - Der Typ der Nachricht (für die Farbgebung).
+     */
+    const displayValidationMessage = (message, type) => {
+        const msgContainer = find(`.${CLASS_MSG_CONTAINER}`);
+        if (!msgContainer) {
+            console.warn('Message container (.msg-container) not found.');
+            return;
+        }
+
+        msgContainer.textContent = message;
+        if (type === 'success') {
+            msgContainer.style.color = 'green';
+        } else if (type === 'error') {
+            msgContainer.style.color = 'red';
+        } else { // 'clear' or any other value
+            msgContainer.style.color = '';
+        }
+    };
+
+
     const fadeOutElement = (element, callback) => {
         if (!element || element.style.opacity === '0' || element.style.display === 'none') {
-             if (typeof callback === 'function') callback();
+            if (typeof callback === 'function') callback();
             return;
         }
         element.style.opacity = '0';
         let transitionEnded = false;
         const onFadeOutComplete = (event) => {
-             if (event.target === element && event.propertyName === 'opacity' && !transitionEnded) {
-                 transitionEnded = true;
-                 element.style.display = 'none';
-                 element.removeEventListener('transitionend', onFadeOutComplete);
-                 if (typeof callback === 'function') callback();
-             }
+            if (event.target === element && event.propertyName === 'opacity' && !transitionEnded) {
+                transitionEnded = true;
+                element.style.display = 'none';
+                element.removeEventListener('transitionend', onFadeOutComplete);
+                if (typeof callback === 'function') callback();
+            }
         };
         element.removeEventListener('transitionend', onFadeOutComplete);
         element.addEventListener('transitionend', onFadeOutComplete);
         setTimeout(() => {
-             if (!transitionEnded) {
-                 transitionEnded = true;
-                 element.style.display = 'none';
-                 element.removeEventListener('transitionend', onFadeOutComplete);
-                 if (typeof callback === 'function') callback();
-             }
+            if (!transitionEnded) {
+                transitionEnded = true;
+                element.style.display = 'none';
+                element.removeEventListener('transitionend', onFadeOutComplete);
+                if (typeof callback === 'function') callback();
+            }
         }, TRANSITION_DURATION + 50);
     };
 
     const fadeInElement = (element) => {
-         if (!element || element.style.opacity === '1') return;
-         if (getComputedStyle(element).display === 'none') {
-             element.style.display = '';
-         }
-         requestAnimationFrame(() => {
-             setTimeout(() => {
-                 element.style.opacity = '1';
-             }, 10);
-         });
+        if (!element || element.style.opacity === '1') return;
+        if (getComputedStyle(element).display === 'none') {
+            element.style.display = '';
+        }
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                element.style.opacity = '1';
+            }, 10);
+        });
     };
 
     const formatDateDDMMYYYY = (dateStringOrDate) => {
@@ -192,31 +217,31 @@
                 return;
             }
 
-             if (this.prevButton) hideElement(this.prevButton);
-             if (this.submitButton) hideElement(this.submitButton);
+            if (this.prevButton) hideElement(this.prevButton);
+            if (this.submitButton) hideElement(this.submitButton);
 
-             this.steps.forEach((step, index) => {
-                 if (index === 0) {
-                     step.style.display = '';
-                     step.style.opacity = '1';
-                     addClass(step, CLASS_ACTIVE_STEP);
-                 } else {
-                     step.style.display = 'none';
-                     step.style.opacity = '0';
-                     removeClass(step, CLASS_ACTIVE_STEP);
-                 }
-             });
-             this.guides.forEach((guide, index) => {
-                 const guideStepNumber = parseInt(guide.getAttribute(DATA_ATTR_GUIDE), 10);
-                 const targetStepNumber = 1; // Initial step is 1
-                 if (!isNaN(guideStepNumber) && guideStepNumber === targetStepNumber || isNaN(guideStepNumber) && index === 0) {
-                     guide.style.display = '';
-                     guide.style.opacity = '1';
-                 } else {
-                     guide.style.display = 'none';
-                     guide.style.opacity = '0';
-                 }
-             });
+            this.steps.forEach((step, index) => {
+                if (index === 0) {
+                    step.style.display = '';
+                    step.style.opacity = '1';
+                    addClass(step, CLASS_ACTIVE_STEP);
+                } else {
+                    step.style.display = 'none';
+                    step.style.opacity = '0';
+                    removeClass(step, CLASS_ACTIVE_STEP);
+                }
+            });
+            this.guides.forEach((guide, index) => {
+                const guideStepNumber = parseInt(guide.getAttribute(DATA_ATTR_GUIDE), 10);
+                const targetStepNumber = 1; // Initial step is 1
+                if (!isNaN(guideStepNumber) && guideStepNumber === targetStepNumber || isNaN(guideStepNumber) && index === 0) {
+                    guide.style.display = '';
+                    guide.style.opacity = '1';
+                } else {
+                    guide.style.display = 'none';
+                    guide.style.opacity = '0';
+                }
+            });
         }
 
         init() {
@@ -226,12 +251,12 @@
 
         addEventListeners() {
             const handleNext = async () => {
-                 if (this.isTransitioning) return;
-                 await this.goToNextStep();
+                if (this.isTransitioning) return;
+                await this.goToNextStep();
             };
             const handlePrev = () => {
-                 if (this.isTransitioning) return;
-                 this.goToPreviousStep();
+                if (this.isTransitioning) return;
+                this.goToPreviousStep();
             };
             this.nextButton?.addEventListener('click', handleNext);
             this.prevButton?.addEventListener('click', handlePrev);
@@ -244,7 +269,7 @@
                     const targetIndex = targetStepNumber - 1;
                     // Allow jumping to any step up to the max reached step + 1 (the next step)
                     if (targetIndex >= 0 && targetIndex < this.totalSteps && targetIndex <= this.maxReachedStepIndex + 1) {
-                         if (targetIndex > this.currentStepIndex) {
+                        if (targetIndex > this.currentStepIndex) {
                             // If jumping forward, validate all intermediate steps
                             let canProceed = true;
                             for (let i = this.currentStepIndex; i < targetIndex; i++) {
@@ -258,9 +283,9 @@
                                 }
                             }
                             if (!canProceed) return; // Stop if any intermediate step validation failed
-                         }
-                         // If jumping backward or to the next valid step, proceed
-                         this.goToStep(targetIndex);
+                        }
+                        // If jumping backward or to the next valid step, proceed
+                        this.goToStep(targetIndex);
                     }
                 });
             });
@@ -268,29 +293,29 @@
             this.form.addEventListener('keydown', async (event) => {
                 // Prevent default form submission on Enter key unless it's a textarea or the submit button is focused and visible
                 if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
-                     const isSubmitVisible = this.submitButton && !this.submitButton.classList.contains(CLASS_HIDE);
+                    const isSubmitVisible = this.submitButton && !this.submitButton.classList.contains(CLASS_HIDE);
                     if (document.activeElement !== this.submitButton || !isSubmitVisible) {
                         event.preventDefault();
-                         // Trigger next step if next button is visible
-                         if (this.nextButton && !this.nextButton.classList.contains(CLASS_HIDE)) {
+                        // Trigger next step if next button is visible
+                        if (this.nextButton && !this.nextButton.classList.contains(CLASS_HIDE)) {
                             await handleNext();
-                         }
+                        }
                     }
                 }
             });
         }
 
         async goToNextStep() {
-             // Validate the current step before proceeding
-             if (!await this.validateStep(this.currentStepIndex)) {
-                 console.log("[DEBUG MultiStepForm] goToNextStep: Validation FAILED for step", this.currentStepIndex + 1);
-                 // Find the first invalid element and trigger native validation message
-                 const firstInvalid = find(':invalid, .input-error, .job-title-error-border', this.steps[this.currentStepIndex]);
-                 firstInvalid?.reportValidity();
-                 firstInvalid?.focus(); // Focus the first invalid element
-                 return; // Stop if validation fails
-             }
-             console.log("[DEBUG MultiStepForm] goToNextStep: Validation PASSED for step", this.currentStepIndex + 1);
+            // Validate the current step before proceeding
+            if (!await this.validateStep(this.currentStepIndex)) {
+                console.log("[DEBUG MultiStepForm] goToNextStep: Validation FAILED for step", this.currentStepIndex + 1);
+                // Find the first invalid element and trigger native validation message
+                const firstInvalid = find(':invalid, .input-error, .job-title-error-border', this.steps[this.currentStepIndex]);
+                firstInvalid?.reportValidity();
+                firstInvalid?.focus(); // Focus the first invalid element
+                return; // Stop if validation fails
+            }
+            console.log("[DEBUG MultiStepForm] goToNextStep: Validation PASSED for step", this.currentStepIndex + 1);
             // Move to the next step if not on the last step
             if (this.currentStepIndex < this.totalSteps - 1) {
                 this.goToStep(this.currentStepIndex + 1);
@@ -338,16 +363,16 @@
 
             // Handle initial load without transitions
             if (isInitialLoad) {
-                 this.steps.forEach((s, i) => {
-                     s.style.display = i === this.currentStepIndex ? '' : 'none';
-                     s.style.opacity = i === this.currentStepIndex ? '1' : '0';
-                     i === this.currentStepIndex ? addClass(s, CLASS_ACTIVE_STEP) : removeClass(s, CLASS_ACTIVE_STEP);
-                 });
-                 this.guides.forEach((g) => {
-                     const guideStep = parseInt(g.getAttribute(DATA_ATTR_GUIDE), 10);
-                     g.style.display = guideStep === targetStepNumber ? '' : 'none';
-                     g.style.opacity = guideStep === targetStepNumber ? '1' : '0';
-                 });
+                this.steps.forEach((s, i) => {
+                    s.style.display = i === this.currentStepIndex ? '' : 'none';
+                    s.style.opacity = i === this.currentStepIndex ? '1' : '0';
+                    i === this.currentStepIndex ? addClass(s, CLASS_ACTIVE_STEP) : removeClass(s, CLASS_ACTIVE_STEP);
+                });
+                this.guides.forEach((g) => {
+                    const guideStep = parseInt(g.getAttribute(DATA_ATTR_GUIDE), 10);
+                    g.style.display = guideStep === targetStepNumber ? '' : 'none';
+                    g.style.opacity = guideStep === targetStepNumber ? '1' : '0';
+                });
                 this.isTransitioning = false;
                 return;
             }
@@ -361,20 +386,20 @@
                 if (incomingGuide) {
                     fadeInElement(incomingGuide);
                 }
-                 // Allow next transition after fade-in completes
-                 setTimeout(() => {
-                     this.isTransitioning = false;
-                 }, TRANSITION_DURATION);
+                // Allow next transition after fade-in completes
+                setTimeout(() => {
+                    this.isTransitioning = false;
+                }, TRANSITION_DURATION);
             };
 
             // Fade out outgoing elements, then fade in incoming elements
             if (outgoingGuide) fadeOutElement(outgoingGuide);
             if (outgoingStep) {
-                 removeClass(outgoingStep, CLASS_ACTIVE_STEP);
-                 fadeOutElement(outgoingStep, fadeInNewElements);
+                removeClass(outgoingStep, CLASS_ACTIVE_STEP);
+                fadeOutElement(outgoingStep, fadeInNewElements);
             } else {
-                 // If no outgoing step (shouldn't happen after first step), just fade in
-                 fadeInNewElements();
+                // If no outgoing step (shouldn't happen after first step), just fade in
+                fadeInNewElements();
             }
         }
 
@@ -390,11 +415,11 @@
 
                 // Add active class to the current step indicator
                 if (!isNaN(indicatorStepNumber) && indicatorStepNumber === targetStepNumber) {
-                     addClass(indicator, CLASS_ACTIVE_INDICATOR);
+                    addClass(indicator, CLASS_ACTIVE_INDICATOR);
                 }
                 // Add reachable class to indicators for steps that have been reached or passed
                 else if (indicatorIndex <= this.maxReachedStepIndex) {
-                     addClass(indicator, CLASS_INDICATOR_REACHABLE);
+                    addClass(indicator, CLASS_INDICATOR_REACHABLE);
                 }
             });
         }
@@ -410,7 +435,7 @@
             }
             // Show/hide submit button
             if (this.submitButton) {
-                 this.currentStepIndex === this.totalSteps - 1 ? showElement(this.submitButton) : hideElement(this.submitButton);
+                this.currentStepIndex === this.totalSteps - 1 ? showElement(this.submitButton) : hideElement(this.submitButton);
             }
         }
 
@@ -439,9 +464,6 @@
 
             // --- Custom Validation for Job Title ---
             const jobTitleInput = find('#jobname', currentStepElement);
-            // Find the message element within the form or globally if not found within the form
-            const messageElement = find('#message', this.form) || find('#message');
-
 
             if (jobTitleInput) {
                 console.log('[DEBUG MultiStepForm] Found jobTitleInput in step', stepIndex + 1);
@@ -451,33 +473,24 @@
                 jobTitleInput.style.border = '';
                 removeClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
                 removeClass(jobTitleInput, CLASS_JOB_TITLE_SUCCESS);
-                if (messageElement) {
-                    messageElement.textContent = '';
-                    messageElement.style.color = '';
-                }
+                displayValidationMessage('', 'clear'); // *** GEÄNDERT: Nachricht löschen
 
                 // If job title is required but empty
                 if (!jobTitle && jobTitleInput.hasAttribute('required')) {
-                     jobTitleInput.style.border = '1px solid #D92415'; // Updated border for error
-                     addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
-                     if (messageElement) {
-                         messageElement.textContent = 'Jobtitel ist ein Pflichtfeld.';
-                         messageElement.style.color = 'red';
-                     }
-                     console.log('[DEBUG MultiStepForm] Job title is required but empty');
-                     return false;
+                    jobTitleInput.style.border = '1px solid #D92415';
+                    addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
+                    displayValidationMessage('Jobtitel ist ein Pflichtfeld.', 'error'); // *** GEÄNDERT: Nachricht anzeigen
+                    console.log('[DEBUG MultiStepForm] Job title is required but empty');
+                    return false;
                 }
 
                 // If job title is not empty, perform format and existence checks
                 if (jobTitle) {
                     // Check for invalid characters
                     if (!isValidJobTitle(jobTitle)) {
-                        jobTitleInput.style.border = '1px solid #D92415'; // Updated border for error
+                        jobTitleInput.style.border = '1px solid #D92415';
                         addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
-                        if (messageElement) {
-                            messageElement.textContent = 'Der Jobtitel enthält ungültige Zeichen.';
-                            messageElement.style.color = 'red';
-                        }
+                        displayValidationMessage('Der Jobtitel enthält ungültige Zeichen.', 'error'); // *** GEÄNDERT: Nachricht anzeigen
                         console.log('[DEBUG MultiStepForm] Job title invalid characters');
                         return false;
                     }
@@ -489,32 +502,23 @@
                         console.log('[DEBUG MultiStepForm] Job title exists result from Worker:', exists);
 
                         if (exists) {
-                            jobTitleInput.style.border = '1px solid #D92415'; // Updated border for error
+                            jobTitleInput.style.border = '1px solid #D92415';
                             addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
-                            if (messageElement) {
-                                messageElement.textContent = 'Dieser Jobtitel existiert bereits.';
-                                messageElement.style.color = 'red';
-                            }
+                            displayValidationMessage('Dieser Jobtitel existiert bereits.', 'error'); // *** GEÄNDERT: Nachricht anzeigen
                             console.log('[DEBUG MultiStepForm] Job title already exists');
                             return false; // Validation fails if title exists
                         } else {
-                            jobTitleInput.style.border = '1px solid #3DB927'; // Updated border for success
+                            jobTitleInput.style.border = '1px solid #3DB927';
                             addClass(jobTitleInput, CLASS_JOB_TITLE_SUCCESS);
-                            if (messageElement) {
-                                messageElement.textContent = 'Dieser Jobtitel ist verfügbar.';
-                                messageElement.style.color = 'green';
-                            }
+                            displayValidationMessage('Dieser Jobtitel ist verfügbar.', 'success'); // *** GEÄNDERT: Nachricht anzeigen
                             console.log('[DEBUG MultiStepForm] Job title available');
                             // Validation passes if title is available (and format is valid)
                         }
                     } catch (error) {
                         // Handle errors during the worker fetch
-                        jobTitleInput.style.border = '1px solid #D92415'; // Updated border for error
+                        jobTitleInput.style.border = '1px solid #D92415';
                         addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
-                        if (messageElement) {
-                            messageElement.textContent = 'Fehler bei der Überprüfung des Jobtitels.';
-                            messageElement.style.color = 'red';
-                        }
+                        displayValidationMessage('Fehler bei der Überprüfung des Jobtitels.', 'error'); // *** GEÄNDERT: Nachricht anzeigen
                         console.error('[DEBUG MultiStepForm] Error in checkJobTitleExists (Worker) during step validation:', error);
                         return false; // Validation fails on worker error
                     }
@@ -569,8 +573,10 @@
                 }
 
                 switch (type) {
-                    case 'currency': return `${value} €`;
-                    case 'textarea': return value.replace(/\n/g, '<br>'); // Replace newlines with <br> for HTML display
+                    case 'currency':
+                        return `${value} €`;
+                    case 'textarea':
+                        return value.replace(/\n/g, '<br>'); // Replace newlines with <br> for HTML display
                     case 'period':
                         const formattedStart = formatDateDDMMYYYY(value.start);
                         const formattedEnd = formatDateDDMMYYYY(value.end);
@@ -578,23 +584,25 @@
                         if (formattedStart) return `Ab ${formattedStart}`;
                         if (formattedEnd) return `Bis ${formattedEnd}`;
                         return null; // Return null if neither start nor end date is valid
-                    case 'date': return formatDateDDMMYYYY(value);
-                    default: return value; // Default to raw value for other types
+                    case 'date':
+                        return formatDateDDMMYYYY(value);
+                    default:
+                        return value; // Default to raw value for other types
                 }
             };
 
             // Helper to update the placeholder element's content
             const updatePlaceholder = (fieldName, displayValue) => {
-                 const placeholderElement = find(`[${DATA_ATTR_PREVIEW_PLACEHOLDER}="${fieldName}"]`, lastStepContainer);
-                 if (placeholderElement) {
-                     // Use innerHTML if the displayValue contains HTML tags (like <br> from textarea)
-                     if (typeof displayValue === 'string' && (displayValue.includes('<') || displayValue.includes('&'))) {
-                         placeholderElement.innerHTML = displayValue;
-                     } else {
-                         // Use textContent for plain text to prevent XSS
-                         placeholderElement.textContent = displayValue;
-                     }
-                 }
+                const placeholderElement = find(`[${DATA_ATTR_PREVIEW_PLACEHOLDER}="${fieldName}"]`, lastStepContainer);
+                if (placeholderElement) {
+                    // Use innerHTML if the displayValue contains HTML tags (like <br> from textarea)
+                    if (typeof displayValue === 'string' && (displayValue.includes('<') || displayValue.includes('&'))) {
+                        placeholderElement.innerHTML = displayValue;
+                    } else {
+                        // Use textContent for plain text to prevent XSS
+                        placeholderElement.textContent = displayValue;
+                    }
+                }
             };
 
             // --- Update Preview Fields ---
@@ -606,10 +614,10 @@
             // Job Address (Optional, depends on toggle)
             const addressFieldElement = find(`[${DATA_ATTR_PREVIEW_FIELD}="job-adress-optional"]`, this.form);
             let jobAddressDisplayVal = 'Remote'; // Default value if the optional field is disabled or empty
-             if (addressFieldElement && !addressFieldElement.disabled) {
-                 let jobAddressContent = getFieldValue('job-adress-optional');
-                 jobAddressDisplayVal = jobAddressContent === null ? 'Remote' : formatValue(jobAddressContent, 'textarea');
-             }
+            if (addressFieldElement && !addressFieldElement.disabled) {
+                let jobAddressContent = getFieldValue('job-adress-optional');
+                jobAddressDisplayVal = jobAddressContent === null ? 'Remote' : formatValue(jobAddressContent, 'textarea');
+            }
             updatePlaceholder('job-adress-optional', jobAddressDisplayVal);
 
             // Budget (Required)
@@ -619,7 +627,10 @@
             // Production Period (Start/End Dates - Required)
             let startDateVal = getFieldValue('startDate');
             let endDateVal = getFieldValue('endDate');
-            let periodFormattedVal = formatValue({ start: startDateVal, end: endDateVal }, 'period');
+            let periodFormattedVal = formatValue({
+                start: startDateVal,
+                end: endDateVal
+            }, 'period');
             updatePlaceholder('productionPeriod', periodFormattedVal || requiredPlaceholder);
 
             // Creator Category (Required)
@@ -650,10 +661,10 @@
             let jobOnlineVal = getFieldValue('jobOnline');
             let jobOnlineDisplay = requiredPlaceholder; // Default to required placeholder
             if (jobOnlineVal !== null) {
-                 const formattedDate = formatValue(jobOnlineVal, 'date');
-                 if (formattedDate) {
-                     jobOnlineDisplay = formattedDate;
-                 }
+                const formattedDate = formatValue(jobOnlineVal, 'date');
+                if (formattedDate) {
+                    jobOnlineDisplay = formattedDate;
+                }
             }
             updatePlaceholder('jobOnline', jobOnlineDisplay);
 
@@ -705,7 +716,9 @@
         const toggleControls = findAll(`[${DATA_ATTR_TOGGLE_CONTROL}]`);
         toggleControls.forEach(control => {
             const controlName = control.getAttribute(DATA_ATTR_TOGGLE_CONTROL);
-            if (!controlName) { return; }
+            if (!controlName) {
+                return;
+            }
 
             // Find related elements using the controlName
             const showHideTarget = find(`[${DATA_ATTR_TOGGLE_TARGET}="${controlName}"]`);
@@ -714,7 +727,9 @@
             const clearTargets = findAll(`[${DATA_ATTR_TOGGLE_CLEAR}="${controlName}"]`); // Fields to clear when toggle is off
 
             // If no targets are found, this control doesn't need initialization
-            if (!showHideTarget && !disableTargetInput && clearTargets.length === 0) { return; }
+            if (!showHideTarget && !disableTargetInput && clearTargets.length === 0) {
+                return;
+            }
 
             // Function to update the state of the targets based on the control's state
             const updateTargetsState = () => {
@@ -733,35 +748,41 @@
                         // Set a specific value if disableValue is provided
                         if (disableValue !== null) {
                             disableTargetInput.value = disableValue;
-                             // Trigger change event so other listeners (like preview) are updated
-                             disableTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            // Trigger change event so other listeners (like preview) are updated
+                            disableTargetInput.dispatchEvent(new Event('change', {
+                                bubbles: true
+                            }));
                         }
                     } else {
                         disableTargetInput.disabled = false;
                         removeClass(disableTargetInput, CLASS_DISABLED_BY_TOGGLE);
                         // Clear the specific value if it was set by the toggle
                         if (disableValue !== null && disableTargetInput.value === disableValue) {
-                             disableTargetInput.value = '';
-                             // Trigger change event
-                             disableTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            disableTargetInput.value = '';
+                            // Trigger change event
+                            disableTargetInput.dispatchEvent(new Event('change', {
+                                bubbles: true
+                            }));
                         }
                     }
                 }
 
                 // Handle clear targets when the control is NOT active
                 if (!isControlActive && clearTargets.length > 0) {
-                     clearTargets.forEach(fieldToClear => {
-                         // Clear different input types
-                         if (fieldToClear.type === 'checkbox' || fieldToClear.type === 'radio') {
-                             fieldToClear.checked = false;
-                         } else if (fieldToClear.tagName === 'SELECT') {
-                             fieldToClear.selectedIndex = 0; // Reset select to first option
-                         } else {
-                             fieldToClear.value = ''; // Clear text, number, textarea, etc.
-                         }
-                         // Trigger change event after clearing
-                         fieldToClear.dispatchEvent(new Event('change', { bubbles: true }));
-                     });
+                    clearTargets.forEach(fieldToClear => {
+                        // Clear different input types
+                        if (fieldToClear.type === 'checkbox' || fieldToClear.type === 'radio') {
+                            fieldToClear.checked = false;
+                        } else if (fieldToClear.tagName === 'SELECT') {
+                            fieldToClear.selectedIndex = 0; // Reset select to first option
+                        } else {
+                            fieldToClear.value = ''; // Clear text, number, textarea, etc.
+                        }
+                        // Trigger change event after clearing
+                        fieldToClear.dispatchEvent(new Event('change', {
+                            bubbles: true
+                        }));
+                    });
                 }
             };
 
@@ -776,88 +797,96 @@
      * Character Counter Logic
      * ========================================================================
      */
-     const initializeCharCounters = () => {
-         const counterInputs = findAll(`[${DATA_ATTR_CHAR_COUNT_INPUT}]`);
-         counterInputs.forEach(inputField => {
-             const counterId = inputField.getAttribute(DATA_ATTR_CHAR_COUNT_INPUT);
-             const maxLengthAttr = inputField.getAttribute(DATA_ATTR_CHAR_COUNT_MAX);
+    const initializeCharCounters = () => {
+        const counterInputs = findAll(`[${DATA_ATTR_CHAR_COUNT_INPUT}]`);
+        counterInputs.forEach(inputField => {
+            const counterId = inputField.getAttribute(DATA_ATTR_CHAR_COUNT_INPUT);
+            const maxLengthAttr = inputField.getAttribute(DATA_ATTR_CHAR_COUNT_MAX);
 
-             // Ensure both attributes are present
-             if (!counterId || maxLengthAttr === null) { return; }
+            // Ensure both attributes are present
+            if (!counterId || maxLengthAttr === null) {
+                return;
+            }
 
-             const maxLength = parseInt(maxLengthAttr, 10);
-             if (isNaN(maxLength)) { return; } // Ensure maxLength is a valid number
+            const maxLength = parseInt(maxLengthAttr, 10);
+            if (isNaN(maxLength)) {
+                return;
+            } // Ensure maxLength is a valid number
 
-             // Find the display element for this counter
-             const displayElement = find(`[${DATA_ATTR_CHAR_COUNT_DISPLAY}="${counterId}"]`);
-             if (!displayElement) { return; } // Ensure display element exists
+            // Find the display element for this counter
+            const displayElement = find(`[${DATA_ATTR_CHAR_COUNT_DISPLAY}="${counterId}"]`);
+            if (!displayElement) {
+                return;
+            } // Ensure display element exists
 
-             // Function to update the counter display
-             const updateCounter = () => {
-                 let currentLength = inputField.value.length;
+            // Function to update the counter display
+            const updateCounter = () => {
+                let currentLength = inputField.value.length;
 
-                 // Truncate the input if it exceeds max length
-                 if (currentLength > maxLength) {
-                     inputField.value = inputField.value.substring(0, maxLength);
-                     currentLength = maxLength; // Update currentLength after truncation
-                     displayElement.style.color = 'red'; // Indicate exceeded limit (shouldn't happen after truncation)
-                 } else {
-                     displayElement.style.color = ''; // Reset color
-                 }
+                // Truncate the input if it exceeds max length
+                if (currentLength > maxLength) {
+                    inputField.value = inputField.value.substring(0, maxLength);
+                    currentLength = maxLength; // Update currentLength after truncation
+                    displayElement.style.color = 'red'; // Indicate exceeded limit (shouldn't happen after truncation)
+                } else {
+                    displayElement.style.color = ''; // Reset color
+                }
 
-                 // Update the display text
-                 displayElement.textContent = `${currentLength}/${maxLength}`;
-             };
+                // Update the display text
+                displayElement.textContent = `${currentLength}/${maxLength}`;
+            };
 
-             // Add event listener and trigger initial update
-             inputField.addEventListener('input', updateCounter);
-             updateCounter(); // Initial call to set the counter on load
-         });
-     };
+            // Add event listener and trigger initial update
+            inputField.addEventListener('input', updateCounter);
+            updateCounter(); // Initial call to set the counter on load
+        });
+    };
 
-     /**
-      * ========================================================================
-      * Real-time Selection Display Logic
-      * ========================================================================
-      */
-     const initializeSelectionDisplays = () => {
-         // Find all elements that should display selections
-         const displayElements = findAll(`[${DATA_ATTR_SELECTION_DISPLAY}]`);
-         const defaultText = "Bitte auswählen"; // Default text when nothing is selected
+    /**
+     * ========================================================================
+     * Real-time Selection Display Logic
+     * ========================================================================
+     */
+    const initializeSelectionDisplays = () => {
+        // Find all elements that should display selections
+        const displayElements = findAll(`[${DATA_ATTR_SELECTION_DISPLAY}]`);
+        const defaultText = "Bitte auswählen"; // Default text when nothing is selected
 
-         displayElements.forEach(displayElement => {
-             // Get the group name from the display element
-             const groupName = displayElement.getAttribute(DATA_ATTR_SELECTION_DISPLAY);
-             if (!groupName) { return; } // Skip if group name is not set
+        displayElements.forEach(displayElement => {
+            // Get the group name from the display element
+            const groupName = displayElement.getAttribute(DATA_ATTR_SELECTION_DISPLAY);
+            if (!groupName) {
+                return;
+            } // Skip if group name is not set
 
-             // Find all checkbox inputs belonging to this group
-             const inputCheckboxes = findAll(`input[type="checkbox"][${DATA_ATTR_SELECTION_INPUT}="${groupName}"]`);
+            // Find all checkbox inputs belonging to this group
+            const inputCheckboxes = findAll(`input[type="checkbox"][${DATA_ATTR_SELECTION_INPUT}="${groupName}"]`);
 
-             if (inputCheckboxes.length === 0) {
-                 console.warn(`SelectionDisplay: No checkboxes found for group "${groupName}"`);
-                 return; // Skip if no checkboxes are found for this display
-             }
+            if (inputCheckboxes.length === 0) {
+                console.warn(`SelectionDisplay: No checkboxes found for group "${groupName}"`);
+                return; // Skip if no checkboxes are found for this display
+            }
 
-             // Function to update the display text based on selected checkboxes
-             const updateDisplay = () => {
-                 const selectedValues = Array.from(inputCheckboxes)
-                                              .filter(checkbox => checkbox.checked) // Filter for checked checkboxes
-                                              // Map to value or the text of the next sibling label
-                                              .map(checkbox => checkbox.value.trim() || checkbox.nextElementSibling?.textContent?.trim() || '');
+            // Function to update the display text based on selected checkboxes
+            const updateDisplay = () => {
+                const selectedValues = Array.from(inputCheckboxes)
+                    .filter(checkbox => checkbox.checked) // Filter for checked checkboxes
+                    // Map to value or the text of the next sibling label
+                    .map(checkbox => checkbox.value.trim() || checkbox.nextElementSibling?.textContent?.trim() || '');
 
-                 // Update the display element's text content
-                 displayElement.textContent = selectedValues.length > 0 ? selectedValues.join(', ') : defaultText;
-             };
+                // Update the display element's text content
+                displayElement.textContent = selectedValues.length > 0 ? selectedValues.join(', ') : defaultText;
+            };
 
-             // Add event listener to each checkbox in the group
-             inputCheckboxes.forEach(checkbox => {
-                 checkbox.addEventListener('change', updateDisplay);
-             });
+            // Add event listener to each checkbox in the group
+            inputCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', updateDisplay);
+            });
 
-             // Initial call to set the display on load
-             updateDisplay();
-         });
-     };
+            // Initial call to set the display on load
+            updateDisplay();
+        });
+    };
 
     /**
      * ========================================================================
@@ -928,11 +957,13 @@
             const today = new Date();
             // Set the input value to today's date in the correct format
             if (currentDatePickerInput) {
-                currentDatePickerInput.value = (currentDatePickerInput.type === 'date')
-                                             ? formatDateYYYYMMDD(today)
-                                             : formatDateDDMMYYYY(today);
-                 // Trigger change event on the input
-                 currentDatePickerInput.dispatchEvent(new Event('change', { bubbles: true }));
+                currentDatePickerInput.value = (currentDatePickerInput.type === 'date') ?
+                    formatDateYYYYMMDD(today) :
+                    formatDateDDMMYYYY(today);
+                // Trigger change event on the input
+                currentDatePickerInput.dispatchEvent(new Event('change', {
+                    bubbles: true
+                }));
             }
             hideCustomDatePicker(); // Hide the datepicker
         });
@@ -1004,18 +1035,18 @@
         const daysInMonth = new Date(year, month + 1, 0).getDate(); // Get number of days in the current month
 
         const today = new Date();
-        today.setHours(0,0,0,0); // Reset time for comparison
+        today.setHours(0, 0, 0, 0); // Reset time for comparison
 
         let selectedDate = null;
         // Parse the currently selected date from the input if available
         if (currentDatePickerInput && currentDatePickerInput.value) {
-             // Try parsing both YYYY-MM-DD (for type="date") and DD.MM.YYYY
-             selectedDate = parseDateDDMMYYYY(currentDatePickerInput.value) || new Date(currentDatePickerInput.value);
-             if (selectedDate && !isNaN(selectedDate.getTime())) {
-                 selectedDate.setHours(0,0,0,0); // Reset time for comparison
-             } else {
-                 selectedDate = null; // Invalid date in input
-             }
+            // Try parsing both YYYY-MM-DD (for type="date") and DD.MM.YYYY
+            selectedDate = parseDateDDMMYYYY(currentDatePickerInput.value) || new Date(currentDatePickerInput.value);
+            if (selectedDate && !isNaN(selectedDate.getTime())) {
+                selectedDate.setHours(0, 0, 0, 0); // Reset time for comparison
+            } else {
+                selectedDate = null; // Invalid date in input
+            }
         }
 
         // Add empty divs for days before the 1st of the month
@@ -1030,7 +1061,7 @@
             dayEl.textContent = day;
 
             const currentDate = new Date(year, month, day);
-            currentDate.setHours(0,0,0,0); // Reset time for comparison
+            currentDate.setHours(0, 0, 0, 0); // Reset time for comparison
 
             // Add classes for today and selected date
             if (currentDate.getTime() === today.getTime()) {
@@ -1049,8 +1080,10 @@
                     } else {
                         currentDatePickerInput.value = formatDateDDMMYYYY(currentDate);
                     }
-                     // Trigger change event on the input
-                     currentDatePickerInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    // Trigger change event on the input
+                    currentDatePickerInput.dispatchEvent(new Event('change', {
+                        bubbles: true
+                    }));
                 }
                 hideCustomDatePicker(); // Hide the datepicker after selection
             });
@@ -1073,7 +1106,7 @@
         if (inputElement.type === 'date' && initialDateStr) {
             const parts = initialDateStr.split('-');
             if (parts.length === 3) {
-                parsedDate = new Date(parts[0], parseInt(parts[1],10) - 1, parseInt(parts[2],10));
+                parsedDate = new Date(parts[0], parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
             }
         } else {
             parsedDate = parseDateDDMMYYYY(initialDateStr);
@@ -1117,18 +1150,18 @@
             // Prevent default behavior for focus and click to use custom datepicker
             input.addEventListener('focus', (event) => {
                 event.preventDefault(); // Prevent default focus behavior
-                 showCustomDatePicker(input); // Show custom datepicker
+                showCustomDatePicker(input); // Show custom datepicker
             });
-             input.addEventListener('click', (event) => {
-                 event.preventDefault(); // Prevent default click behavior
-                 showCustomDatePicker(input); // Show custom datepicker
-             });
-             // Optional: Add keydown listener to close on Escape
-             input.addEventListener('keydown', (event) => {
-                 if (event.key === 'Escape') {
-                     hideCustomDatePicker();
-                 }
-             });
+            input.addEventListener('click', (event) => {
+                event.preventDefault(); // Prevent default click behavior
+                showCustomDatePicker(input); // Show custom datepicker
+            });
+            // Optional: Add keydown listener to close on Escape
+            input.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    hideCustomDatePicker();
+                }
+            });
         });
     };
 
@@ -1141,7 +1174,7 @@
     // Simple debounce function to limit API calls
     function debounce(func, wait) {
         let timeout;
-        return function (...args) {
+        return function(...args) {
             const context = this;
             clearTimeout(timeout);
             timeout = setTimeout(() => func.apply(context, args), wait);
@@ -1161,8 +1194,12 @@
         try {
             const response = await fetch(JOB_TITLE_CHECK_WORKER_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', },
-                body: JSON.stringify({ jobTitle: title.trim() }), // Send trimmed title
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    jobTitle: title.trim()
+                }), // Send trimmed title
             });
 
             // Check if the response status indicates an error (e.g., 400, 500)
@@ -1194,35 +1231,27 @@
     // Initializes real-time validation for the job title input
     const initializeJobTitleValidation = () => {
         const jobTitleInput = document.getElementById('jobname');
-        // Find the message element, prioritizing one within the form if available
-        const messageElement = document.getElementById('message');
 
         if (!jobTitleInput) return; // Exit if the job title input is not found
 
         // Add an input event listener with debounce
-        jobTitleInput.addEventListener('input', debounce(async function (e) {
+        jobTitleInput.addEventListener('input', debounce(async function(e) {
             const jobTitle = e.target.value;
 
             // Clear previous validation states
             jobTitleInput.style.border = '';
             removeClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
             removeClass(jobTitleInput, CLASS_JOB_TITLE_SUCCESS);
-            if (messageElement) {
-                messageElement.textContent = '';
-                messageElement.style.color = '';
-            }
+            displayValidationMessage('', 'clear'); // *** GEÄNDERT: Nachricht löschen
 
             // Don't validate if the input is empty after trimming
             if (!jobTitle.trim()) return;
 
             // Perform local character validation first
             if (!isValidJobTitle(jobTitle)) {
-                jobTitleInput.style.border = '1px solid #D92415'; // Updated border for error
+                jobTitleInput.style.border = '1px solid #D92415';
                 addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
-                if (messageElement) {
-                    messageElement.textContent = 'Der Jobtitel enthält ungültige Zeichen.';
-                    messageElement.style.color = 'red';
-                }
+                displayValidationMessage('Der Jobtitel enthält ungültige Zeichen.', 'error'); // *** GEÄNDERT: Nachricht anzeigen
                 return; // Stop validation if characters are invalid
             }
 
@@ -1231,29 +1260,20 @@
                 const exists = await checkJobTitleExists(jobTitle);
 
                 if (exists) {
-                    jobTitleInput.style.border = '1px solid #D92415'; // Updated border for error
+                    jobTitleInput.style.border = '1px solid #D92415';
                     addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
-                    if (messageElement) {
-                        messageElement.textContent = 'Dieser Jobtitel existiert bereits.';
-                        messageElement.style.color = 'red';
-                    }
+                    displayValidationMessage('Dieser Jobtitel existiert bereits.', 'error'); // *** GEÄNDERT: Nachricht anzeigen
                 } else {
-                    jobTitleInput.style.border = '1px solid #3DB927'; // Updated border for success
+                    jobTitleInput.style.border = '1px solid #3DB927';
                     addClass(jobTitleInput, CLASS_JOB_TITLE_SUCCESS);
-                    if (messageElement) {
-                        messageElement.textContent = 'Dieser Jobtitel ist verfügbar.';
-                        messageElement.style.color = 'green';
-                    }
+                    displayValidationMessage('Dieser Jobtitel ist verfügbar.', 'success'); // *** GEÄNDERT: Nachricht anzeigen
                 }
             } catch (error) {
                 // Handle errors during the worker fetch
-                jobTitleInput.style.border = '1px solid #D92415'; // Updated border for error
+                jobTitleInput.style.border = '1px solid #D92415';
                 addClass(jobTitleInput, CLASS_JOB_TITLE_ERROR);
-                if (messageElement) {
-                    messageElement.textContent = 'Fehler bei der Überprüfung des Jobtitels.';
-                    messageElement.style.color = 'red';
-                }
-                 console.error('[DEBUG JobTitle] Error during real-time job title check:', error);
+                displayValidationMessage('Fehler bei der Überprüfung des Jobtitels.', 'error'); // *** GEÄNDERT: Nachricht anzeigen
+                console.error('[DEBUG JobTitle] Error during real-time job title check:', error);
             }
         }, 500)); // Debounce time: 500ms
     };
@@ -1275,11 +1295,11 @@
                     // Create and initialize a new MultiStepForm instance for each form
                     new MultiStepForm(formElement).init();
                 } catch (error) {
-                     console.error(`Failed to initialize MultiStepForm for: #${formElement.id || 'form without id'}`, error);
+                    console.error(`Failed to initialize MultiStepForm for: #${formElement.id || 'form without id'}`, error);
                 }
             });
         } else {
-             console.info('MultiStepForm: No forms with attribute ' + DATA_ATTR_FORM + ' found.');
+            console.info('MultiStepForm: No forms with attribute ' + DATA_ATTR_FORM + ' found.');
         }
 
         // Initialize Toggle Fields functionality

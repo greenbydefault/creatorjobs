@@ -1,8 +1,8 @@
 // form-submission-handler.js
-// VERSION 20.0: User-Facing Messages
-// - Replaces all technical status messages (e.g., "saving to Airtable")
-//   with generic, user-friendly feedback (e.g., "Job-Details werden gespeichert...").
-// - The goal is to improve the user experience and abstract away the backend implementation details.
+// VERSION 20.2: Admin Test Re-enabled & Airtable Error Logging
+// - Reverts the 'admin-test' flag to true for testing purposes.
+// - Adds a new function to log detailed errors to a separate Airtable table for debugging.
+// - Replaces all technical status messages with user-friendly feedback.
 
 (function() {
     'use strict';
@@ -12,6 +12,8 @@
     const AIRTABLE_WORKER_URL = 'https://airtable-job-post.oliver-258.workers.dev/';
     const AIRTABLE_MEMBER_SEARCH_ENDPOINT = AIRTABLE_WORKER_URL + '/search-member';
     const MEMBERSTACK_CREDIT_WORKER_URL = 'https://post-job-credit-update.oliver-258.workers.dev/';
+    // *** NEU: URL für den Airtable Error-Log-Worker. BITTE DURCH EIGENE URL ERSETZEN. ***
+    const AIRTABLE_LOG_WORKER_URL = 'https://your-airtable-log-worker.workers.dev/'; // <-- BITTE ERSETZEN
     const MAIN_FORM_ID = 'wf-form-post-job-form';
     const DATA_FIELD_ATTRIBUTE = 'data-preview-field';
     const SUPPORT_EMAIL = 'support@yourcompany.com';
@@ -255,7 +257,11 @@
     }
 
     function getFriendlyErrorFieldInfo(errorMessage) {
-        const result = { area: null, field: null, title: "Fehler bei Verarbeitung" };
+        const result = {
+            area: null,
+            field: null,
+            title: "Fehler bei Verarbeitung"
+        };
         const lowerErrorMessage = errorMessage.toLowerCase();
 
         if (lowerErrorMessage.includes("airtable fehler")) {
@@ -264,7 +270,7 @@
             const airtableFieldKeywords = Object.values(AIRTABLE_FIELD_MAPPINGS).map(name => name.toLowerCase());
             for (const fieldKeyword of airtableFieldKeywords) {
                 if (lowerErrorMessage.includes(fieldKeyword)) {
-                    const originalFieldName = Object.entries(AIRTABLE_FIELD_MAPPINGS).find(([key, val]) => val.toLowerCase() === fieldKeyword)?.[1];
+                    const originalFieldName = Object.entries(AIRTABLE_FIELD_MAPPINGS).find(([key, val]) => val.toLowerCase() === fieldKeyword) ? .[1];
                     result.field = originalFieldName || fieldKeyword;
                     break;
                 }
@@ -273,15 +279,26 @@
             result.area = "Webseite (Webflow)";
             result.title = lowerErrorMessage.includes("erstellungsfehler") ? "Fehler bei Job-Erstellung" : "Fehler bei Job-Aktualisierung";
             const webflowSlugToFriendlyName = {
-                'name': 'Job-Titel', 'job-title': 'Job-Titel', 'job-date-end': 'Job Online Bis Datum',
-                'job-payment': 'Bezahlung', 'anzahl-gesuchte-creator': 'Anzahl gesuchte Creator',
-                'anzahl-videos-2': 'Anzahl Videos', 'anzahl-bilder-2': 'Anzahl Bilder',
-                'deine-aufgaben': 'Aufgabenbeschreibung', 'job-beschreibung': 'Job-Steckbrief',
-                'location': 'Standort', 'previewtext': 'Vorschautext', 'brand-name': 'Markenname',
-                'contact-mail': 'Kontakt E-Mail', 'job-image': 'Job Bild',
-                'creator-follower': 'Creator Follower', 'creator-alter': 'Creator Alter',
-                'creator-geschlecht': 'Creator Geschlecht', 'video-dauer': 'Videodauer',
-                'format': 'Format', 'untertitel': 'Untertitel',
+                'name': 'Job-Titel',
+                'job-title': 'Job-Titel',
+                'job-date-end': 'Job Online Bis Datum',
+                'job-payment': 'Bezahlung',
+                'anzahl-gesuchte-creator': 'Anzahl gesuchte Creator',
+                'anzahl-videos-2': 'Anzahl Videos',
+                'anzahl-bilder-2': 'Anzahl Bilder',
+                'deine-aufgaben': 'Aufgabenbeschreibung',
+                'job-beschreibung': 'Job-Steckbrief',
+                'location': 'Standort',
+                'previewtext': 'Vorschautext',
+                'brand-name': 'Markenname',
+                'contact-mail': 'Kontakt E-Mail',
+                'job-image': 'Job Bild',
+                'creator-follower': 'Creator Follower',
+                'creator-alter': 'Creator Alter',
+                'creator-geschlecht': 'Creator Geschlecht',
+                'video-dauer': 'Videodauer',
+                'format': 'Format',
+                'untertitel': 'Untertitel',
                 'dauer-nutzungsrechte': 'Dauer Nutzungsrechte',
             };
             for (const slug in webflowSlugToFriendlyName) {
@@ -322,7 +339,7 @@
                         }
                     }
                 } else if (field.tagName === 'SELECT' && field.value) {
-                     multiSelectFields[fieldNameKey].push(field.value.trim());
+                    multiSelectFields[fieldNameKey].push(field.value.trim());
                 }
             } else {
                 switch (fieldNameKey) {
@@ -340,7 +357,7 @@
                                 formData[fieldNameKey] = field.value.trim();
                             }
                         } else if (field.tagName === 'SELECT') {
-                            value = field.options[field.selectedIndex]?.value.trim();
+                            value = field.options[field.selectedIndex] ? .value.trim();
                             if (value !== undefined && value !== null && value !== '') formData[fieldNameKey] = value;
                         } else if (field.type === 'number') {
                             const numVal = field.value.trim();
@@ -348,8 +365,7 @@
                         } else if (field.type === 'date') {
                             value = field.value;
                             if (value) formData[fieldNameKey] = value;
-                        }
-                        else {
+                        } else {
                             value = field.value.trim();
                             if (value !== '' || fieldNameKey === 'job-adress' || fieldNameKey === 'job-adress-optional') {
                                 formData[fieldNameKey] = value;
@@ -419,7 +435,7 @@
                     fileUUID = firstSuccessEntry.uuid || (firstSuccessEntry.fileInfo ? firstSuccessEntry.fileInfo.uuid : null);
                     console.log('Uploadcare API: Found UUID from successEntries:', fileUUID);
                 } else if (collectionState && collectionState.allEntries && collectionState.allEntries.length > 0) {
-                     const firstEntry = collectionState.allEntries.find(entry => entry.isSuccess);
+                    const firstEntry = collectionState.allEntries.find(entry => entry.isSuccess);
                     if (firstEntry) {
                         fileUUID = firstEntry.uuid || (firstEntry.fileInfo ? firstEntry.fileInfo.uuid : null);
                         console.log('Uploadcare API: Found UUID from allEntries (isSuccess=true):', fileUUID);
@@ -459,9 +475,9 @@
                         console.log('Uploadcare API: Final fallback to hidden input also failed (not found or no value).');
                     }
                 }
-            } else if (uploadcareAPI) { 
+            } else if (uploadcareAPI) {
                 console.error(`Uploadcare API: API instance was retrieved, but its getOutputCollectionState method is missing or not a function. Type is: ${typeof uploadcareAPI.getOutputCollectionState}`);
-            } else { 
+            } else {
                 console.error(`Uploadcare API: Failed to obtain API instance through all available methods. Cannot process Uploadcare file.`);
             }
         } catch (e) {
@@ -472,7 +488,7 @@
             formData['creatorLand'] = [formData['creatorLand']];
         }
         if (formData['creatorLang'] && !Array.isArray(formData['creatorLang'])) {
-             formData['creatorLang'] = [formData['creatorLang']];
+            formData['creatorLang'] = [formData['creatorLang']];
         }
 
         const memberstackInputs = findAll('input[data-ms-member]', formElement);
@@ -525,6 +541,57 @@
         return formData;
     }
 
+    /**
+     * *** NEU: Funktion zum Loggen von Fehlern in Airtable ***
+     * @param {object} logDetails - Ein Objekt mit den Fehlerdetails.
+     * @param {string} logDetails.errorMessage - Die detaillierte Fehlermeldung.
+     * @param {string} [logDetails.jobTitle] - Der Titel des Jobs.
+     * @param {string} [logDetails.jobAirtableId] - Die Airtable ID des Job-Records (falls erstellt).
+     * @param {string} [logDetails.memberAirtableId] - Die Airtable ID des Member-Records.
+     */
+    async function logErrorToAirtable(logDetails) {
+        if (!AIRTABLE_LOG_WORKER_URL || !AIRTABLE_LOG_WORKER_URL.startsWith('https')) {
+            console.warn('Airtable Log Worker URL ist nicht konfiguriert. Überspringe Fehler-Logging.');
+            return;
+        }
+
+        const payload = {
+            fields: {
+                "Error Log": logDetails.errorMessage || 'Keine Fehlermeldung vorhanden.',
+                "Name": logDetails.jobTitle || 'Kein Job-Titel vorhanden',
+                "Datum": new Date().toISOString()
+            }
+        };
+
+        if (logDetails.jobAirtableId) {
+            payload.fields["UUID"] = logDetails.jobAirtableId;
+        }
+        if (logDetails.memberAirtableId) {
+            // Airtable erwartet verknüpfte Datensätze als Array von Record-IDs
+            payload.fields["Member"] = [logDetails.memberAirtableId];
+        }
+
+        try {
+            const response = await fetch(AIRTABLE_LOG_WORKER_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                console.log('Fehler erfolgreich in Airtable geloggt.');
+            } else {
+                const errorData = await response.json().catch(() => ({}));
+                console.error('Fehler beim Loggen des Fehlers in Airtable.', response.status, errorData);
+            }
+        } catch (error) {
+            console.error('Netzwerkfehler beim Versuch, in Airtable zu loggen.', error);
+        }
+    }
+
+
     async function deleteAirtableRecord(airtableRecordId, reason = 'Unknown error') {
         if (!airtableRecordId) {
             console.warn('Keine Airtable Record ID zum Löschen vorhanden.');
@@ -534,8 +601,13 @@
         try {
             const response = await fetch(AIRTABLE_WORKER_URL + '/delete', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ recordId: airtableRecordId, reason: reason })
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    recordId: airtableRecordId,
+                    reason: reason
+                })
             });
             if (response.ok) {
                 console.log(`Airtable Record ${airtableRecordId} erfolgreich gelöscht.`);
@@ -550,7 +622,7 @@
 
     async function handleFormSubmit(event, testData = null) {
         if (event && typeof event.preventDefault === 'function') {
-             event.preventDefault();
+            event.preventDefault();
         }
         const form = find(`#${MAIN_FORM_ID}`);
         const submitButton = form ? form.querySelector('button[type="submit"], input[type="submit"]') : null;
@@ -594,8 +666,12 @@
         try {
             const memberSearchResponse = await fetch(AIRTABLE_MEMBER_SEARCH_ENDPOINT, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ webflowMemberId: webflowMemberIdOfTheSubmitter })
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    webflowMemberId: webflowMemberIdOfTheSubmitter
+                })
             });
             const memberSearchData = await memberSearchResponse.json();
             if (!memberSearchResponse.ok || !memberSearchData.memberRecordId) {
@@ -627,23 +703,28 @@
                 }
             }
             airtableJobDetails['job-posted-by'] = [airtableMemberRecordId];
+
+            // *** GEÄNDERT: 'admin-test' für Testzwecke wieder auf true gesetzt ***
             const adminTestAirtableKey = AIRTABLE_FIELD_MAPPINGS['admin-test'] || 'admin-test';
-            if (rawFormData.hasOwnProperty('admin-test') || AIRTABLE_FIELD_MAPPINGS.hasOwnProperty('admin-test')) {
-                 airtableJobDetails[adminTestAirtableKey] = rawFormData['admin-test'] === undefined ? true : rawFormData['admin-test'];
-            }
+            airtableJobDetails[adminTestAirtableKey] = rawFormData['admin-test'] === undefined ? true : rawFormData['admin-test'];
+
 
             // MODIFIED MESSAGE
             showCustomPopup('Deine Job-Details werden gespeichert...', 'loading', 'Speichervorgang');
             const airtableCreateResponse = await fetch(AIRTABLE_WORKER_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ jobDetails: airtableJobDetails })
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    jobDetails: airtableJobDetails
+                })
             });
             const airtableCreateResponseData = await airtableCreateResponse.json();
             if (!airtableCreateResponse.ok) {
                 throw new Error(`Airtable Fehler (${airtableCreateResponse.status}): ${airtableCreateResponseData.error?.message || JSON.stringify(airtableCreateResponseData)}`);
             }
-            airtableRecordId = airtableCreateResponseData.records?.[0]?.id;
+            airtableRecordId = airtableCreateResponseData.records ? .[0] ? .id;
             if (!airtableRecordId) {
                 throw new Error('Airtable Record ID nicht erhalten nach Erstellung.');
             }
@@ -670,10 +751,10 @@
                     continue;
                 }
                 if (formDataKey === 'jobImageUpload' && webflowSlug === 'job-image') {
-                    if (rawFormData[formDataKey]) { 
+                    if (rawFormData[formDataKey]) {
                         webflowFieldData[webflowSlug] = rawFormData[formDataKey];
                     }
-                    continue; 
+                    continue;
                 }
 
                 if (formValue === undefined || formValue === null || (typeof formValue === 'string' && formValue.trim() === '')) {
@@ -688,19 +769,19 @@
                 }
                 if (formDataKey === 'creatorCountOptional' && webflowSlug === 'creator-follower') {
                     const followerValueString = rawFormData['creatorCountOptional'];
-                    if (followerValueString && REFERENCE_MAPPINGS['creatorFollower']?.[followerValueString]) {
+                    if (followerValueString && REFERENCE_MAPPINGS['creatorFollower'] ? .[followerValueString]) {
                         webflowFieldData[webflowSlug] = REFERENCE_MAPPINGS['creatorFollower'][followerValueString];
                     } else if (followerValueString) {
                         console.warn(`Webflow: Kein Mapping für creatorFollower: '${followerValueString}'`);
                     }
                     continue;
                 }
-                if (REFERENCE_MAPPINGS[formDataKey]?.[formValue] && !Array.isArray(formValue)) {
+                if (REFERENCE_MAPPINGS[formDataKey] ? .[formValue] && !Array.isArray(formValue)) {
                     const mappedId = REFERENCE_MAPPINGS[formDataKey][formValue];
                     if (mappedId && !mappedId.startsWith('BITTE_WEBFLOW_ITEM_ID_') && !mappedId.startsWith('webflow_item_id_')) {
                         webflowFieldData[webflowSlug] = mappedId;
                     } else {
-                         webflowFieldData[webflowSlug] = formValue;
+                        webflowFieldData[webflowSlug] = formValue;
                     }
                 } else if (['startDate', 'endDate', 'jobOnline'].includes(formDataKey)) {
                     if (formValue) webflowFieldData[webflowSlug] = formValue;
@@ -710,38 +791,52 @@
                     webflowFieldData[webflowSlug] = String(formValue);
                 }
             }
+
+            // *** GEÄNDERT: 'admin-test' für Testzwecke wieder auf true gesetzt ***
             const adminTestWebflowSlug = WEBFLOW_FIELD_SLUG_MAPPINGS['admin-test'];
             if (adminTestWebflowSlug) {
                 webflowFieldData[adminTestWebflowSlug] = rawFormData['admin-test'] === undefined ? true : rawFormData['admin-test'];
             }
 
-            console.log('Sende an Webflow Worker (Create):', JSON.stringify({ fields: webflowFieldData }));
-            const webflowCreateResponse = await fetch(WEBFLOW_CMS_POST_WORKER_URL + '/', { 
+            console.log('Sende an Webflow Worker (Create):', JSON.stringify({
+                fields: webflowFieldData
+            }));
+            const webflowCreateResponse = await fetch(WEBFLOW_CMS_POST_WORKER_URL + '/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fields: webflowFieldData })
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    fields: webflowFieldData
+                })
             });
             const webflowCreateResponseData = await webflowCreateResponse.json().catch(() => ({}));
             if (!webflowCreateResponse.ok) {
                 throw new Error(`Webflow Erstellungsfehler (${webflowCreateResponse.status}): ${JSON.stringify(webflowCreateResponseData.error || webflowCreateResponseData.errors || webflowCreateResponseData)}`);
             }
-            webflowItemId = webflowCreateResponseData.id || webflowCreateResponseData.item?.id;
+            webflowItemId = webflowCreateResponseData.id || webflowCreateResponseData.item ? .id;
             if (!webflowItemId) {
                 throw new Error('Webflow Item ID nicht erhalten nach Erstellung.');
             }
             console.log('Webflow Item erstellt mit ID:', webflowItemId);
-            
+
             const jobSlugInWebflowToUpdate = WEBFLOW_FIELD_SLUG_MAPPINGS['airtableJobIdForWebflow'];
             let webflowItemUpdateSuccess = false;
             if (jobSlugInWebflowToUpdate) {
                 // MODIFIED MESSAGE
                 showCustomPopup('Letzte Anpassungen werden vorgenommen...', 'loading', 'Abschluss');
                 console.log(`Versuche Webflow Item ${webflowItemId} zu aktualisieren: Feld '${jobSlugInWebflowToUpdate}' = ${webflowItemId}`);
-                const updatePayload = { fields: { [jobSlugInWebflowToUpdate]: webflowItemId } };
+                const updatePayload = {
+                    fields: {
+                        [jobSlugInWebflowToUpdate]: webflowItemId
+                    }
+                };
                 try {
-                    const webflowItemUpdateResponse = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/${webflowItemId}`, { 
+                    const webflowItemUpdateResponse = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/${webflowItemId}`, {
                         method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
                         body: JSON.stringify(updatePayload)
                     });
                     const webflowItemUpdateResponseData = await webflowItemUpdateResponse.json().catch(() => ({}));
@@ -753,28 +848,35 @@
                         webflowItemUpdateSuccess = true;
                     }
                 } catch (updateError) {
-                     console.error(`Netzwerkfehler/Exception beim Aktualisieren des Feldes '${jobSlugInWebflowToUpdate}' im Webflow Item ${webflowItemId}:`, updateError);
+                    console.error(`Netzwerkfehler/Exception beim Aktualisieren des Feldes '${jobSlugInWebflowToUpdate}' im Webflow Item ${webflowItemId}:`, updateError);
                     throw new Error(`Webflow Update Exception für '${jobSlugInWebflowToUpdate}': ${updateError.message}`);
                 }
             } else {
                 console.warn("Kein Mapping für 'airtableJobIdForWebflow' gefunden, 'job-id' kann nicht in Webflow aktualisiert werden. Prozess wird fortgesetzt.");
-                webflowItemUpdateSuccess = true; 
+                webflowItemUpdateSuccess = true;
             }
 
             if (webflowItemUpdateSuccess) {
                 // MODIFIED MESSAGE
                 showCustomPopup('Die Veröffentlichung wird abgeschlossen...', 'loading', 'Finalisierung');
-                const airtableUpdatePayload = { recordId: airtableRecordId, webflowId: webflowItemId };
+                const airtableUpdatePayload = {
+                    recordId: airtableRecordId,
+                    webflowId: webflowItemId
+                };
                 const airtableWebflowIdField = AIRTABLE_FIELD_MAPPINGS['webflowItemIdFieldAirtable'];
                 if (airtableWebflowIdField) {
-                    airtableUpdatePayload.fieldsToUpdate = { [airtableWebflowIdField]: webflowItemId };
+                    airtableUpdatePayload.fieldsToUpdate = {
+                        [airtableWebflowIdField]: webflowItemId
+                    };
                 } else {
                     console.warn("Kein 'webflowItemIdFieldAirtable' in AIRTABLE_FIELD_MAPPINGS definiert. Webflow Item ID wird möglicherweise nicht in Airtable gespeichert.");
                 }
 
                 const airtableUpdateResponse = await fetch(AIRTABLE_WORKER_URL + '/update', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify(airtableUpdatePayload)
                 });
                 const airtableUpdateResponseData = await airtableUpdateResponse.json();
@@ -797,8 +899,12 @@
                     try {
                         const creditResponse = await fetch(MEMBERSTACK_CREDIT_WORKER_URL, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ memberId: memberstackId })
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                memberId: memberstackId
+                            })
                         });
                         const creditData = await creditResponse.json();
                         if (creditResponse.ok) {
@@ -821,6 +927,14 @@
         } catch (error) {
             console.error('Fehler im Hauptprozess:', error);
             const technicalSupportDetails = `Fehler: ${error.message}. Stack: ${error.stack}. RawData: ${JSON.stringify(rawFormData)}. AirtablePayload: ${JSON.stringify(airtableJobDetails)}. WebflowPayload: ${JSON.stringify(webflowFieldData)}.`;
+
+            // *** NEU: Fehler in Airtable loggen ***
+            logErrorToAirtable({
+                errorMessage: technicalSupportDetails,
+                jobTitle: rawFormData['job-title'] || rawFormData['projectName'],
+                jobAirtableId: airtableRecordId, // kann null sein
+                memberAirtableId: airtableMemberRecordId // kann null sein
+            });
 
             const friendlyInfo = getFriendlyErrorFieldInfo(error.message);
             let userDisplayMessage;
@@ -870,7 +984,10 @@
             showCustomPopup(`Test-Übermittlung: Hauptformular "${MAIN_FORM_ID}" nicht gefunden.`, 'error', 'Test Fehler');
             return;
         }
-        handleFormSubmit({ preventDefault: () => {}, target: mainForm }, testData);
+        handleFormSubmit({
+            preventDefault: () => {},
+            target: mainForm
+        }, testData);
     }
     window.testSubmissionWithData = testSubmissionWithData;
 
@@ -883,7 +1000,7 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            console.log(`Form Submission Handler v20.0 initialisiert für: #${MAIN_FORM_ID}`);
+            console.log(`Form Submission Handler v20.2 initialisiert für: #${MAIN_FORM_ID}`);
         } else {
             console.warn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }

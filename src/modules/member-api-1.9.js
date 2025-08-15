@@ -21,10 +21,6 @@
       return response.json();
     }
   };
-  const CACHE = window.WEBFLOW_API.cache || {
-    get: (key) => null,
-    set: (key, data) => {}
-  };
 
   class MemberApiService {
     /**
@@ -48,16 +44,6 @@
           DEBUG.log(`Kein User gefunden mit Webflow-ID ${webflowId}`, null, 'warn');
           return null;
         }
-
-        DEBUG.log(`User gefunden: ${user.id}`);
-        if (user.fieldData && user.fieldData['video-feed']) {
-          DEBUG.log(
-            `User hat video-feed Feld mit ${Array.isArray(user.fieldData['video-feed']) ? user.fieldData['video-feed'].length + ' Einträgen' : 'Wert ' + typeof user.fieldData['video-feed']}`
-          );
-        } else {
-          DEBUG.log('User hat KEIN video-feed Feld in fieldData!', null, 'warn');
-          DEBUG.log('Verfügbare Felder: ' + (user.fieldData ? Object.keys(user.fieldData).join(', ') : 'keine fieldData'));
-        }
         return user;
       } catch (error) {
         DEBUG.log(`Fehler beim Abrufen des Users mit Webflow-ID ${webflowId}`, error, 'error');
@@ -65,32 +51,50 @@
       }
     }
 
-    /** Videos aus dem Feed eines Users laden */
-    async getVideosFromUserFeed(user, videoApiService) {
-      if (!user || !user.fieldData) {
-        DEBUG.log('Keine fieldData im User-Profil gefunden', null, 'warn');
-        return [];
-      }
-      if (!user.fieldData['video-feed']) {
-        DEBUG.log('Keine Video-Referenzen im User-Profil gefunden', null, 'warn');
-        DEBUG.log('Verfügbare Felder: ' + Object.keys(user.fieldData).join(', '));
-        return [];
-      }
-      const videoFeed = user.fieldData['video-feed'];
-      DEBUG.log(`Video-Feed-Typ: ${Array.isArray(videoFeed) ? 'Array' : typeof videoFeed}`);
-      DEBUG.log(`Video-Feed-Länge: ${Array.isArray(videoFeed) ? videoFeed.length : 'N/A'}`);
-      if (!videoFeed || !Array.isArray(videoFeed) || videoFeed.length === 0) {
-        DEBUG.log('Leerer Video-Feed im User-Profil');
-        return [];
-      }
+    /**
+     * Prüft, ob das Video-Item bereits live (veröffentlicht) ist.
+     */
+    async isVideoLive(videoId) {
       try {
-        const videos = await videoApiService.fetchVideosInChunks(videoFeed);
-        DEBUG.log(`${videos.length} Videos geladen mit den nötigen Daten`);
-        return videos;
-      } catch (error) {
-        DEBUG.log('Fehler beim Laden der Videos', error, 'error');
-        return [];
+        const url = API.buildApiUrl(`/${CONFIG.VIDEOS_COLLECTION_ID}/items/${videoId}/live`);
+        const worker = API.buildWorkerUrl(url);
+        const res = await API.fetchApi(worker);
+        return !!res && !!res.id; // live-Version vorhanden
+      } catch (e) {
+        return false; // 404/validation ⇒ nicht live
       }
+    }
+
+    /**
+     * Veröffentlicht ein Video-Item, damit es in /live-Referenzen genutzt werden kann.
+     */
+    async publishVideo(videoId) {
+      const publishUrl = API.buildApiUrl(`/${CONFIG.VIDEOS_COLLECTION_ID}/items/publish`);
+      const worker = API.buildWorkerUrl(publishUrl);
+      const body = {
+        itemIds: [videoId],
+        // Optional: Domains, falls dein Worker diese erwartet. Ansonsten leer lassen.
+        publishToDomains: CONFIG.PUBLISH_TO_DOMAINS || []
+      };
+      DEBUG.log('Veröffentliche Video-Item (publish):', body);
+      return API.fetchApi(worker, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+    }
+
+    /**
+     * Stellt sicher, dass das referenzierte Video live ist (mit kleinem Retry-Backoff)
+     */
+    async ensureVideoLive(videoId, attempts = 3) {
+      for (let i = 0; i < attempts; i++) {
+        if (await this.isVideoLive(videoId)) return true;
+        try { await this.publishVideo(videoId); } catch (_) {}
+        // kleines Backoff, damit die Veröffentlichung serverseitig durchläuft
+        await new Promise(r => setTimeout(r, 500 * (i + 1)));
+      }
+      return this.isVideoLive(videoId);
     }
 
     /**
@@ -102,19 +106,23 @@
         return null;
       }
 
-      // Kurze techn. Wartezeit kann helfen, bis das neue Video-Item vom CMS indexiert ist
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
       try {
-        // 1) Member LIVE holen
+        // 1) Sicherstellen, dass das referenzierte Video live ist
+        const liveOk = await this.ensureVideoLive(videoId);
+        if (!liveOk) {
+          DEBUG.log(`Video ${videoId} ist nicht live – Abbruch, um Validation Error zu vermeiden`, null, 'error');
+          return null;
+        }
+
+        // 2) Member LIVE holen
         const member = await this.getUserByWebflowId(memberId);
         if (!member) {
           DEBUG.log(`Kein Member mit ID ${memberId} gefunden`, null, 'warn');
           return null;
         }
 
-        // 2) Video-Feed aktualisieren (lokal)
-        const currentVideoFeed = Array.isArray(member.fieldData['video-feed']) ? member.fieldData['video-feed'] : [];
+        // 3) Video-Feed aktualisieren (lokal)
+        const currentVideoFeed = Array.isArray(member.fieldData?.['video-feed']) ? member.fieldData['video-feed'] : [];
         let updatedVideoFeed;
         if (remove) {
           updatedVideoFeed = currentVideoFeed.filter((id) => id !== videoId);
@@ -128,7 +136,7 @@
           DEBUG.log(`Füge Video ${videoId} zum Feed des Members ${memberId} hinzu`);
         }
 
-        // 3) LIVE aktualisieren (PATCH /live)
+        // 4) LIVE aktualisieren (PATCH /live)
         const livePatchUrl = API.buildApiUrl(`/${CONFIG.MEMBERS_COLLECTION_ID}/items/${member.id}/live`);
         const livePatchWorker = API.buildWorkerUrl(livePatchUrl);
 
@@ -139,31 +147,12 @@
         };
 
         DEBUG.log('Sende Member-Update an Webflow LIVE API (PATCH):', { url: livePatchUrl, payload });
-        try {
-          const res = await API.fetchApi(livePatchWorker, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-          return res;
-        } catch (patchErr) {
-          DEBUG.log('PATCH /live fehlgeschlagen, versuche PUT /live...', patchErr, 'warn');
-
-          // 4) Fallback: kompletter PUT auf /live mit gemergten Feldern
-          const livePutUrl = livePatchUrl; // gleicher /live Pfad
-          const livePutWorker = API.buildWorkerUrl(livePutUrl);
-          const putPayload = {
-            isArchived: member.isArchived || false,
-            isDraft: member.isDraft || false,
-            fieldData: { ...member.fieldData, 'video-feed': updatedVideoFeed },
-          };
-
-          return await API.fetchApi(livePutWorker, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(putPayload),
-          });
-        }
+        const res = await API.fetchApi(livePatchWorker, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        return res;
       } catch (error) {
         DEBUG.log('Fehler beim Aktualisieren des Member Video-Feeds (live):', error, 'error');
         return null;

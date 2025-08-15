@@ -48,7 +48,7 @@
          * @param {boolean} enabled - true zum Aktivieren, false zum Deaktivieren
          */
         setEnabled(enabled) {
-            this.enabled = enabled;
+            this.enabled = false;
             console.log(`${this.prefix} Debugging ${enabled ? 'aktiviert' : 'deaktiviert'}`);
         }
     }

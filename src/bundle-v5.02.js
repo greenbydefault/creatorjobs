@@ -82,7 +82,7 @@
     cache: './modules/cache-1.6.js',
     apiService: './modules/api-service-1.0.js',
     videoApi: './modules/video-api-1.4.js',
-    memberApi: './modules/member-api-1.7.js',
+    memberApi: './modules/member-api-1.8.js',
     uploadcare: './modules/uploadcare-1.6.js',
     memberstack: './modules/memberstack-1.1.js',
     uiManager: './modules/ui-manager-1.9.js',

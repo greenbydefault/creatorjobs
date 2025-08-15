@@ -83,7 +83,7 @@
     apiService: './modules/api-service-1.0.js',
     videoApi: './modules/video-api-1.4.js',
     memberApi: './modules/member-api-1.7.js',
-    uploadcare: './modules/uploadcare-1.4.js',
+    uploadcare: './modules/uploadcare-1.5.js',
     memberstack: './modules/memberstack-1.1.js',
     uiManager: './modules/ui-manager-1.9.js',
     videoFeedApp: './modules/video-feed-app-1.6.js',

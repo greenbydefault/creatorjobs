@@ -13,15 +13,21 @@
     },
   };
 
+  const STATUS = {
+    IDLE: 'idle',
+    UPLOADING: 'uploading',
+    PROCESSING: 'processing',
+    READY: 'ready',
+  };
+
   class UploadcareService {
     constructor() {
-      // Uploadcare Datei-Informationen speichern
       this.fileUuid = '';
       this.fileCdnUrl = '';
-      this.processedUrl = ''; // URL mit Videokonvertierung
+      this.processedUrl = '';
       this.isVideoProcessing = false;
 
-      // ✅ Neu: Zustände zur Vermeidung doppelter Initialisierung / Logs
+      // Zustands-/Flicker-Guards
       this._initialized = false;
       this._pollingIntervalId = null;
       this._uploaderCtx = null;
@@ -29,22 +35,17 @@
       this._onProgress = null;
       this._onStart = null;
       this._onFailed = null;
-      this._lastLoggedUuid = null;
       this._lastProgress = -1;
+      this._lastLoggedUuid = null;
+      this._status = STATUS.IDLE;
     }
 
-    /**
-     * Idempotente Initialisierung des Uploadcare-Services
-     */
     init() {
-      // Prüfe, ob das Uploadcare-Element existiert
       const uploaderCtx = document.querySelector('[id*="uploaderCtx"]');
       if (!uploaderCtx) {
         DEBUG.log('Uploadcare Context Provider nicht gefunden', null, 'warn');
         return;
       }
-
-      // Falls bereits initialisiert, nicht erneut binden
       if (this._initialized) {
         DEBUG.log('UPLOADCARE.init() bereits ausgeführt – überspringe erneute Initialisierung');
         return;
@@ -53,31 +54,22 @@
       this._uploaderCtx = uploaderCtx;
       DEBUG.log('Uploadcare Context Provider gefunden', uploaderCtx);
 
-      // Event-Listener NUR EINMAL binden (und für späteres Entfernen speichern)
       this._onSuccess = this.handleUploadSuccess.bind(this);
       this._onProgress = this.handleUploadProgress.bind(this);
       this._onStart = () => DEBUG.log('Upload gestartet');
-      this._onFailed = (event) => {
-        DEBUG.log('Upload fehlgeschlagen:', event?.detail, 'error');
-      };
+      this._onFailed = (event) => DEBUG.log('Upload fehlgeschlagen:', event?.detail, 'error');
 
-      uploaderCtx.addEventListener('file-upload-success', this._onSuccess, { once: false });
-      uploaderCtx.addEventListener('file-upload-progress', this._onProgress, { once: false });
-      uploaderCtx.addEventListener('file-upload-start', this._onStart, { once: false });
-      uploaderCtx.addEventListener('file-upload-failed', this._onFailed, { once: false });
+      uploaderCtx.addEventListener('file-upload-success', this._onSuccess);
+      uploaderCtx.addEventListener('file-upload-progress', this._onProgress);
+      uploaderCtx.addEventListener('file-upload-start', this._onStart);
+      uploaderCtx.addEventListener('file-upload-failed', this._onFailed);
 
-      // Regelmäßige Überprüfung für Uploads – existierendes Intervall vorher stoppen
-      if (this._pollingIntervalId) {
-        clearInterval(this._pollingIntervalId);
-      }
+      if (this._pollingIntervalId) clearInterval(this._pollingIntervalId);
       this._pollingIntervalId = setInterval(() => this.getUploadcareFileInfo(), 1000);
 
       this._initialized = true;
     }
 
-    /**
-     * Optional: Aufräumen (z. B. beim Navigieren zwischen Seiten)
-     */
     destroy() {
       if (this._uploaderCtx) {
         if (this._onSuccess) this._uploaderCtx.removeEventListener('file-upload-success', this._onSuccess);
@@ -85,18 +77,14 @@
         if (this._onStart) this._uploaderCtx.removeEventListener('file-upload-start', this._onStart);
         if (this._onFailed) this._uploaderCtx.removeEventListener('file-upload-failed', this._onFailed);
       }
-      if (this._pollingIntervalId) {
-        clearInterval(this._pollingIntervalId);
-        this._pollingIntervalId = null;
-      }
+      if (this._pollingIntervalId) clearInterval(this._pollingIntervalId);
+      this._pollingIntervalId = null;
       this._initialized = false;
-      this._lastLoggedUuid = null;
+      this._status = STATUS.IDLE;
       this._lastProgress = -1;
+      this._lastLoggedUuid = null;
     }
 
-    /**
-     * Funktion zum Abrufen der Dateiinformationen
-     */
     getUploadcareFileInfo() {
       try {
         const uploaderCtx = this._uploaderCtx || document.querySelector('[id*="uploaderCtx"]');
@@ -106,14 +94,10 @@
         const state = api.getOutputCollectionState();
 
         if (state.successCount > 0) {
-          // Nimm die erste erfolgreiche Datei
           const fileEntry = state.successEntries[0];
-
-          // Speichere die UUID und CDN URL
           this.fileUuid = fileEntry.uuid || '';
           this.fileCdnUrl = fileEntry.cdnUrl || '';
 
-          // 🔇 Nur loggen, wenn sich die UUID ändert (verhindert Spam)
           if (this._lastLoggedUuid !== this.fileUuid) {
             DEBUG.log('Uploadcare Datei gefunden:', {
               name: fileEntry.name,
@@ -123,31 +107,30 @@
             this._lastLoggedUuid = this.fileUuid;
           }
 
-          // Aktualisiere versteckte Felder im Formular, falls vorhanden
           this.updateHiddenFields();
 
-          // Zeige Dateiinformationen an
-          this.displayFileInfo(fileEntry);
-
-          // 🛑 Polling stoppen – wir haben die Datei
-          if (this._pollingIntervalId) {
-            clearInterval(this._pollingIntervalId);
-            this._pollingIntervalId = null;
+          // Wenn wir NICHT in Verarbeitung sind, zeigen wir "bereit" an und stoppen Polling.
+          if (this._status !== STATUS.PROCESSING) {
+            this._status = STATUS.READY;
+            this.displayFileInfo(fileEntry, false, 'ready');
+            if (this._pollingIntervalId) {
+              clearInterval(this._pollingIntervalId);
+              this._pollingIntervalId = null;
+            }
           }
-
           return fileEntry;
         }
 
-        // Prüfe, ob derzeit eine Datei hochgeladen wird – Progress nur loggen/rendern, wenn er sich ändert
-        if (state.uploadingCount > 0) {
+        // Upload läuft – nur aktualisieren, wenn der Wert sich ändert
+        if (state.uploadingCount > 0 && this._status !== STATUS.PROCESSING && this._status !== STATUS.READY) {
           const uploadingFile = state.uploadingEntries[0];
-          const progress = Math.round(uploadingFile.uploadProgress || 0);
-          if (progress !== this._lastProgress) {
+          this._status = STATUS.UPLOADING;
+          const p = Math.round(uploadingFile.uploadProgress || 0);
+          if (p !== this._lastProgress) {
+            this._lastProgress = p;
             this.displayFileInfo(uploadingFile, true);
-            this._lastProgress = progress;
           }
         }
-
         return null;
       } catch (error) {
         DEBUG.log('Fehler beim Abrufen der Uploadcare-Dateiinformationen:', error, 'error');
@@ -155,18 +138,13 @@
       }
     }
 
-    /**
-     * Behandelt einen erfolgreichen Upload
-     */
     async handleUploadSuccess(event) {
       DEBUG.log('Uploadcare Upload erfolgreich:', event?.detail);
       const fileEntry = this.getUploadcareFileInfo();
 
-      // Deaktiviere den Submit-Button während der Konvertierung
       const form = document.getElementById(CONFIG.FORM_ID);
       const submitButton = form ? form.querySelector('input[type="submit"], button[type="submit"]') : null;
       let originalValue = '';
-
       if (submitButton) {
         submitButton.disabled = true;
         originalValue = submitButton.value || submitButton.textContent;
@@ -174,22 +152,31 @@
         else submitButton.textContent = 'Video wird optimiert...';
       }
 
-      // Wenn Video hochgeladen, starte die Konvertierung
       if (fileEntry && this.fileUuid) {
         try {
-          // Zeige Konvertierungsstatus an
+          this._status = STATUS.PROCESSING;
           this.isVideoProcessing = true;
-          this.displayFileInfo(fileEntry, false);
+          this.displayFileInfo(fileEntry, false, 'processing');
 
-          // Starte die Videokonvertierung mit dem Worker
           await this.convertVideoWithWorker(this.fileUuid);
 
-          // Aktualisiere die Anzeige nach der Konvertierung
-          this.displayFileInfo(fileEntry, false);
+          // Nach erfolgreicher Konvertierung
+          this.isVideoProcessing = false;
+          this._status = STATUS.READY;
+
+          // Keine weiteren Progress-Events gewünscht → Listener entfernen
+          if (this._uploaderCtx && this._onProgress) {
+            this._uploaderCtx.removeEventListener('file-upload-progress', this._onProgress);
+          }
+          if (this._pollingIntervalId) {
+            clearInterval(this._pollingIntervalId);
+            this._pollingIntervalId = null;
+          }
+
+          this.displayFileInfo(fileEntry, false, 'ready');
         } catch (error) {
           DEBUG.log('Fehler bei der Videokonvertierung:', error, 'error');
         } finally {
-          // Reaktiviere den Submit-Button
           if (submitButton) {
             submitButton.disabled = false;
             if (submitButton.type === 'submit') submitButton.value = originalValue;
@@ -199,29 +186,31 @@
       }
     }
 
-    /**
-     * Behandelt einen Upload-Fortschritt
-     */
-    handleUploadProgress(event) {
-      // Keine Log-Spam – nur aktualisieren, getUploadcareFileInfo verarbeitet Deduplikation
+    handleUploadProgress() {
+      // Nur pollen; Dedupe/Statuslogik übernimmt getUploadcareFileInfo
       this.getUploadcareFileInfo();
     }
 
     /**
      * Zeigt Dateiinformation an
+     * @param {Object} fileEntry
+     * @param {boolean} isUploading
+     * @param {('uploading'|'processing'|'ready')} forceState
      */
-    displayFileInfo(fileEntry, isUploading = false) {
+    displayFileInfo(fileEntry, isUploading = false, forceState = null) {
       const fileInfoDiv = document.getElementById('fileInfo');
       if (!fileInfoDiv) return;
 
+      const state = forceState || (isUploading ? 'uploading' : this._status);
       let statusText = '';
 
-      if (isUploading) {
+      if (state === 'uploading') {
         statusText = ` Wird hochgeladen (${Math.round(fileEntry.uploadProgress || 0)}%)... `;
-      } else if (this.isVideoProcessing) {
+      } else if (state === 'processing') {
         statusText = ' Video wird optimiert... ';
       } else {
-        statusText = ' Erfolgreich hochgeladen ';
+        // FINALER, STABILER STATUS
+        statusText = ' Zum Upload bereit ';
       }
 
       fileInfoDiv.innerHTML = `
@@ -233,9 +222,6 @@
       `;
     }
 
-    /**
-     * Formatiert die Dateigröße
-     */
     formatFileSize(bytes) {
       if (bytes === 0) return '0 Bytes';
       const k = 1024;
@@ -244,22 +230,16 @@
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    /**
-     * Aktualisiert versteckte Felder im Formular
-     */
     updateHiddenFields() {
       const form = document.getElementById(CONFIG.FORM_ID);
       if (!form) return;
 
-      // Suche nach versteckten Feldern für die UUID und CDN URL
       const videoLinkInput = form.querySelector("input[name='Video Link'], input[name='VideoLink'], input[name='video-link']");
       if (videoLinkInput) {
-        // Bevorzuge die konvertierte URL, falls vorhanden
         videoLinkInput.value = this.processedUrl || this.fileCdnUrl;
         DEBUG.log("Verstecktes Feld 'Video Link' aktualisiert:", videoLinkInput.value);
       }
 
-      // Optional: Feld für die UUID finden und aktualisieren
       const uuidInput = form.querySelector("input[name='File UUID'], input[name='FileUUID'], input[name='file-uuid']");
       if (uuidInput) {
         uuidInput.value = this.fileUuid;
@@ -267,130 +247,82 @@
       }
     }
 
-    /**
-     * Funktion zur Videokonvertierung mit dem Cloudflare Worker
-     */
     async convertVideoWithWorker(uuid) {
       if (!uuid) {
         DEBUG.log('Keine UUID für Videokonvertierung vorhanden', null, 'warn');
         return null;
       }
-
       try {
-        this.isVideoProcessing = true;
         DEBUG.log('Starte Videokonvertierung für UUID:', uuid);
-
-        // Sende Anfrage an den Cloudflare Worker
         const response = await fetch(CONFIG.VIDEO_CONVERT_WORKER_URL, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            uuid: uuid,
-            format: 'mp4',
-            quality: 'lighter',
-            size: '360x640',
-          }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uuid, format: 'mp4', quality: 'lighter', size: '360x640' }),
         });
-
-        // Verarbeite die Antwort
-        if (!response.ok) {
-          throw new Error(`Worker-Fehler: ${response.status}`);
-        }
-
+        if (!response.ok) throw new Error(`Worker-Fehler: ${response.status}`);
         const data = await response.json();
         DEBUG.log('Worker-Antwort erhalten:', data);
 
-        this.isVideoProcessing = false;
-
         if (data.status === 'success' && data.result) {
-          // Verarbeite die Antwort, wobei result ein Array sein kann
           let convertedUuid = null;
-
           if (Array.isArray(data.result) && data.result.length > 0) {
-            const firstResult = data.result[0];
-            if (firstResult && firstResult.uuid) {
-              convertedUuid = firstResult.uuid;
-            }
+            const first = data.result[0];
+            if (first && first.uuid) convertedUuid = first.uuid;
           } else if (data.result.uuid) {
             convertedUuid = data.result.uuid;
           }
-
           if (convertedUuid) {
             DEBUG.log('Videokonvertierung erfolgreich, UUID:', convertedUuid);
             this.processedUrl = `https://ucarecdn.com/${convertedUuid}/`;
             this.updateHiddenFields();
             return { uuid: convertedUuid };
-          } else {
-            DEBUG.log('Keine UUID in der Worker-Antwort gefunden:', data, 'warn');
-            return null;
           }
-        } else {
-          DEBUG.log('Unerwartetes Format der Worker-Antwort:', data, 'warn');
+          DEBUG.log('Keine UUID in der Worker-Antwort gefunden:', data, 'warn');
           return null;
         }
+        DEBUG.log('Unerwartetes Format der Worker-Antwort:', data, 'warn');
+        return null;
       } catch (error) {
-        this.isVideoProcessing = false;
         DEBUG.log('Fehler bei der Videokonvertierung:', error, 'error');
         return null;
       }
     }
 
-    /**
-     * Extrahiert die Uploadcare-UUID aus einer URL
-     */
     extractUploadcareUuid(videoUrl) {
       if (!videoUrl) return null;
-
-      // Überprüfen, ob es eine Uploadcare-URL ist
       if (videoUrl.includes('ucarecdn.com')) {
-        const uuidMatch = videoUrl.match(/ucarecdn\.com\/([a-f0-9-]+)/i);
-        if (uuidMatch && uuidMatch[1]) return uuidMatch[1];
+        const m = videoUrl.match(/ucarecdn\.com\/([a-f0-9-]+)/i);
+        if (m && m[1]) return m[1];
       }
-
-      // Überprüfe auf einen direkten Uploadcare-Dateilink (cdnX.uploadcare)
       if (videoUrl.includes('uploadcare')) {
-        const uuidMatch = videoUrl.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
-        if (uuidMatch && uuidMatch[1]) return uuidMatch[1];
+        const m = videoUrl.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+        if (m && m[1]) return m[1];
       }
-
       DEBUG.log('Konnte keine Uploadcare UUID aus der URL extrahieren:', videoUrl, 'warn');
       return null;
     }
 
-    /**
-     * Löscht eine Datei von Uploadcare
-     */
     async deleteUploadcareFile(fileUuid) {
       if (!fileUuid) {
         DEBUG.log('Keine Uploadcare-UUID zum Löschen angegeben', null, 'error');
         return false;
       }
-
       if (CONFIG.SKIP_UPLOADCARE_DELETE) {
         DEBUG.log(`SKIP_UPLOADCARE_DELETE ist aktiviert. Überspringe Löschung von ${fileUuid}`, null, 'warn');
         return true;
       }
-
       try {
         DEBUG.log(`Lösche Uploadcare-Datei mit UUID: ${fileUuid}`);
-
         const response = await fetch(CONFIG.UPLOADCARE_WORKER_URL, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/vnd.uploadcare-v0.7+json',
-          },
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/vnd.uploadcare-v0.7+json' },
           body: JSON.stringify({ uuid: fileUuid, action: 'delete' }),
         });
-
         if (!response.ok) {
           const errorText = await response.text();
           DEBUG.log('Fehler beim Löschen der Uploadcare-Datei:', `${response.status} ${errorText}`, 'error');
           return false;
         }
-
         DEBUG.log(`Uploadcare-Datei ${fileUuid} erfolgreich gelöscht`);
         return true;
       } catch (error) {
@@ -400,6 +332,5 @@
     }
   }
 
-  // Singleton-Instanz im globalen Namespace registrieren
   window.WEBFLOW_API.UPLOADCARE = new UploadcareService();
 })();

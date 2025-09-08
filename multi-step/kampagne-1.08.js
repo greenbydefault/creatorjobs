@@ -1,9 +1,18 @@
 // form-submission-handler.js
-// VERSION 21.1: Complete Working Script with Webflow Member Update
-// Komplett funktionsfähiges Script - direkt kopieren und verwenden
+// VERSION 21.3: Complete Working Script with Full Debug Toggle Implementation
+// VOLLSTÄNDIG korrigiertes Script mit funktionierendem Debug-System
 
 (function() {
     'use strict';
+
+    // === DEBUG CONFIGURATION ===
+    // HIER ÄNDERN: true für Development, false für Produktion
+    const DEBUG_MODE = false;
+    
+    // Debug-Funktionen - nur aktiv wenn DEBUG_MODE = true
+    const debugLog = DEBUG_MODE ? console.log.bind(console) : () => {};
+    const debugWarn = DEBUG_MODE ? console.warn.bind(console) : () => {};
+    const debugError = DEBUG_MODE ? console.error.bind(console) : () => {};
 
     // --- Konfiguration ---
     const WEBFLOW_CMS_POST_WORKER_URL = 'https://late-meadow-00bc.oliver-258.workers.dev';
@@ -187,7 +196,7 @@
             try {
                 return await operation();
             } catch (error) {
-                console.warn(`Attempt ${attempt} failed:`, error.message);
+                debugWarn(`Attempt ${attempt} failed:`, error.message);
                 if (attempt === maxRetries) {
                     throw error;
                 }
@@ -203,9 +212,9 @@
         const mailIconLink = find(MAIL_ERROR_ATTR);
 
         if (!popup || !popupTitle || !popupMessage || !mailIconLink) {
-            console.error("Popup-Elemente nicht gefunden!");
-            console.log(`Status: ${type.toUpperCase()} - Titel: ${title} - Nachricht: ${message}`);
-            if (supportDetails) console.log('Support Details:', supportDetails);
+            debugError("Popup-Elemente nicht gefunden!");
+            debugLog(`Status: ${type.toUpperCase()} - Titel: ${title} - Nachricht: ${message}`);
+            if (supportDetails) debugLog('Support Details:', supportDetails);
             return;
         }
         
@@ -272,7 +281,7 @@
         }
         
         if (isNaN(dateObj.getTime())) {
-            console.warn('Ungültiges Datumsformat für ISO-Konvertierung:', dateString);
+            debugWarn('Ungültiges Datumsformat für ISO-Konvertierung:', dateString);
             return null;
         }
         
@@ -407,49 +416,49 @@
             }
         }
 
-        // Uploadcare handling (existing code maintained)
+        // Uploadcare handling
         let uploadcareAPI = null;
         try {
-            console.log(`[Uploadcare Debug] Attempting to get API via document.querySelector('#${UPLOADCARE_PROVIDER_ID}').getAPI()`);
+            debugLog(`[Uploadcare Debug] Attempting to get API via document.querySelector('#${UPLOADCARE_PROVIDER_ID}').getAPI()`);
             const uploaderCtxEl = find(`#${UPLOADCARE_PROVIDER_ID}`);
             if (uploaderCtxEl && typeof uploaderCtxEl.getAPI === 'function') {
                 uploadcareAPI = uploaderCtxEl.getAPI();
                 if (uploadcareAPI) {
-                    console.log('[Uploadcare Debug] API instance retrieved via #uploaderctx.getAPI():', uploadcareAPI);
+                    debugLog('[Uploadcare Debug] API instance retrieved via #uploaderctx.getAPI():', uploadcareAPI);
                 } else {
-                    console.warn('[Uploadcare Debug] #uploaderctx.getAPI() was callable but did not return an API instance.');
+                    debugWarn('[Uploadcare Debug] #uploaderctx.getAPI() was callable but did not return an API instance.');
                 }
             } else if (uploaderCtxEl) {
-                console.warn(`[Uploadcare Debug] Element with ID #${UPLOADCARE_PROVIDER_ID} was found, but its getAPI method is NOT a function. Type is: ${typeof uploaderCtxEl.getAPI}.`);
+                debugWarn(`[Uploadcare Debug] Element with ID #${UPLOADCARE_PROVIDER_ID} was found, but its getAPI method is NOT a function. Type is: ${typeof uploaderCtxEl.getAPI}.`);
             } else {
-                console.warn(`[Uploadcare Debug] Element with ID #${UPLOADCARE_PROVIDER_ID} was NOT FOUND in the document.`);
+                debugWarn(`[Uploadcare Debug] Element with ID #${UPLOADCARE_PROVIDER_ID} was NOT FOUND in the document.`);
             }
 
             if (!uploadcareAPI) {
-                console.log('[Uploadcare Debug] Attempting to get API via window.UPLOADCARE_BLOCKS.get() as fallback 1');
+                debugLog('[Uploadcare Debug] Attempting to get API via window.UPLOADCARE_BLOCKS.get() as fallback 1');
                 if (window.UPLOADCARE_BLOCKS && typeof window.UPLOADCARE_BLOCKS.get === 'function') {
                     uploadcareAPI = window.UPLOADCARE_BLOCKS.get(UPLOADCARE_CTX_NAME);
                     if (uploadcareAPI) {
-                        console.log('[Uploadcare Debug] API instance retrieved via window.UPLOADCARE_BLOCKS.get():', uploadcareAPI);
+                        debugLog('[Uploadcare Debug] API instance retrieved via window.UPLOADCARE_BLOCKS.get():', uploadcareAPI);
                     } else {
-                        console.warn('[Uploadcare Debug] window.UPLOADCARE_BLOCKS.get() did NOT return an API instance for ctx-name:', UPLOADCARE_CTX_NAME);
+                        debugWarn('[Uploadcare Debug] window.UPLOADCARE_BLOCKS.get() did NOT return an API instance for ctx-name:', UPLOADCARE_CTX_NAME);
                     }
                 } else {
-                    console.error('[Uploadcare Debug] CRITICAL: window.UPLOADCARE_BLOCKS or window.UPLOADCARE_BLOCKS.get is not available.');
+                    debugError('[Uploadcare Debug] CRITICAL: window.UPLOADCARE_BLOCKS or window.UPLOADCARE_BLOCKS.get is not available.');
                 }
             }
 
             if (!uploadcareAPI) {
-                console.warn('[Uploadcare Debug] Falling back to DOM query for uploader element (uc-file-uploader-regular) as fallback 2.');
+                debugWarn('[Uploadcare Debug] Falling back to DOM query for uploader element (uc-file-uploader-regular) as fallback 2.');
                 const uploaderEl = find(`uc-file-uploader-regular[ctx-name="${UPLOADCARE_CTX_NAME}"]`, formElement);
-                console.log('[Uploadcare Debug] Uploader element (uc-file-uploader-regular) found via DOM query:', uploaderEl);
+                debugLog('[Uploadcare Debug] Uploader element (uc-file-uploader-regular) found via DOM query:', uploaderEl);
                 if (uploaderEl && typeof uploaderEl.getAPI === 'function') {
                     uploadcareAPI = uploaderEl.getAPI();
-                    console.log('[Uploadcare Debug] API instance retrieved via uc-file-uploader-regular.getAPI():', uploadcareAPI);
+                    debugLog('[Uploadcare Debug] API instance retrieved via uc-file-uploader-regular.getAPI():', uploadcareAPI);
                 } else if (uploaderEl) {
-                    console.error(`[Uploadcare Debug] uc-file-uploader-regular element WAS FOUND via DOM query, but its getAPI method is NOT a function. Type is: ${typeof uploaderEl.getAPI}.`);
+                    debugError(`[Uploadcare Debug] uc-file-uploader-regular element WAS FOUND via DOM query, but its getAPI method is NOT a function. Type is: ${typeof uploaderEl.getAPI}.`);
                 } else {
-                    console.error(`[Uploadcare Debug] uc-file-uploader-regular element with ctx-name "${UPLOADCARE_CTX_NAME}" was NOT FOUND via DOM query.`);
+                    debugError(`[Uploadcare Debug] uc-file-uploader-regular element with ctx-name "${UPLOADCARE_CTX_NAME}" was NOT FOUND via DOM query.`);
                 }
             }
 
@@ -460,55 +469,55 @@
                 if (collectionState && collectionState.successEntries && collectionState.successEntries.length > 0) {
                     const firstSuccessEntry = collectionState.successEntries[0];
                     fileUUID = firstSuccessEntry.uuid || (firstSuccessEntry.fileInfo ? firstSuccessEntry.fileInfo.uuid : null);
-                    console.log('Uploadcare API: Found UUID from successEntries:', fileUUID);
+                    debugLog('Uploadcare API: Found UUID from successEntries:', fileUUID);
                 } else if (collectionState && collectionState.allEntries && collectionState.allEntries.length > 0) {
                     const firstEntry = collectionState.allEntries.find(entry => entry.isSuccess);
                     if (firstEntry) {
                         fileUUID = firstEntry.uuid || (firstEntry.fileInfo ? firstEntry.fileInfo.uuid : null);
-                        console.log('Uploadcare API: Found UUID from allEntries (isSuccess=true):', fileUUID);
+                        debugLog('Uploadcare API: Found UUID from allEntries (isSuccess=true):', fileUUID);
                     } else {
-                        console.log('Uploadcare API: No entry with isSuccess=true in allEntries.');
+                        debugLog('Uploadcare API: No entry with isSuccess=true in allEntries.');
                     }
                 } else {
-                    console.log('Uploadcare API: No successful or available entries found in collection state.');
+                    debugLog('Uploadcare API: No successful or available entries found in collection state.');
                 }
 
                 if (fileUUID) {
                     const baseCdnUrl = `https://ucarecdn.com/${fileUUID}/`;
                     const transformedUrl = `${baseCdnUrl}-/preview/320x320/-/format/auto/-/quality/smart/`;
                     formData['jobImageUpload'] = transformedUrl;
-                    console.log('Uploadcare Image URL (from API) prepared for Airtable/Webflow:', transformedUrl);
+                    debugLog('Uploadcare Image URL (from API) prepared for Airtable/Webflow:', transformedUrl);
                 } else {
-                    console.warn('Uploadcare API: Could not retrieve a valid file UUID via any API method. Attempting final fallback to hidden input.');
+                    debugWarn('Uploadcare API: Could not retrieve a valid file UUID via any API method. Attempting final fallback to hidden input.');
                     const uploadcareHiddenInput = find(`input[name="${UPLOADCARE_CTX_NAME}"]`, formElement);
                     if (uploadcareHiddenInput && uploadcareHiddenInput.value && uploadcareHiddenInput.value.trim() !== '') {
                         let cdnLink = uploadcareHiddenInput.value.trim();
-                        console.warn('Uploadcare API: Falling back to hidden input value:', cdnLink);
+                        debugWarn('Uploadcare API: Falling back to hidden input value:', cdnLink);
                         if (cdnLink.startsWith('https://ucarecdn.com/') && !cdnLink.endsWith('/')) {
                             cdnLink += '/';
                         } else if (!cdnLink.startsWith('https://ucarecdn.com/')) {
                             if (cdnLink.includes('~')) {
                                 const groupBaseUUID = cdnLink.split('~')[0];
                                 cdnLink = `https://ucarecdn.com/${groupBaseUUID}/nth/0/`;
-                                console.warn('Uploadcare API: Hidden input seems to be a group UUID, attempting to use first file:', cdnLink);
+                                debugWarn('Uploadcare API: Hidden input seems to be a group UUID, attempting to use first file:', cdnLink);
                             } else {
                                 cdnLink = `https://ucarecdn.com/${cdnLink}/`;
                             }
                         }
                         const transformedUrl = `${cdnLink}-/preview/320x320/-/format/auto/-/quality/smart/`;
                         formData['jobImageUpload'] = transformedUrl;
-                        console.warn('Uploadcare Image URL (from fallback input) prepared:', transformedUrl);
+                        debugWarn('Uploadcare Image URL (from fallback input) prepared:', transformedUrl);
                     } else {
-                        console.log('Uploadcare API: Final fallback to hidden input also failed (not found or no value).');
+                        debugLog('Uploadcare API: Final fallback to hidden input also failed (not found or no value).');
                     }
                 }
             } else if (uploadcareAPI) {
-                console.error(`Uploadcare API: API instance was retrieved, but its getOutputCollectionState method is missing or not a function. Type is: ${typeof uploadcareAPI.getOutputCollectionState}`);
+                debugError(`Uploadcare API: API instance was retrieved, but its getOutputCollectionState method is missing or not a function. Type is: ${typeof uploadcareAPI.getOutputCollectionState}`);
             } else {
-                console.error(`Uploadcare API: Failed to obtain API instance through all available methods. Cannot process Uploadcare file.`);
+                debugError(`Uploadcare API: Failed to obtain API instance through all available methods. Cannot process Uploadcare file.`);
             }
         } catch (e) {
-            console.error('Error during Uploadcare API integration:', e);
+            debugError('Error during Uploadcare API integration:', e);
         }
 
         // Data normalization
@@ -572,18 +581,18 @@
             formData['creatorCountOptional'] = formData['creatorFollower'];
         }
 
-        console.log('Gesammelte Formulardaten (rawFormData):', JSON.parse(JSON.stringify(formData)));
+        debugLog('Gesammelte Formulardaten (rawFormData):', JSON.parse(JSON.stringify(formData)));
         return formData;
     }
 
     // Enhanced delete function with better error handling
     async function deleteAirtableRecord(airtableRecordId, reason = 'Unknown error') {
         if (!airtableRecordId) {
-            console.warn('Keine Airtable Record ID zum Löschen vorhanden.');
+            debugWarn('Keine Airtable Record ID zum Löschen vorhanden.');
             return false;
         }
         
-        console.log(`Versuche Airtable Record ${airtableRecordId} zu löschen wegen: ${reason}`);
+        debugLog(`Versuche Airtable Record ${airtableRecordId} zu löschen wegen: ${reason}`);
         
         try {
             const response = await retryOperation(async () => {
@@ -606,10 +615,10 @@
                 return deleteResponse;
             });
             
-            console.log(`Airtable Record ${airtableRecordId} erfolgreich gelöscht.`);
+            debugLog(`Airtable Record ${airtableRecordId} erfolgreich gelöscht.`);
             return true;
         } catch (error) {
-            console.error(`Fehler beim Löschen von Airtable Record ${airtableRecordId}:`, error);
+            debugError(`Fehler beim Löschen von Airtable Record ${airtableRecordId}:`, error);
             return false;
         }
     }
@@ -617,7 +626,7 @@
     // Enhanced Airtable creation with better error handling
     async function createAirtableRecord(jobDetails) {
         return await retryOperation(async () => {
-            console.log('Erstelle Airtable Record mit Daten:', jobDetails);
+            debugLog('Erstelle Airtable Record mit Daten:', jobDetails);
             
             const response = await fetch(AIRTABLE_WORKER_URL, {
                 method: 'POST',
@@ -641,7 +650,7 @@
                 throw new Error('Airtable Record ID nicht erhalten nach Erstellung.');
             }
             
-            console.log('Airtable Job Record erfolgreich erstellt mit ID:', recordId);
+            debugLog('Airtable Job Record erfolgreich erstellt mit ID:', recordId);
             return { recordId, responseData };
         });
     }
@@ -649,7 +658,7 @@
     // Enhanced Webflow creation with better error handling
     async function createWebflowItem(fieldData) {
         return await retryOperation(async () => {
-            console.log('Erstelle Webflow Item mit Daten:', fieldData);
+            debugLog('Erstelle Webflow Item mit Daten:', fieldData);
             
             const response = await fetch(WEBFLOW_CMS_POST_WORKER_URL + '/', {
                 method: 'POST',
@@ -673,7 +682,7 @@
                 throw new Error('Webflow Item ID nicht erhalten nach Erstellung.');
             }
             
-            console.log('Webflow Item erfolgreich erstellt mit ID:', itemId);
+            debugLog('Webflow Item erfolgreich erstellt mit ID:', itemId);
             return { itemId, responseData };
         });
     }
@@ -681,7 +690,7 @@
     // Enhanced Webflow update with better error handling
     async function updateWebflowItem(itemId, updateFields) {
         return await retryOperation(async () => {
-            console.log(`Aktualisiere Webflow Item ${itemId} mit Feldern:`, updateFields);
+            debugLog(`Aktualisiere Webflow Item ${itemId} mit Feldern:`, updateFields);
             
             const response = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/${itemId}`, {
                 method: 'PATCH',
@@ -699,7 +708,7 @@
             }
             
             const responseData = await response.json();
-            console.log(`Webflow Item ${itemId} erfolgreich aktualisiert.`);
+            debugLog(`Webflow Item ${itemId} erfolgreich aktualisiert.`);
             return responseData;
         });
     }
@@ -707,7 +716,7 @@
     // Enhanced Airtable update with better error handling
     async function updateAirtableRecord(recordId, webflowItemId, additionalFields = {}) {
         return await retryOperation(async () => {
-            console.log(`Aktualisiere Airtable Record ${recordId} mit Webflow ID ${webflowItemId}`);
+            debugLog(`Aktualisiere Airtable Record ${recordId} mit Webflow ID ${webflowItemId}`);
             
             const fieldsToUpdate = { ...additionalFields };
             const airtableWebflowIdField = AIRTABLE_FIELD_MAPPINGS['webflowItemIdFieldAirtable'];
@@ -736,7 +745,7 @@
             }
             
             const responseData = await response.json();
-            console.log('Airtable Record erfolgreich mit Webflow Item ID aktualisiert.');
+            debugLog('Airtable Record erfolgreich mit Webflow Item ID aktualisiert.');
             return responseData;
         });
     }
@@ -744,7 +753,7 @@
     // Update member's posted-jobs field in Webflow with enhanced debugging
     async function updateWebflowMemberPostedJobs(webflowMemberId, newWebflowJobId) {
         return await retryOperation(async () => {
-            console.log(`Aktualisiere Webflow Member ${webflowMemberId} - füge Job ${newWebflowJobId} zu posted-jobs hinzu`);
+            debugLog(`Aktualisiere Webflow Member ${webflowMemberId} - füge Job ${newWebflowJobId} zu posted-jobs hinzu`);
             
             // 1. Aktuelles Member Item laden
             const getMemberResponse = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/members/${webflowMemberId}`, {
@@ -760,38 +769,38 @@
             }
             
             const memberData = await getMemberResponse.json();
-            console.log(`Member Daten erhalten:`, JSON.stringify(memberData, null, 2));
+            debugLog(`Member Daten erhalten:`, JSON.stringify(memberData, null, 2));
             
             // Verschiedene mögliche Strukturen der Webflow API prüfen
             let currentPostedJobs = [];
             
             if (memberData.fieldData && memberData.fieldData['posted-jobs']) {
                 currentPostedJobs = memberData.fieldData['posted-jobs'];
-                console.log(`Posted jobs gefunden in fieldData:`, currentPostedJobs);
+                debugLog(`Posted jobs gefunden in fieldData:`, currentPostedJobs);
             } else if (memberData.fields && memberData.fields['posted-jobs']) {
                 currentPostedJobs = memberData.fields['posted-jobs'];
-                console.log(`Posted jobs gefunden in fields:`, currentPostedJobs);
+                debugLog(`Posted jobs gefunden in fields:`, currentPostedJobs);
             } else if (memberData['posted-jobs']) {
                 currentPostedJobs = memberData['posted-jobs'];
-                console.log(`Posted jobs gefunden in root:`, currentPostedJobs);
+                debugLog(`Posted jobs gefunden in root:`, currentPostedJobs);
             } else {
-                console.log(`Keine posted-jobs gefunden, starte mit leerem Array`);
+                debugLog(`Keine posted-jobs gefunden, starte mit leerem Array`);
                 currentPostedJobs = [];
             }
             
             // Sicherstellen, dass es ein Array ist
             if (!Array.isArray(currentPostedJobs)) {
-                console.warn(`posted-jobs ist kein Array, konvertiere:`, currentPostedJobs);
+                debugWarn(`posted-jobs ist kein Array, konvertiere:`, currentPostedJobs);
                 currentPostedJobs = currentPostedJobs ? [currentPostedJobs] : [];
             }
             
-            console.log(`Aktuelle posted-jobs vor Update:`, currentPostedJobs);
-            console.log(`Füge hinzu:`, newWebflowJobId);
+            debugLog(`Aktuelle posted-jobs vor Update:`, currentPostedJobs);
+            debugLog(`Füge hinzu:`, newWebflowJobId);
             
             // 2. Neue Job-ID hinzufügen (falls nicht schon vorhanden)
             if (!currentPostedJobs.includes(newWebflowJobId)) {
                 currentPostedJobs.push(newWebflowJobId);
-                console.log(`Neue posted-jobs nach Hinzufügung:`, currentPostedJobs);
+                debugLog(`Neue posted-jobs nach Hinzufügung:`, currentPostedJobs);
                 
                 // 3. Member aktualisieren
                 const updatePayload = {
@@ -800,7 +809,7 @@
                     }
                 };
                 
-                console.log(`Update Payload:`, JSON.stringify(updatePayload, null, 2));
+                debugLog(`Update Payload:`, JSON.stringify(updatePayload, null, 2));
                 
                 const updateMemberResponse = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/members/${webflowMemberId}`, {
                     method: 'PATCH',
@@ -812,17 +821,17 @@
                 
                 if (!updateMemberResponse.ok) {
                     const errorData = await updateMemberResponse.json().catch(() => ({}));
-                    console.error(`Update Fehler:`, errorData);
+                    debugError(`Update Fehler:`, errorData);
                     throw new Error(`Webflow Member Update Fehler (${updateMemberResponse.status}): ${JSON.stringify(errorData.error || errorData.errors || errorData)}`);
                 }
                 
                 const updateResponseData = await updateMemberResponse.json();
-                console.log(`Update Response:`, JSON.stringify(updateResponseData, null, 2));
-                console.log(`Webflow Member ${webflowMemberId} erfolgreich aktualisiert - Job ${newWebflowJobId} zu posted-jobs hinzugefügt. Total Jobs: ${currentPostedJobs.length}`);
+                debugLog(`Update Response:`, JSON.stringify(updateResponseData, null, 2));
+                debugLog(`Webflow Member ${webflowMemberId} erfolgreich aktualisiert - Job ${newWebflowJobId} zu posted-jobs hinzugefügt. Total Jobs: ${currentPostedJobs.length}`);
                 
                 return updateResponseData;
             } else {
-                console.log(`Job ${newWebflowJobId} ist bereits in posted-jobs von Member ${webflowMemberId} vorhanden.`);
+                debugLog(`Job ${newWebflowJobId} ist bereits in posted-jobs von Member ${webflowMemberId} vorhanden.`);
                 return { alreadyExists: true };
             }
         });
@@ -831,11 +840,11 @@
     // Credit deduction function
     async function deductMemberstackCredit(memberstackId) {
         if (!memberstackId) {
-            console.warn('Keine Memberstack ID für Credit-Abzug vorhanden.');
+            debugWarn('Keine Memberstack ID für Credit-Abzug vorhanden.');
             return false;
         }
         
-        console.log(`Versuche Credit für Memberstack ID ${memberstackId} abzuziehen...`);
+        debugLog(`Versuche Credit für Memberstack ID ${memberstackId} abzuziehen...`);
         
         try {
             const response = await retryOperation(async () => {
@@ -858,10 +867,10 @@
             });
             
             const creditData = await response.json();
-            console.log(`Credit-Abzug erfolgreich: ${creditData.message} (Credits vorher: ${creditData.oldCredits}, nachher: ${creditData.newCredits})`);
+            debugLog(`Credit-Abzug erfolgreich: ${creditData.message} (Credits vorher: ${creditData.oldCredits}, nachher: ${creditData.newCredits})`);
             return true;
         } catch (error) {
-            console.error('Fehler beim Credit-Abzug:', error);
+            debugError('Fehler beim Credit-Abzug:', error);
             return false;
         }
     }
@@ -940,7 +949,7 @@
                 
                 airtableMemberRecordId = memberSearchData.memberRecordId;
                 transactionState.memberRecordId = airtableMemberRecordId;
-                console.log('Mitglied gefunden. Airtable Record ID des Mitglieds:', airtableMemberRecordId);
+                debugLog('Mitglied gefunden. Airtable Record ID des Mitglieds:', airtableMemberRecordId);
             } catch (error) {
                 throw new Error(`MEMBER_SEARCH_ERROR: ${error.message}`);
             }
@@ -1017,7 +1026,7 @@
                     if (followerValueString && REFERENCE_MAPPINGS['creatorFollower']?.[followerValueString]) {
                         webflowFieldData[webflowSlug] = REFERENCE_MAPPINGS['creatorFollower'][followerValueString];
                     } else if (followerValueString) {
-                        console.warn(`Webflow: Kein Mapping für creatorFollower: '${followerValueString}'`);
+                        debugWarn(`Webflow: Kein Mapping für creatorFollower: '${followerValueString}'`);
                     }
                     continue;
                 }
@@ -1069,9 +1078,9 @@
             try {
                 await updateWebflowMemberPostedJobs(webflowMemberIdOfTheSubmitter, transactionState.webflowItemId);
                 transactionState.memberUpdated = true;
-                console.log('Webflow Member posted-jobs Feld erfolgreich aktualisiert.');
+                debugLog('Webflow Member posted-jobs Feld erfolgreich aktualisiert.');
             } catch (memberUpdateError) {
-                console.error('Fehler beim Aktualisieren der Webflow Member posted-jobs:', memberUpdateError);
+                debugError('Fehler beim Aktualisieren der Webflow Member posted-jobs:', memberUpdateError);
                 // This is not critical enough to fail the entire process, but we should log it
                 // The job is still created successfully
             }
@@ -1093,7 +1102,7 @@
             }
 
         } catch (error) {
-            console.error('Fehler im Hauptprozess:', error);
+            debugError('Fehler im Hauptprozess:', error);
             
             // Handle validation errors differently
             if (error.message.startsWith('VALIDATION_ERROR:')) {
@@ -1123,7 +1132,7 @@
 
             // Rollback: Clean up created records if transaction failed
             if (!transactionState.completed && transactionState.airtableRecordId) {
-                console.log('Starte Rollback-Prozess...');
+                debugLog('Starte Rollback-Prozess...');
                 await deleteAirtableRecord(transactionState.airtableRecordId, `Fehler im Prozess: ${error.message}`);
             }
 
@@ -1148,7 +1157,7 @@
 
     // Test function (maintained from original)
     function testSubmissionWithData(testData) {
-        console.log('Starte Test-Übermittlung mit Daten:', testData);
+        debugLog('Starte Test-Übermittlung mit Daten:', testData);
         const mainForm = find(`#${MAIN_FORM_ID}`);
         if (!mainForm) {
             showCustomPopup(`Test-Übermittlung: Hauptformular "${MAIN_FORM_ID}" nicht gefunden.`, 'error', 'Test Fehler');
@@ -1176,9 +1185,9 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            console.log(`Form Submission Handler v21.1 initialisiert für: #${MAIN_FORM_ID}`);
+            debugLog(`Form Submission Handler v21.3 initialisiert für: #${MAIN_FORM_ID}`);
         } else {
-            console.warn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
+            debugWarn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }
     });
 

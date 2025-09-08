@@ -977,7 +977,19 @@
             // Step 8: Update Airtable with Webflow ID
             await updateAirtableRecord(transactionState.airtableRecordId, transactionState.webflowItemId);
 
-            // Step 9: Deduct credit (non-critical - don't fail if this fails)
+            // Step 9: Update member's posted-jobs field in Webflow
+            showCustomPopup('Verknüpfung mit deinem Profil wird erstellt...', 'loading', 'Profil-Update');
+            try {
+                await updateWebflowMemberPostedJobs(webflowMemberIdOfTheSubmitter, transactionState.webflowItemId);
+                transactionState.memberUpdated = true;
+                console.log('Webflow Member posted-jobs Feld erfolgreich aktualisiert.');
+            } catch (memberUpdateError) {
+                console.error('Fehler beim Aktualisieren der Webflow Member posted-jobs:', memberUpdateError);
+                // This is not critical enough to fail the entire process, but we should log it
+                // The job is still created successfully
+            }
+
+            // Step 10: Deduct credit (non-critical - don't fail if this fails)
             const memberstackId = rawFormData['memberstackId'];
             if (memberstackId) {
                 transactionState.creditDeducted = await deductMemberstackCredit(memberstackId);

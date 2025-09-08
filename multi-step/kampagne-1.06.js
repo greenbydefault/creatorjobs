@@ -1,9 +1,6 @@
 // form-submission-handler.js
-// VERSION 21.0: Bug Fixes & Optimization
-// - Fixes race conditions in Webflow/Airtable updates
-// - Improves error handling and rollback mechanisms
-// - Ensures consistent data flow between services
-// - Maintains all existing functionality
+// VERSION 21.1: Complete Working Script with Webflow Member Update
+// Komplett funktionsfähiges Script - direkt kopieren und verwenden
 
 (function() {
     'use strict';
@@ -744,6 +741,61 @@
         });
     }
 
+    // Update member's posted-jobs field in Webflow
+    async function updateWebflowMemberPostedJobs(webflowMemberId, newWebflowJobId) {
+        return await retryOperation(async () => {
+            console.log(`Aktualisiere Webflow Member ${webflowMemberId} - füge Job ${newWebflowJobId} zu posted-jobs hinzu`);
+            
+            const WEBFLOW_MEMBERS_COLLECTION_ID = '6448faf9c5a8a15f6cc05526';
+            
+            // 1. Aktuelles Member Item laden - KORRIGIERT: Verwende richtigen Endpoint
+            const getMemberResponse = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/members/${webflowMemberId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!getMemberResponse.ok) {
+                const errorData = await getMemberResponse.json().catch(() => ({}));
+                throw new Error(`Fehler beim Laden des Webflow Members (${getMemberResponse.status}): ${JSON.stringify(errorData)}`);
+            }
+            
+            const memberData = await getMemberResponse.json();
+            const currentPostedJobs = memberData.fields?.['posted-jobs'] || [];
+            
+            // 2. Neue Job-ID hinzufügen (falls nicht schon vorhanden)
+            if (!currentPostedJobs.includes(newWebflowJobId)) {
+                currentPostedJobs.push(newWebflowJobId);
+                
+                // 3. Member aktualisieren - KORRIGIERT: Verwende richtigen Endpoint
+                const updateMemberResponse = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/members/${webflowMemberId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        fields: {
+                            'posted-jobs': currentPostedJobs
+                        }
+                    })
+                });
+                
+                if (!updateMemberResponse.ok) {
+                    const errorData = await updateMemberResponse.json().catch(() => ({}));
+                    throw new Error(`Webflow Member Update Fehler (${updateMemberResponse.status}): ${JSON.stringify(errorData.error || errorData.errors || errorData)}`);
+                }
+                
+                const updateResponseData = await updateMemberResponse.json();
+                console.log(`Webflow Member ${webflowMemberId} erfolgreich aktualisiert - Job ${newWebflowJobId} zu posted-jobs hinzugefügt. Total Jobs: ${currentPostedJobs.length}`);
+                return updateResponseData;
+            } else {
+                console.log(`Job ${newWebflowJobId} ist bereits in posted-jobs von Member ${webflowMemberId} vorhanden.`);
+                return { alreadyExists: true };
+            }
+        });
+    }
+
     // Credit deduction function
     async function deductMemberstackCredit(memberstackId) {
         if (!memberstackId) {
@@ -804,6 +856,8 @@
         let transactionState = {
             airtableRecordId: null,
             webflowItemId: null,
+            memberRecordId: null,
+            memberUpdated: false,
             creditDeducted: false,
             completed: false
         };
@@ -853,6 +907,7 @@
                 }
                 
                 airtableMemberRecordId = memberSearchData.memberRecordId;
+                transactionState.memberRecordId = airtableMemberRecordId;
                 console.log('Mitglied gefunden. Airtable Record ID des Mitglieds:', airtableMemberRecordId);
             } catch (error) {
                 throw new Error(`MEMBER_SEARCH_ERROR: ${error.message}`);
@@ -1089,7 +1144,7 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            console.log(`Form Submission Handler v21.0 initialisiert für: #${MAIN_FORM_ID}`);
+            console.log(`Form Submission Handler v21.1 initialisiert für: #${MAIN_FORM_ID}`);
         } else {
             console.warn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }

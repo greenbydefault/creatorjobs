@@ -741,14 +741,12 @@
         });
     }
 
-    // Update member's posted-jobs field in Webflow
+    // Update member's posted-jobs field in Webflow with enhanced debugging
     async function updateWebflowMemberPostedJobs(webflowMemberId, newWebflowJobId) {
         return await retryOperation(async () => {
             console.log(`Aktualisiere Webflow Member ${webflowMemberId} - füge Job ${newWebflowJobId} zu posted-jobs hinzu`);
             
-            const WEBFLOW_MEMBERS_COLLECTION_ID = '6448faf9c5a8a15f6cc05526';
-            
-            // 1. Aktuelles Member Item laden - KORRIGIERT: Verwende richtigen Endpoint
+            // 1. Aktuelles Member Item laden
             const getMemberResponse = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/members/${webflowMemberId}`, {
                 method: 'GET',
                 headers: {
@@ -762,32 +760,66 @@
             }
             
             const memberData = await getMemberResponse.json();
-            const currentPostedJobs = memberData.fields?.['posted-jobs'] || [];
+            console.log(`Member Daten erhalten:`, JSON.stringify(memberData, null, 2));
+            
+            // Verschiedene mögliche Strukturen der Webflow API prüfen
+            let currentPostedJobs = [];
+            
+            if (memberData.fieldData && memberData.fieldData['posted-jobs']) {
+                currentPostedJobs = memberData.fieldData['posted-jobs'];
+                console.log(`Posted jobs gefunden in fieldData:`, currentPostedJobs);
+            } else if (memberData.fields && memberData.fields['posted-jobs']) {
+                currentPostedJobs = memberData.fields['posted-jobs'];
+                console.log(`Posted jobs gefunden in fields:`, currentPostedJobs);
+            } else if (memberData['posted-jobs']) {
+                currentPostedJobs = memberData['posted-jobs'];
+                console.log(`Posted jobs gefunden in root:`, currentPostedJobs);
+            } else {
+                console.log(`Keine posted-jobs gefunden, starte mit leerem Array`);
+                currentPostedJobs = [];
+            }
+            
+            // Sicherstellen, dass es ein Array ist
+            if (!Array.isArray(currentPostedJobs)) {
+                console.warn(`posted-jobs ist kein Array, konvertiere:`, currentPostedJobs);
+                currentPostedJobs = currentPostedJobs ? [currentPostedJobs] : [];
+            }
+            
+            console.log(`Aktuelle posted-jobs vor Update:`, currentPostedJobs);
+            console.log(`Füge hinzu:`, newWebflowJobId);
             
             // 2. Neue Job-ID hinzufügen (falls nicht schon vorhanden)
             if (!currentPostedJobs.includes(newWebflowJobId)) {
                 currentPostedJobs.push(newWebflowJobId);
+                console.log(`Neue posted-jobs nach Hinzufügung:`, currentPostedJobs);
                 
-                // 3. Member aktualisieren - KORRIGIERT: Verwende richtigen Endpoint
+                // 3. Member aktualisieren
+                const updatePayload = {
+                    fields: {
+                        'posted-jobs': currentPostedJobs
+                    }
+                };
+                
+                console.log(`Update Payload:`, JSON.stringify(updatePayload, null, 2));
+                
                 const updateMemberResponse = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/members/${webflowMemberId}`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        fields: {
-                            'posted-jobs': currentPostedJobs
-                        }
-                    })
+                    body: JSON.stringify(updatePayload)
                 });
                 
                 if (!updateMemberResponse.ok) {
                     const errorData = await updateMemberResponse.json().catch(() => ({}));
+                    console.error(`Update Fehler:`, errorData);
                     throw new Error(`Webflow Member Update Fehler (${updateMemberResponse.status}): ${JSON.stringify(errorData.error || errorData.errors || errorData)}`);
                 }
                 
                 const updateResponseData = await updateMemberResponse.json();
+                console.log(`Update Response:`, JSON.stringify(updateResponseData, null, 2));
                 console.log(`Webflow Member ${webflowMemberId} erfolgreich aktualisiert - Job ${newWebflowJobId} zu posted-jobs hinzugefügt. Total Jobs: ${currentPostedJobs.length}`);
+                
                 return updateResponseData;
             } else {
                 console.log(`Job ${newWebflowJobId} ist bereits in posted-jobs von Member ${webflowMemberId} vorhanden.`);

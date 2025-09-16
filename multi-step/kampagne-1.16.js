@@ -16,6 +16,9 @@
 
     // --- Konfiguration ---
     const WEBFLOW_CMS_POST_WORKER_URL = 'https://post-a-job.oliver-258.workers.dev/';
+    
+    // Debug: URL-Überprüfung
+    console.log('🔧 WEBFLOW URL:', WEBFLOW_CMS_POST_WORKER_URL);
     const AIRTABLE_WORKER_URL = 'https://airtable-job-post.oliver-258.workers.dev/';
     const AIRTABLE_MEMBER_SEARCH_ENDPOINT = AIRTABLE_WORKER_URL + '/search-member';
     const MEMBERSTACK_CREDIT_WORKER_URL = 'https://post-job-credit-update.oliver-258.workers.dev/';
@@ -281,20 +284,12 @@
             const templateParams = {
                 to_email: jobData.memberEmail || EMAILJS_CONFIG.ADMIN_EMAIL,
                 job_title: jobData['job-title'] || jobData.projectName || 'Unbekannter Job',
-                job_id: jobData.airtableJobId || jobData.airtableRecordId || 'N/A',
-                webflow_id: jobData.webflowItemId || jobData.webflowItemId || 'N/A',
-                user_name: jobData.userName || jobData['brand-name'] || 'Unbekannt',
-                user_email: jobData.memberEmail || jobData['contact-mail'] || 'N/A',
-                budget: jobData.budget ? `${jobData.budget} €` : 'N/A',
-                admin_test: jobData['admin-test'] ? 'Ja' : 'Nein',
-                member_id: jobData.memberstackId || 'N/A',
-                request_id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                timestamp: new Date().toLocaleString('de-DE'),
-                status: 'Erfolgreich gepostet',
+                job_id: jobData.airtableJobId || 'N/A',
+                webflow_id: jobData.webflowItemId || 'N/A',
+                user_name: jobData.userName || 'Unbekannt',
                 admin_email: EMAILJS_CONFIG.ADMIN_EMAIL
             };
 
-            debugLog('Sende Success Email mit Parametern:', templateParams);
             await sendEmailJS(EMAILJS_CONFIG.TEMPLATE_ID_SUCCESS, templateParams);
             debugLog('Success Email erfolgreich gesendet');
         } catch (error) {
@@ -791,13 +786,7 @@
             
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                const errorMessage = errorData.error?.message || errorData.message || JSON.stringify(errorData.error || errorData.errors || errorData);
-                
-                if (response.status === 500) {
-                    throw new Error(`Webflow Server Fehler (500): Der Server ist temporär nicht verfügbar. Bitte versuchen Sie es in ein paar Minuten erneut. Technische Details: ${errorMessage}`);
-                } else {
-                    throw new Error(`Webflow Erstellungsfehler (${response.status}): ${errorMessage}`);
-                }
+                throw new Error(`Webflow Erstellungsfehler (${response.status}): ${JSON.stringify(errorData.error || errorData.errors || errorData)}`);
             }
             
             const responseData = await response.json();
@@ -1039,14 +1028,11 @@
             completed: false
         };
 
-        // Initialize rawFormData early to avoid reference errors
-        let rawFormData = {};
-
         try {
             showCustomPopup('Deine Eingaben werden vorbereitet...', 'loading', 'Einen Moment bitte...');
 
             // Step 1: Collect and validate form data
-            rawFormData = testData ? testData : collectAndFormatFormData(form);
+            const rawFormData = testData ? testData : collectAndFormatFormData(form);
 
             if (!rawFormData['projectName'] && !rawFormData['job-title']) {
                 throw new Error('VALIDATION_ERROR: Bitte geben Sie einen Job-Titel an.');
@@ -1263,9 +1249,7 @@
                 const friendlyInfo = getFriendlyErrorFieldInfo(error.message);
                 
                 let userDisplayMessage;
-                if (error.message.includes('500') || error.message.includes('Server Fehler')) {
-                    userDisplayMessage = "Der Server ist temporär nicht verfügbar. Bitte versuchen Sie es in ein paar Minuten erneut. Falls das Problem weiterhin besteht, kontaktieren Sie den Support.";
-                } else if (friendlyInfo.area) {
+                if (friendlyInfo.area) {
                     userDisplayMessage = `Es tut uns leid, ein Fehler ist aufgetreten.`;
                     if (friendlyInfo.field) {
                         userDisplayMessage += ` Möglicherweise betrifft es das Feld "${friendlyInfo.field}".`;

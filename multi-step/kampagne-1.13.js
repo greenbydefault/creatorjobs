@@ -7,7 +7,7 @@
 
     // === DEBUG CONFIGURATION ===
     // HIER ÄNDERN: true für Development, false für Produktion
-    const DEBUG_MODE = false;
+    const DEBUG_MODE = true;
     
     // Debug-Funktionen - nur aktiv wenn DEBUG_MODE = true
     const debugLog = DEBUG_MODE ? console.log.bind(console) : () => {};

@@ -7,7 +7,7 @@
 
     // === DEBUG CONFIGURATION ===
     // HIER ÄNDERN: true für Development, false für Produktion
-    const DEBUG_MODE = false;
+    const DEBUG_MODE = true;
     
     // Debug-Funktionen - nur aktiv wenn DEBUG_MODE = true
     const debugLog = DEBUG_MODE ? console.log.bind(console) : () => {};
@@ -791,7 +791,13 @@
             
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(`Webflow Erstellungsfehler (${response.status}): ${JSON.stringify(errorData.error || errorData.errors || errorData)}`);
+                const errorMessage = errorData.error?.message || errorData.message || JSON.stringify(errorData.error || errorData.errors || errorData);
+                
+                if (response.status === 500) {
+                    throw new Error(`Webflow Server Fehler (500): Der Server ist temporär nicht verfügbar. Bitte versuchen Sie es in ein paar Minuten erneut. Technische Details: ${errorMessage}`);
+                } else {
+                    throw new Error(`Webflow Erstellungsfehler (${response.status}): ${errorMessage}`);
+                }
             }
             
             const responseData = await response.json();
@@ -1033,11 +1039,14 @@
             completed: false
         };
 
+        // Initialize rawFormData early to avoid reference errors
+        let rawFormData = {};
+
         try {
             showCustomPopup('Deine Eingaben werden vorbereitet...', 'loading', 'Einen Moment bitte...');
 
             // Step 1: Collect and validate form data
-            const rawFormData = testData ? testData : collectAndFormatFormData(form);
+            rawFormData = testData ? testData : collectAndFormatFormData(form);
 
             if (!rawFormData['projectName'] && !rawFormData['job-title']) {
                 throw new Error('VALIDATION_ERROR: Bitte geben Sie einen Job-Titel an.');
@@ -1254,7 +1263,9 @@
                 const friendlyInfo = getFriendlyErrorFieldInfo(error.message);
                 
                 let userDisplayMessage;
-                if (friendlyInfo.area) {
+                if (error.message.includes('500') || error.message.includes('Server Fehler')) {
+                    userDisplayMessage = "Der Server ist temporär nicht verfügbar. Bitte versuchen Sie es in ein paar Minuten erneut. Falls das Problem weiterhin besteht, kontaktieren Sie den Support.";
+                } else if (friendlyInfo.area) {
                     userDisplayMessage = `Es tut uns leid, ein Fehler ist aufgetreten.`;
                     if (friendlyInfo.field) {
                         userDisplayMessage += ` Möglicherweise betrifft es das Feld "${friendlyInfo.field}".`;

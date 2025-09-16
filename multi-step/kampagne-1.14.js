@@ -7,7 +7,7 @@
 
     // === DEBUG CONFIGURATION ===
     // HIER ÄNDERN: true für Development, false für Produktion
-    const DEBUG_MODE = true;
+    const DEBUG_MODE = false;
     
     // Debug-Funktionen - nur aktiv wenn DEBUG_MODE = true
     const debugLog = DEBUG_MODE ? console.log.bind(console) : () => {};
@@ -15,7 +15,7 @@
     const debugError = DEBUG_MODE ? console.error.bind(console) : () => {};
 
     // --- Konfiguration ---
-    const WEBFLOW_CMS_POST_WORKER_URL = 'https://late-meadow-00bc.oliver-258.workers.dev';
+    const WEBFLOW_CMS_POST_WORKER_URL = 'https://post-a-job.oliver-258.workers.dev/';
     const AIRTABLE_WORKER_URL = 'https://airtable-job-post.oliver-258.workers.dev/';
     const AIRTABLE_MEMBER_SEARCH_ENDPOINT = AIRTABLE_WORKER_URL + '/search-member';
     const MEMBERSTACK_CREDIT_WORKER_URL = 'https://post-job-credit-update.oliver-258.workers.dev/';
@@ -281,12 +281,20 @@
             const templateParams = {
                 to_email: jobData.memberEmail || EMAILJS_CONFIG.ADMIN_EMAIL,
                 job_title: jobData['job-title'] || jobData.projectName || 'Unbekannter Job',
-                job_id: jobData.airtableJobId || 'N/A',
-                webflow_id: jobData.webflowItemId || 'N/A',
-                user_name: jobData.userName || 'Unbekannt',
+                job_id: jobData.airtableJobId || jobData.airtableRecordId || 'N/A',
+                webflow_id: jobData.webflowItemId || jobData.webflowItemId || 'N/A',
+                user_name: jobData.userName || jobData['brand-name'] || 'Unbekannt',
+                user_email: jobData.memberEmail || jobData['contact-mail'] || 'N/A',
+                budget: jobData.budget ? `${jobData.budget} €` : 'N/A',
+                admin_test: jobData['admin-test'] ? 'Ja' : 'Nein',
+                member_id: jobData.memberstackId || 'N/A',
+                request_id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                timestamp: new Date().toLocaleString('de-DE'),
+                status: 'Erfolgreich gepostet',
                 admin_email: EMAILJS_CONFIG.ADMIN_EMAIL
             };
 
+            debugLog('Sende Success Email mit Parametern:', templateParams);
             await sendEmailJS(EMAILJS_CONFIG.TEMPLATE_ID_SUCCESS, templateParams);
             debugLog('Success Email erfolgreich gesendet');
         } catch (error) {

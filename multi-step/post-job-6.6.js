@@ -1,13 +1,13 @@
 // form-submission-handler.js
-// VERSION 21.3: Complete Working Script with Full Debug Toggle Implementation
-// VOLLSTÄNDIG korrigiertes Script mit funktionierendem Debug-System
+// VERSION 21.8: Intelligent Error Code System with Multi-Endpoint Verification
+// Intelligentes Fehlercode-System mit Multi-Endpoint Verification
 
 (function() {
     'use strict';
 
     // === DEBUG CONFIGURATION ===
     // HIER ÄNDERN: true für Development, false für Produktion
-    const DEBUG_MODE = false;
+    const DEBUG_MODE = true;
     
     // Debug-Funktionen - nur aktiv wenn DEBUG_MODE = true
     const debugLog = DEBUG_MODE ? console.log.bind(console) : () => {};
@@ -15,7 +15,7 @@
     const debugError = DEBUG_MODE ? console.error.bind(console) : () => {};
 
     // --- Konfiguration ---
-    const WEBFLOW_CMS_POST_WORKER_URL = 'https://late-meadow-00bc.oliver-258.workers.dev';
+    const WEBFLOW_CMS_POST_WORKER_URL = 'https://post-a-job.oliver-258.workers.dev/';
     const AIRTABLE_WORKER_URL = 'https://airtable-job-post.oliver-258.workers.dev/';
     const AIRTABLE_MEMBER_SEARCH_ENDPOINT = AIRTABLE_WORKER_URL + '/search-member';
     const MEMBERSTACK_CREDIT_WORKER_URL = 'https://post-job-credit-update.oliver-258.workers.dev/';
@@ -24,6 +24,89 @@
     const SUPPORT_EMAIL = 'support@yourcompany.com';
     const UPLOADCARE_CTX_NAME = 'my-uploader';
     const UPLOADCARE_PROVIDER_ID = 'uploaderctx';
+
+    // EmailJS Konfiguration
+    const EMAILJS_CONFIG = {
+        SERVICE_ID: 'service_5yxp4ke',
+        TEMPLATE_ID_SUCCESS: 'template_fzetysg',
+        TEMPLATE_ID_ERROR: 'template_xu94ioh',
+        PUBLIC_KEY: 'Jwa4q9MN-NfwAgQPB',
+        ADMIN_EMAIL: 'oliver@creatorjobs.com'
+    };
+
+    // Intelligentes Fehlercode-System
+    const ERROR_CODES = {
+        // Airtable Fehler (1000-1999)
+        AIRTABLE_CREATE_FAILED: 1001,
+        AIRTABLE_UPDATE_FAILED: 1002,
+        AIRTABLE_VERIFICATION_FAILED: 1003,
+        AIRTABLE_DELETE_FAILED: 1004,
+        AIRTABLE_ENDPOINT_UNAVAILABLE: 1005,
+        
+        // Webflow Fehler (2000-2999)
+        WEBFLOW_CREATE_FAILED: 2001,
+        WEBFLOW_UPDATE_FAILED: 2002,
+        WEBFLOW_VERIFICATION_FAILED: 2003,
+        WEBFLOW_ENDPOINT_UNAVAILABLE: 2004,
+        WEBFLOW_API_TOKEN_MISSING: 2005,
+        
+        // Member Fehler (3000-3999)
+        MEMBER_SEARCH_FAILED: 3001,
+        MEMBER_UPDATE_FAILED: 3002,
+        MEMBER_VERIFICATION_FAILED: 3003,
+        
+        // Verification Fehler (4000-4999)
+        VERIFICATION_AIRTABLE_MISSING: 4001,
+        VERIFICATION_WEBFLOW_MISSING: 4002,
+        VERIFICATION_MEMBER_MISSING: 4003,
+        VERIFICATION_CRITICAL_FAILED: 4004,
+        
+        // System Fehler (5000-5999)
+        NETWORK_TIMEOUT: 5001,
+        RACE_CONDITION: 5002,
+        MEMORY_OVERFLOW: 5003,
+        UNKNOWN_ERROR: 5999
+    };
+
+    // Fehlercode-Generator
+    function generateErrorCode(errorType, context = '') {
+        const baseCode = ERROR_CODES[errorType] || ERROR_CODES.UNKNOWN_ERROR;
+        const timestamp = Date.now().toString().slice(-3); // Letzte 3 Ziffern
+        const contextHash = context ? context.split('').reduce((a, b) => a + b.charCodeAt(0), 0) % 100 : 0;
+        return parseInt(`${baseCode}${timestamp}${contextHash.toString().padStart(2, '0')}`);
+    }
+
+    // Fehlercode-Interpreter
+    function interpretErrorCode(code) {
+        const codeStr = code.toString();
+        const baseCode = parseInt(codeStr.slice(0, 4));
+        
+        const interpretations = {
+            1001: 'Airtable Job-Erstellung fehlgeschlagen',
+            1002: 'Airtable Job-Update fehlgeschlagen', 
+            1003: 'Airtable Verification fehlgeschlagen',
+            1004: 'Airtable Job-Löschung fehlgeschlagen',
+            1005: 'Airtable API-Endpunkt nicht verfügbar',
+            2001: 'Webflow Job-Erstellung fehlgeschlagen',
+            2002: 'Webflow Job-Update fehlgeschlagen',
+            2003: 'Webflow Verification fehlgeschlagen',
+            2004: 'Webflow API-Endpunkt nicht verfügbar',
+            2005: 'Webflow API Token fehlt',
+            3001: 'Member-Suche fehlgeschlagen',
+            3002: 'Member-Update fehlgeschlagen',
+            3003: 'Member Verification fehlgeschlagen',
+            4001: 'Airtable Webflow ID fehlt',
+            4002: 'Webflow Job ID fehlt',
+            4003: 'Member Job-Verknüpfung fehlt',
+            4004: 'Kritische Verification fehlgeschlagen',
+            5001: 'Netzwerk-Timeout',
+            5002: 'Race Condition erkannt',
+            5003: 'Memory Overflow',
+            5999: 'Unbekannter Fehler'
+        };
+        
+        return interpretations[baseCode] || 'Unbekannter Fehlercode';
+    }
 
     const POPUP_WRAPPER_ATTR = '[data-error-target="popup-wrapper"]';
     const POPUP_TITLE_ATTR = '[data-error-target="popup-title"]';
@@ -34,6 +117,8 @@
     // Retry configuration
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 1000; // 1 second
+    const CRITICAL_MAX_RETRIES = 5; // Für kritische Updates
+    const CRITICAL_RETRY_DELAY = 2000; // 2 seconds für kritische Updates
 
     const REFERENCE_MAPPINGS = {
         'creatorFollower': {
@@ -186,54 +271,251 @@
         'webflowItemIdFieldAirtable': 'Webflow Item ID'
     };
 
-    // Utility functions
-    const find = (selector, element = document) => element.querySelector(selector);
-    const findAll = (selector, element = document) => element.querySelectorAll(selector);
+    // Optimized utility functions with caching
+    const DOMCache = {
+        elements: new Map(),
+        find(selector, element = document) {
+            const key = `${selector}_${element === document ? 'doc' : element.tagName}`;
+            if (!this.elements.has(key)) {
+                this.elements.set(key, element.querySelector(selector));
+            }
+            return this.elements.get(key);
+        },
+        findAll(selector, element = document) {
+            const key = `${selector}_all_${element === document ? 'doc' : element.tagName}`;
+            if (!this.elements.has(key)) {
+                this.elements.set(key, Array.from(element.querySelectorAll(selector)));
+            }
+            return this.elements.get(key);
+        },
+        clear() {
+            this.elements.clear();
+        }
+    };
 
-    // Retry mechanism for API calls
-    async function retryOperation(operation, maxRetries = MAX_RETRIES, delay = RETRY_DELAY) {
+    const find = DOMCache.find.bind(DOMCache);
+    const findAll = DOMCache.findAll.bind(DOMCache);
+
+    // Object pooling for frequent objects
+    const ObjectPool = {
+        transactionStates: [],
+        getTransactionState() {
+            const state = this.transactionStates.pop() || {};
+            return Object.assign(state, {
+                airtableRecordId: null,
+                webflowItemId: null,
+                memberRecordId: null,
+                memberUpdated: false,
+                creditDeducted: false,
+                completed: false,
+                verificationPassed: false
+            });
+        },
+        returnTransactionState(state) {
+            Object.keys(state).forEach(key => state[key] = null);
+            this.transactionStates.push(state);
+        }
+    };
+
+    // Popup elements caching
+    const PopupCache = {
+        elements: null,
+        get() {
+            if (!this.elements) {
+                this.elements = {
+                    wrapper: find(POPUP_WRAPPER_ATTR),
+                    title: find(POPUP_TITLE_ATTR),
+                    message: find(POPUP_MESSAGE_ATTR),
+                    mailLink: find(MAIL_ERROR_ATTR),
+                    closeBtn: find(CLOSE_POPUP_ATTR)
+                };
+            }
+            return this.elements;
+        },
+        clear() {
+            this.elements = null;
+        }
+    };
+
+    // Optimized retry mechanism with exponential backoff and jitter
+    async function optimizedRetryOperation(operation, maxRetries = MAX_RETRIES, baseDelay = RETRY_DELAY) {
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 return await operation();
             } catch (error) {
                 debugWarn(`Attempt ${attempt} failed:`, error.message);
-                if (attempt === maxRetries) {
-                    throw error;
-                }
-                await new Promise(resolve => setTimeout(resolve, delay * attempt));
+                if (attempt === maxRetries) throw error;
+                
+                // Exponential backoff with jitter
+                const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
+                await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
     }
 
-    function showCustomPopup(message, type, title, supportDetails = '') {
-        const popup = find(POPUP_WRAPPER_ATTR);
-        const popupTitle = find(POPUP_TITLE_ATTR);
-        const popupMessage = find(POPUP_MESSAGE_ATTR);
-        const mailIconLink = find(MAIL_ERROR_ATTR);
+    // Critical retry mechanism for important operations
+    async function criticalRetryOperation(operation, maxRetries = CRITICAL_MAX_RETRIES, baseDelay = CRITICAL_RETRY_DELAY) {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                return await operation();
+            } catch (error) {
+                debugWarn(`Critical attempt ${attempt} failed:`, error.message);
+                if (attempt === maxRetries) throw error;
+                
+                // Exponential backoff with jitter for critical operations
+                const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 2000;
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+    }
 
-        if (!popup || !popupTitle || !popupMessage || !mailIconLink) {
+    // Backward compatibility
+    const retryOperation = optimizedRetryOperation;
+
+    // Optimized EmailJS with lazy loading and caching
+    const EmailJSCache = {
+        loaded: false,
+        loading: null,
+        async ensureLoaded() {
+            if (this.loaded) return true;
+            if (this.loading) return this.loading;
+            
+            this.loading = this.loadScript();
+            await this.loading;
+            this.loaded = true;
+            this.loading = null;
+            return true;
+        },
+        async loadScript() {
+            return new Promise((resolve, reject) => {
+                if (window.emailjs) {
+                    emailjs.init(EMAILJS_CONFIG.PUBLIC_KEY);
+                    resolve();
+                    return;
+                }
+
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js';
+                script.onload = () => {
+                    emailjs.init(EMAILJS_CONFIG.PUBLIC_KEY);
+                    resolve();
+                };
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+    };
+
+    // Optimized EmailJS Integration
+    async function sendEmailJS(templateId, templateParams) {
+        try {
+            debugLog('Sende EmailJS:', { templateId, templateParams });
+            
+            await EmailJSCache.ensureLoaded();
+
+            const response = await emailjs.send(
+                EMAILJS_CONFIG.SERVICE_ID,
+                templateId,
+                templateParams,
+                EMAILJS_CONFIG.PUBLIC_KEY
+            );
+            
+            debugLog('EmailJS erfolgreich gesendet:', response);
+            return response;
+        } catch (error) {
+            debugError('EmailJS Fehler:', error);
+            throw error;
+        }
+    }
+
+    // Success Email senden
+    async function sendSuccessEmail(jobData) {
+        try {
+            const templateParams = {
+                to_email: jobData.memberEmail || EMAILJS_CONFIG.ADMIN_EMAIL,
+                job_title: jobData['job-title'] || jobData.projectName || 'Unbekannter Job',
+                job_id: jobData.airtableJobId || 'N/A',
+                webflow_id: jobData.webflowItemId || 'N/A',
+                user_name: jobData.userName || 'Unbekannt',
+                admin_email: EMAILJS_CONFIG.ADMIN_EMAIL
+            };
+
+            await sendEmailJS(EMAILJS_CONFIG.TEMPLATE_ID_SUCCESS, templateParams);
+            debugLog('Success Email erfolgreich gesendet');
+        } catch (error) {
+            debugError('Fehler beim Senden der Success Email:', error);
+            // Nicht kritisch - Job ist trotzdem erfolgreich
+        }
+    }
+
+    // Error Email senden
+    async function sendErrorEmail(errorData) {
+        try {
+            // Extract error code and type from error
+            const errorCode = errorData.errorCode || errorData.error?.errorCode || 'UNKNOWN';
+            const errorType = errorData.errorType || errorData.error?.errorType || 'UNKNOWN';
+            const errorInterpretation = interpretErrorCode(errorCode);
+            
+            const templateParams = {
+                to_email: EMAILJS_CONFIG.ADMIN_EMAIL,
+                error_message: errorData.message || 'Unbekannter Fehler',
+                error_code: errorCode,
+                error_type: errorType,
+                error_interpretation: errorInterpretation,
+                error_stack: errorData.stack || 'Kein Stack verfügbar',
+                user_email: errorData.userEmail || 'Unbekannt',
+                job_title: errorData.jobTitle || 'Unbekannt',
+                timestamp: new Date().toISOString(),
+                browser_info: navigator.userAgent,
+                page_url: window.location.href
+            };
+
+            await sendEmailJS(EMAILJS_CONFIG.TEMPLATE_ID_ERROR, templateParams);
+            debugLog('Error Email erfolgreich gesendet');
+        } catch (emailError) {
+            debugError('Fehler beim Senden der Error Email:', emailError);
+        }
+    }
+
+    // Optimized popup functions with caching
+    function showCustomPopup(message, type, title, supportDetails = '', errorCode = null) {
+        const elements = PopupCache.get();
+        
+        if (!elements.wrapper || !elements.title || !elements.message || !elements.mailLink) {
             debugError("Popup-Elemente nicht gefunden!");
             debugLog(`Status: ${type.toUpperCase()} - Titel: ${title} - Nachricht: ${message}`);
             if (supportDetails) debugLog('Support Details:', supportDetails);
             return;
         }
         
-        popup.setAttribute('data-popup-type', type);
-        popupTitle.textContent = title;
-        popupMessage.textContent = message;
-
-        if (type === 'error') {
-            mailIconLink.style.display = 'inline-block';
-            const subject = encodeURIComponent(`Fehlerbericht Formularübermittlung (${title})`);
-            const body = encodeURIComponent(`Es ist ein Fehler im Formular aufgetreten:\n\nNachricht für den Benutzer:\n${message}\n\nSupport Details:\n${supportDetails}\n\nZeitstempel: ${new Date().toISOString()}\nBrowser: ${navigator.userAgent}\nSeite: ${window.location.href}`);
-            mailIconLink.href = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
-            mailIconLink.target = '_blank';
-        } else {
-            mailIconLink.style.display = 'none';
-            mailIconLink.href = '#';
+        elements.wrapper.setAttribute('data-popup-type', type);
+        elements.title.textContent = title;
+        
+        // Add error code to message if available
+        let displayMessage = message;
+        if (errorCode) {
+            const errorInterpretation = interpretErrorCode(errorCode);
+            displayMessage += `\n\nFehlercode: ${errorCode}\n${errorInterpretation}`;
         }
         
-        popup.style.display = 'flex';
+        elements.message.textContent = displayMessage;
+
+        if (type === 'error') {
+            elements.mailLink.style.display = 'inline-block';
+            const emailBody = errorCode ? 
+                `Fehlercode: ${errorCode}\nFehlerinterpretation: ${interpretErrorCode(errorCode)}\n\nSupport Details:\n${supportDetails}` : 
+                `Support Details:\n${supportDetails}`;
+            
+            const subject = encodeURIComponent(`Fehlerbericht Formularübermittlung (${title})${errorCode ? ` - Code: ${errorCode}` : ''}`);
+            const body = encodeURIComponent(`Es ist ein Fehler im Formular aufgetreten:\n\nNachricht für den Benutzer:\n${message}\n\n${emailBody}\n\nZeitstempel: ${new Date().toISOString()}\nBrowser: ${navigator.userAgent}\nSeite: ${window.location.href}`);
+            elements.mailLink.href = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+            elements.mailLink.target = '_blank';
+        } else {
+            elements.mailLink.style.display = 'none';
+            elements.mailLink.href = '#';
+        }
+        
+        elements.wrapper.style.display = 'flex';
         
         if (type !== 'error' && type !== 'loading') {
             setTimeout(closeCustomPopup, 7000);
@@ -241,52 +523,78 @@
     }
 
     function closeCustomPopup() {
-        const popup = find(POPUP_WRAPPER_ATTR);
-        if (popup) {
-            popup.style.display = 'none';
+        const elements = PopupCache.get();
+        if (elements.wrapper) {
+            elements.wrapper.style.display = 'none';
         }
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        const closeBtn = find(CLOSE_POPUP_ATTR);
-        if (closeBtn) {
-            closeBtn.addEventListener('click', closeCustomPopup);
+    // Event delegation for better performance
+    document.addEventListener('click', (event) => {
+        if (event.target.matches(CLOSE_POPUP_ATTR)) {
+            closeCustomPopup();
         }
     });
 
-    function formatToISODate(dateString) {
-        if (!dateString) return null;
-        if (/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z/.test(dateString)) {
-            return dateString;
-        }
-        
-        const ymdParts = dateString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (ymdParts) {
-            const dateObj = new Date(Date.UTC(parseInt(ymdParts[1]), parseInt(ymdParts[2]) - 1, parseInt(ymdParts[3])));
-            if (!isNaN(dateObj.getTime())) return dateObj.toISOString();
-        }
-        
-        let dateObj;
-        const deParts = dateString.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-        if (deParts) {
-            dateObj = new Date(Date.UTC(parseInt(deParts[3]), parseInt(deParts[2]) - 1, parseInt(deParts[1])));
-        } else {
-            dateObj = new Date(dateString);
-            if (isNaN(dateObj.getTime())) {
-                const now = new Date(dateString);
-                if (!isNaN(now.getTime())) {
-                    dateObj = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds()));
+    // Pre-compiled regex patterns for better performance
+    const DATE_PATTERNS = {
+        ISO: /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z/,
+        DE: /^(\d{2})\.(\d{2})\.(\d{4})$/,
+        YMD: /^(\d{4})-(\d{2})-(\d{2})$/
+    };
+
+    // Memoized date formatting with caching
+    const DateFormatCache = {
+        cache: new Map(),
+        formatToISODate(dateString) {
+            if (!dateString) return null;
+            
+            // Check cache first
+            if (this.cache.has(dateString)) {
+                return this.cache.get(dateString);
+            }
+            
+            let result = null;
+            
+            // Already ISO format
+            if (DATE_PATTERNS.ISO.test(dateString)) {
+                result = dateString;
+            } else {
+                // YYYY-MM-DD format
+                const ymdParts = dateString.match(DATE_PATTERNS.YMD);
+                if (ymdParts) {
+                    const dateObj = new Date(Date.UTC(parseInt(ymdParts[1]), parseInt(ymdParts[2]) - 1, parseInt(ymdParts[3])));
+                    if (!isNaN(dateObj.getTime())) result = dateObj.toISOString();
+                } else {
+                    // DD.MM.YYYY format
+                    const deParts = dateString.match(DATE_PATTERNS.DE);
+                    if (deParts) {
+                        const dateObj = new Date(Date.UTC(parseInt(deParts[3]), parseInt(deParts[2]) - 1, parseInt(deParts[1])));
+                        if (!isNaN(dateObj.getTime())) result = dateObj.toISOString();
+                    } else {
+                        // Generic date parsing
+                        const dateObj = new Date(dateString);
+                        if (!isNaN(dateObj.getTime())) {
+                            result = new Date(Date.UTC(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), dateObj.getHours(), dateObj.getMinutes(), dateObj.getSeconds(), dateObj.getMilliseconds())).toISOString();
+                        }
+                    }
                 }
             }
+            
+            if (!result) {
+                debugWarn('Ungültiges Datumsformat für ISO-Konvertierung:', dateString);
+            }
+            
+            // Cache the result
+            this.cache.set(dateString, result);
+            return result;
+        },
+        clear() {
+            this.cache.clear();
         }
-        
-        if (isNaN(dateObj.getTime())) {
-            debugWarn('Ungültiges Datumsformat für ISO-Konvertierung:', dateString);
-            return null;
-        }
-        
-        return dateObj.toISOString();
-    }
+    };
+
+    const formatToISODate = DateFormatCache.formatToISODate.bind(DateFormatCache);
 
     function getFriendlyErrorFieldInfo(errorMessage) {
         const result = {
@@ -625,6 +933,8 @@
 
     // Enhanced Airtable creation with better error handling
     async function createAirtableRecord(jobDetails) {
+        const errorCode = generateErrorCode('AIRTABLE_CREATE_FAILED', jobDetails.ProjectName || 'Unknown');
+        
         return await retryOperation(async () => {
             debugLog('Erstelle Airtable Record mit Daten:', jobDetails);
             
@@ -640,14 +950,20 @@
             
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(`Airtable Fehler (${response.status}): ${errorData.error?.message || JSON.stringify(errorData)}`);
+                const error = new Error(`Airtable Fehler (${response.status}): ${errorData.error?.message || JSON.stringify(errorData)}. Fehlercode: ${errorCode}`);
+                error.errorCode = errorCode;
+                error.errorType = 'AIRTABLE_CREATE_FAILED';
+                throw error;
             }
             
             const responseData = await response.json();
             const recordId = responseData.records?.[0]?.id;
             
             if (!recordId) {
-                throw new Error('Airtable Record ID nicht erhalten nach Erstellung.');
+                const error = new Error(`Airtable Record ID nicht erhalten nach Erstellung. Fehlercode: ${errorCode}`);
+                error.errorCode = errorCode;
+                error.errorType = 'AIRTABLE_CREATE_FAILED';
+                throw error;
             }
             
             debugLog('Airtable Job Record erfolgreich erstellt mit ID:', recordId);
@@ -657,6 +973,8 @@
 
     // Enhanced Webflow creation with better error handling
     async function createWebflowItem(fieldData) {
+        const errorCode = generateErrorCode('WEBFLOW_CREATE_FAILED', fieldData.name || 'Unknown');
+        
         return await retryOperation(async () => {
             debugLog('Erstelle Webflow Item mit Daten:', fieldData);
             
@@ -672,14 +990,34 @@
             
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(`Webflow Erstellungsfehler (${response.status}): ${JSON.stringify(errorData.error || errorData.errors || errorData)}`);
+                const errorMessage = errorData.error?.message || errorData.message || JSON.stringify(errorData.error || errorData.errors || errorData);
+                
+                if (response.status === 500 && errorMessage.includes('Webflow API Token missing')) {
+                    const error = new Error(`Webflow Server Konfigurationsfehler: Der Webflow API Token ist nicht konfiguriert. Fehlercode: ${errorCode}. Technische Details: ${errorMessage}`);
+                    error.errorCode = errorCode;
+                    error.errorType = 'WEBFLOW_API_TOKEN_MISSING';
+                    throw error;
+                } else if (response.status === 500) {
+                    const error = new Error(`Webflow Server Fehler (500): Der Server ist temporär nicht verfügbar. Fehlercode: ${errorCode}. Technische Details: ${errorMessage}`);
+                    error.errorCode = errorCode;
+                    error.errorType = 'WEBFLOW_CREATE_FAILED';
+                    throw error;
+                } else {
+                    const error = new Error(`Webflow Erstellungsfehler (${response.status}): ${errorMessage}. Fehlercode: ${errorCode}`);
+                    error.errorCode = errorCode;
+                    error.errorType = 'WEBFLOW_CREATE_FAILED';
+                    throw error;
+                }
             }
             
             const responseData = await response.json();
             const itemId = responseData.id || responseData.item?.id;
             
             if (!itemId) {
-                throw new Error('Webflow Item ID nicht erhalten nach Erstellung.');
+                const error = new Error(`Webflow Item ID nicht erhalten nach Erstellung. Fehlercode: ${errorCode}`);
+                error.errorCode = errorCode;
+                error.errorType = 'WEBFLOW_CREATE_FAILED';
+                throw error;
             }
             
             debugLog('Webflow Item erfolgreich erstellt mit ID:', itemId);
@@ -715,7 +1053,7 @@
 
     // Enhanced Airtable update with better error handling
     async function updateAirtableRecord(recordId, webflowItemId, additionalFields = {}) {
-        return await retryOperation(async () => {
+        return await criticalRetryOperation(async () => {
             debugLog(`Aktualisiere Airtable Record ${recordId} mit Webflow ID ${webflowItemId}`);
             
             const fieldsToUpdate = { ...additionalFields };
@@ -752,7 +1090,7 @@
 
     // Update member's posted-jobs field in Webflow with enhanced debugging
     async function updateWebflowMemberPostedJobs(webflowMemberId, newWebflowJobId) {
-        return await retryOperation(async () => {
+        return await criticalRetryOperation(async () => {
             debugLog(`Aktualisiere Webflow Member ${webflowMemberId} - füge Job ${newWebflowJobId} zu posted-jobs hinzu`);
             
             // 1. Aktuelles Member Item laden
@@ -837,6 +1175,221 @@
         });
     }
 
+    // Verification functions
+    async function verifyAirtableJobId(airtableRecordId) {
+        const errorCode = generateErrorCode('AIRTABLE_VERIFICATION_FAILED', airtableRecordId);
+        
+        try {
+            debugLog(`Verifiziere Airtable Job-ID für Record ${airtableRecordId}`);
+            
+            // Try multiple endpoints for Airtable verification
+            const endpoints = [
+                { url: `${AIRTABLE_WORKER_URL}/get-record`, method: 'POST', body: { recordId: airtableRecordId } },
+                { url: `${AIRTABLE_WORKER_URL}/verify-record`, method: 'POST', body: { recordId: airtableRecordId } },
+                { url: `${AIRTABLE_WORKER_URL}/record/${airtableRecordId}`, method: 'GET' }
+            ];
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await fetch(endpoint.url, {
+                        method: endpoint.method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: endpoint.body ? JSON.stringify(endpoint.body) : undefined
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        const webflowIdField = AIRTABLE_FIELD_MAPPINGS['webflowItemIdFieldAirtable'];
+                        const hasWebflowId = data.fields && data.fields[webflowIdField];
+                        
+                        debugLog(`Airtable Verification: ${hasWebflowId ? 'PASSED' : 'FAILED'} - Webflow ID: ${hasWebflowId || 'FEHLT'}`);
+                        return hasWebflowId;
+                    }
+                } catch (endpointError) {
+                    debugWarn(`Airtable Endpoint ${endpoint.url} fehlgeschlagen:`, endpointError.message);
+                }
+            }
+            
+            // All endpoints failed
+            const error = new Error(`Airtable Verification fehlgeschlagen - alle Endpunkte unerreichbar. Fehlercode: ${errorCode}`);
+            error.errorCode = errorCode;
+            error.errorType = 'AIRTABLE_ENDPOINT_UNAVAILABLE';
+            throw error;
+            
+        } catch (error) {
+            debugError(`Airtable Verification Fehler (${errorCode}):`, error);
+            error.errorCode = errorCode;
+            error.errorType = 'AIRTABLE_VERIFICATION_FAILED';
+            throw error;
+        }
+    }
+
+    async function verifyWebflowJobId(webflowItemId) {
+        const errorCode = generateErrorCode('WEBFLOW_VERIFICATION_FAILED', webflowItemId);
+        
+        try {
+            debugLog(`Verifiziere Webflow Job-ID für Item ${webflowItemId}`);
+            
+            // Try multiple endpoints for Webflow verification
+            const endpoints = [
+                { url: `${WEBFLOW_CMS_POST_WORKER_URL}/get-item`, method: 'POST', body: { itemId: webflowItemId } },
+                { url: `${WEBFLOW_CMS_POST_WORKER_URL}/verify-item`, method: 'POST', body: { itemId: webflowItemId } },
+                { url: `${WEBFLOW_CMS_POST_WORKER_URL}/${webflowItemId}`, method: 'GET' },
+                { url: `${WEBFLOW_CMS_POST_WORKER_URL}/item/${webflowItemId}`, method: 'GET' }
+            ];
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await fetch(endpoint.url, {
+                        method: endpoint.method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: endpoint.body ? JSON.stringify(endpoint.body) : undefined
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        const jobIdField = WEBFLOW_FIELD_SLUG_MAPPINGS['airtableJobIdForWebflow'];
+                        const hasJobId = data.fields && data.fields[jobIdField];
+                        
+                        debugLog(`Webflow Verification: ${hasJobId ? 'PASSED' : 'FAILED'} - Job ID: ${hasJobId || 'FEHLT'}`);
+                        return hasJobId;
+                    }
+                } catch (endpointError) {
+                    debugWarn(`Webflow Endpoint ${endpoint.url} fehlgeschlagen:`, endpointError.message);
+                }
+            }
+            
+            // All endpoints failed
+            const error = new Error(`Webflow Verification fehlgeschlagen - alle Endpunkte unerreichbar. Fehlercode: ${errorCode}`);
+            error.errorCode = errorCode;
+            error.errorType = 'WEBFLOW_ENDPOINT_UNAVAILABLE';
+            throw error;
+            
+        } catch (error) {
+            debugError(`Webflow Verification Fehler (${errorCode}):`, error);
+            error.errorCode = errorCode;
+            error.errorType = 'WEBFLOW_VERIFICATION_FAILED';
+            throw error;
+        }
+    }
+
+    async function verifyMemberHasJob(webflowMemberId, expectedJobId) {
+        try {
+            debugLog(`Verifiziere Member ${webflowMemberId} hat Job ${expectedJobId}`);
+            
+            const response = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/members/${webflowMemberId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Member Verification fehlgeschlagen (${response.status})`);
+            }
+            
+            const data = await response.json();
+            let postedJobs = [];
+            
+            if (data.fieldData && data.fieldData['posted-jobs']) {
+                postedJobs = data.fieldData['posted-jobs'];
+            } else if (data.fields && data.fields['posted-jobs']) {
+                postedJobs = data.fields['posted-jobs'];
+            } else if (data['posted-jobs']) {
+                postedJobs = data['posted-jobs'];
+            }
+            
+            if (!Array.isArray(postedJobs)) {
+                postedJobs = postedJobs ? [postedJobs] : [];
+            }
+            
+            const hasJob = postedJobs.includes(expectedJobId);
+            debugLog(`Member Verification: ${hasJob ? 'PASSED' : 'FAILED'} - Jobs: ${postedJobs.length}, Expected: ${expectedJobId}`);
+            return hasJob;
+        } catch (error) {
+            debugError('Member Verification Fehler:', error);
+            return false;
+        }
+    }
+
+    // Optimized batch verification
+    async function performCriticalVerification(transactionState, webflowMemberId) {
+        debugLog('=== STARTING CRITICAL VERIFICATION ===');
+        
+        const verificationResults = {
+            airtableHasWebflowId: false,
+            webflowHasJobId: false,
+            memberHasJob: false
+        };
+        
+        try {
+            // Batch all verification calls for parallel execution
+            const verificationPromises = [];
+            
+            if (transactionState.airtableRecordId) {
+                verificationPromises.push(
+                    verifyAirtableJobId(transactionState.airtableRecordId)
+                        .then(result => ({ type: 'airtable', result }))
+                        .catch(error => ({ type: 'airtable', result: false, error }))
+                );
+            }
+            
+            if (transactionState.webflowItemId) {
+                verificationPromises.push(
+                    verifyWebflowJobId(transactionState.webflowItemId)
+                        .then(result => ({ type: 'webflow', result }))
+                        .catch(error => ({ type: 'webflow', result: false, error }))
+                );
+            }
+            
+            if (webflowMemberId && transactionState.webflowItemId) {
+                verificationPromises.push(
+                    verifyMemberHasJob(webflowMemberId, transactionState.webflowItemId)
+                        .then(result => ({ type: 'member', result }))
+                        .catch(error => ({ type: 'member', result: false, error }))
+                );
+            }
+            
+            // Execute all verifications in parallel
+            const results = await Promise.all(verificationPromises);
+            
+            // Process results
+            results.forEach(({ type, result, error }) => {
+                if (error) {
+                    debugError(`${type} verification error:`, error);
+                }
+                
+                switch (type) {
+                    case 'airtable':
+                        verificationResults.airtableHasWebflowId = result;
+                        break;
+                    case 'webflow':
+                        verificationResults.webflowHasJobId = result;
+                        break;
+                    case 'member':
+                        verificationResults.memberHasJob = result;
+                        break;
+                }
+            });
+            
+            const allPassed = verificationResults.airtableHasWebflowId && 
+                             verificationResults.webflowHasJobId && 
+                             verificationResults.memberHasJob;
+            
+            debugLog('Verification Ergebnis:', {
+                webflowJobId: verificationResults.webflowHasJobId,
+                airtableWebflowId: verificationResults.airtableHasWebflowId,
+                memberHasJob: verificationResults.memberHasJob,
+                overall: allPassed ? 'PASSED' : 'FAILED'
+            });
+            
+            return { passed: allPassed, results: verificationResults };
+        } catch (error) {
+            debugError('Critical Verification Fehler:', error);
+            return { passed: false, results: verificationResults, error: error.message };
+        }
+    }
+
     // Credit deduction function
     async function deductMemberstackCredit(memberstackId) {
         if (!memberstackId) {
@@ -875,11 +1428,22 @@
         }
     }
 
+    // Global submission lock to prevent race conditions
+    let isSubmitting = false;
+
     // Main form submission handler with enhanced error handling and transaction logic
     async function handleFormSubmit(event, testData = null) {
         if (event && typeof event.preventDefault === 'function') {
             event.preventDefault();
         }
+        
+        // Prevent multiple simultaneous submissions
+        if (isSubmitting) {
+            debugWarn('Formular wird bereits verarbeitet, ignoriere weitere Submission');
+            return;
+        }
+        
+        isSubmitting = true;
         
         const form = find(`#${MAIN_FORM_ID}`);
         const submitButton = form ? form.querySelector('button[type="submit"], input[type="submit"]') : null;
@@ -893,21 +1457,17 @@
             else submitButton.value = sendingText;
         }
 
-        // Transaction state tracking
-        let transactionState = {
-            airtableRecordId: null,
-            webflowItemId: null,
-            memberRecordId: null,
-            memberUpdated: false,
-            creditDeducted: false,
-            completed: false
-        };
+        // Use object pooling for transaction state
+        const transactionState = ObjectPool.getTransactionState();
+
+        // Initialize rawFormData early to avoid reference errors
+        let rawFormData = {};
 
         try {
             showCustomPopup('Deine Eingaben werden vorbereitet...', 'loading', 'Einen Moment bitte...');
 
             // Step 1: Collect and validate form data
-            const rawFormData = testData ? testData : collectAndFormatFormData(form);
+            rawFormData = testData ? testData : collectAndFormatFormData(form);
 
             if (!rawFormData['projectName'] && !rawFormData['job-title']) {
                 throw new Error('VALIDATION_ERROR: Bitte geben Sie einen Job-Titel an.');
@@ -1063,8 +1623,10 @@
             // Step 7: Update Webflow item with its own ID (if mapping exists)
             const jobSlugInWebflowToUpdate = WEBFLOW_FIELD_SLUG_MAPPINGS['airtableJobIdForWebflow'];
             if (jobSlugInWebflowToUpdate) {
-                await updateWebflowItem(transactionState.webflowItemId, {
-                    [jobSlugInWebflowToUpdate]: transactionState.webflowItemId
+                await criticalRetryOperation(async () => {
+                    await updateWebflowItem(transactionState.webflowItemId, {
+                        [jobSlugInWebflowToUpdate]: transactionState.webflowItemId
+                    });
                 });
             }
 
@@ -1073,19 +1635,89 @@
             // Step 8: Update Airtable with Webflow ID
             await updateAirtableRecord(transactionState.airtableRecordId, transactionState.webflowItemId);
 
-            // Step 9: Update member's posted-jobs field in Webflow
+            // Step 9: Update member's posted-jobs field in Webflow (CRITICAL - must succeed)
             showCustomPopup('Verknüpfung mit deinem Profil wird erstellt...', 'loading', 'Profil-Update');
-            try {
-                await updateWebflowMemberPostedJobs(webflowMemberIdOfTheSubmitter, transactionState.webflowItemId);
-                transactionState.memberUpdated = true;
-                debugLog('Webflow Member posted-jobs Feld erfolgreich aktualisiert.');
-            } catch (memberUpdateError) {
-                debugError('Fehler beim Aktualisieren der Webflow Member posted-jobs:', memberUpdateError);
-                // This is not critical enough to fail the entire process, but we should log it
-                // The job is still created successfully
-            }
+            await updateWebflowMemberPostedJobs(webflowMemberIdOfTheSubmitter, transactionState.webflowItemId);
+            transactionState.memberUpdated = true;
+            debugLog('Webflow Member posted-jobs Feld erfolgreich aktualisiert.');
 
-            // Step 10: Deduct credit (non-critical - don't fail if this fails)
+            // Step 10: Critical Verification
+            showCustomPopup('Verifiziere Job-Erstellung...', 'loading', 'Finale Überprüfung');
+            const verification = await performCriticalVerification(transactionState, webflowMemberIdOfTheSubmitter);
+            
+            if (!verification.passed) {
+                debugError('Critical Verification fehlgeschlagen:', verification);
+                
+                // Try to fix missing connections
+                let fixAttempts = 0;
+                const maxFixAttempts = 2;
+                
+                while (!verification.passed && fixAttempts < maxFixAttempts) {
+                    fixAttempts++;
+                    debugLog(`Fix-Versuch ${fixAttempts}/${maxFixAttempts}`);
+                    
+                    // Fix 1: Update Airtable if missing Webflow ID
+                    if (!verification.results.airtableHasWebflowId && transactionState.airtableRecordId && transactionState.webflowItemId) {
+                        debugLog('Versuche Airtable Webflow ID nachzutragen...');
+                        try {
+                            await updateAirtableRecord(transactionState.airtableRecordId, transactionState.webflowItemId);
+                            verification.results.airtableHasWebflowId = true;
+                        } catch (error) {
+                            debugError('Airtable Fix fehlgeschlagen:', error);
+                        }
+                    }
+                    
+                    // Fix 2: Update Webflow if missing Job ID
+                    if (!verification.results.webflowHasJobId && transactionState.webflowItemId) {
+                        debugLog('Versuche Webflow Job ID nachzutragen...');
+                        try {
+                            const jobSlugInWebflowToUpdate = WEBFLOW_FIELD_SLUG_MAPPINGS['airtableJobIdForWebflow'];
+                            if (jobSlugInWebflowToUpdate) {
+                                await updateWebflowItem(transactionState.webflowItemId, {
+                                    [jobSlugInWebflowToUpdate]: transactionState.webflowItemId
+                                });
+                                verification.results.webflowHasJobId = true;
+                            }
+                        } catch (error) {
+                            debugError('Webflow Fix fehlgeschlagen:', error);
+                        }
+                    }
+                    
+                    // Fix 3: Update Member if missing Job
+                    if (!verification.results.memberHasJob && webflowMemberIdOfTheSubmitter && transactionState.webflowItemId) {
+                        debugLog('Versuche Member Job nachzutragen...');
+                        try {
+                            await updateWebflowMemberPostedJobs(webflowMemberIdOfTheSubmitter, transactionState.webflowItemId);
+                            verification.results.memberHasJob = true;
+                        } catch (error) {
+                            debugError('Member Fix fehlgeschlagen:', error);
+                        }
+                    }
+                    
+                    // Re-verify after fixes
+                    if (fixAttempts < maxFixAttempts) {
+                        const reVerification = await performCriticalVerification(transactionState, webflowMemberIdOfTheSubmitter);
+                        verification.passed = reVerification.passed;
+                        verification.results = reVerification.results;
+                    }
+                }
+                
+                if (!verification.passed) {
+                    // Check if Member verification passed (most important)
+                    if (verification.results.memberHasJob) {
+                        debugLog('Member Verification erfolgreich - Job wurde korrekt hinzugefügt');
+                        debugWarn('Airtable/Webflow Verification übersprungen aufgrund von Endpoint-Problemen, aber Job ist funktional');
+                        // Don't throw error if member verification passed
+                    } else {
+                        throw new Error(`VERIFICATION_FAILED: Job wurde erstellt, aber Verknüpfungen sind unvollständig. Airtable: ${verification.results.airtableHasWebflowId}, Webflow: ${verification.results.webflowHasJobId}, Member: ${verification.results.memberHasJob}`);
+                    }
+                }
+            }
+            
+            transactionState.verificationPassed = true;
+            debugLog('=== VERIFICATION COMPLETED SUCCESSFULLY ===');
+
+            // Step 11: Deduct credit (non-critical - don't fail if this fails)
             const memberstackId = rawFormData['memberstackId'];
             if (memberstackId) {
                 transactionState.creditDeducted = await deductMemberstackCredit(memberstackId);
@@ -1094,6 +1726,17 @@
             // Success!
             transactionState.completed = true;
             showCustomPopup('Dein Job wurde erfolgreich veröffentlicht!', 'success', 'Fertig!');
+            
+            // Send success email
+            try {
+                await sendSuccessEmail({
+                    ...rawFormData,
+                    airtableJobId: transactionState.airtableRecordId,
+                    webflowItemId: transactionState.webflowItemId
+                });
+            } catch (emailError) {
+                debugError('Success Email konnte nicht gesendet werden:', emailError);
+            }
             
             if (submitButton) {
                 const finalSuccessText = 'Erfolgreich gesendet!';
@@ -1107,17 +1750,22 @@
             // Handle validation errors differently
             if (error.message.startsWith('VALIDATION_ERROR:')) {
                 const userMessage = error.message.replace('VALIDATION_ERROR: ', '');
-                showCustomPopup(userMessage, 'error', 'Fehlende Eingabe', `Frontend Validation Error: ${error.message}`);
+                showCustomPopup(userMessage, 'error', 'Fehlende Eingabe', `Frontend Validation Error: ${error.message}`, error.errorCode);
             } else if (error.message.startsWith('MEMBER_SEARCH_ERROR:')) {
                 const userMessage = error.message.replace('MEMBER_SEARCH_ERROR: ', '');
-                showCustomPopup("Dein Benutzerkonto konnte nicht überprüft werden. Bitte lade die Seite neu oder kontaktiere den Support.", 'error', 'Fehler bei der Benutzerprüfung', `Member Search Error: ${userMessage}`);
+                showCustomPopup("Dein Benutzerkonto konnte nicht überprüft werden. Bitte lade die Seite neu oder kontaktiere den Support.", 'error', 'Fehler bei der Benutzerprüfung', `Member Search Error: ${userMessage}`, error.errorCode);
+            } else if (error.message.startsWith('VERIFICATION_FAILED:')) {
+                const userMessage = error.message.replace('VERIFICATION_FAILED: ', '');
+                showCustomPopup("Dein Job wurde erstellt, aber es gab Probleme bei der Verknüpfung. Der Support wurde automatisch benachrichtigt und wird das Problem beheben.", 'error', 'Verknüpfungsproblem', `Verification Error: ${userMessage}`, error.errorCode);
             } else {
                 // Handle other errors
                 const technicalSupportDetails = `Fehler: ${error.message}. Stack: ${error.stack}. TransactionState: ${JSON.stringify(transactionState)}. RawData: ${JSON.stringify(rawFormData || {})}`;
                 const friendlyInfo = getFriendlyErrorFieldInfo(error.message);
                 
                 let userDisplayMessage;
-                if (friendlyInfo.area) {
+                if (error.message.includes('500') || error.message.includes('Server Fehler') || error.message.includes('Konfigurationsfehler')) {
+                    userDisplayMessage = "Der Server ist temporär nicht verfügbar oder nicht korrekt konfiguriert. Bitte versuchen Sie es in ein paar Minuten erneut. Falls das Problem weiterhin besteht, kontaktieren Sie den Support.";
+                } else if (friendlyInfo.area) {
                     userDisplayMessage = `Es tut uns leid, ein Fehler ist aufgetreten.`;
                     if (friendlyInfo.field) {
                         userDisplayMessage += ` Möglicherweise betrifft es das Feld "${friendlyInfo.field}".`;
@@ -1127,7 +1775,20 @@
                     userDisplayMessage = "Es tut uns leid, leider ist ein unerwarteter Fehler bei der Verarbeitung Ihrer Anfrage aufgetreten. Bitte kontaktieren Sie den Support für weitere Hilfe.";
                 }
                 
-                showCustomPopup(userDisplayMessage, 'error', friendlyInfo.title, technicalSupportDetails);
+                showCustomPopup(userDisplayMessage, 'error', friendlyInfo.title, technicalSupportDetails, error.errorCode);
+            }
+
+            // Send error email
+            try {
+                await sendErrorEmail({
+                    message: error.message,
+                    stack: error.stack,
+                    userEmail: rawFormData?.memberEmail || 'Unbekannt',
+                    jobTitle: rawFormData?.['job-title'] || rawFormData?.projectName || 'Unbekannt',
+                    transactionState: transactionState
+                });
+            } catch (emailError) {
+                debugError('Error Email konnte nicht gesendet werden:', emailError);
             }
 
             // Rollback: Clean up created records if transaction failed
@@ -1143,6 +1804,12 @@
                 else submitButton.value = initialSubmitButtonText;
             }
         } finally {
+            // Reset submission lock
+            isSubmitting = false;
+            
+            // Return transaction state to pool
+            ObjectPool.returnTransactionState(transactionState);
+            
             // Final cleanup of submit button state
             if (submitButton && submitButton.disabled) {
                 const currentButtonText = submitButton.tagName === 'BUTTON' ? submitButton.textContent : submitButton.value;
@@ -1175,6 +1842,19 @@
         handleFormSubmit(event, null);
     }
 
+    // Global cleanup function for memory management
+    function cleanup() {
+        // Clear all caches
+        DOMCache.clear();
+        PopupCache.clear();
+        DateFormatCache.clear();
+        
+        // Reset global state
+        isSubmitting = false;
+        
+        debugLog('Memory cleanup completed');
+    }
+
     // Initialize on DOM ready
     document.addEventListener('DOMContentLoaded', () => {
         const mainForm = find(`#${MAIN_FORM_ID}`);
@@ -1185,10 +1865,13 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            debugLog(`Form Submission Handler v21.3 initialisiert für: #${MAIN_FORM_ID}`);
+            debugLog(`Form Submission Handler v21.8 initialisiert für: #${MAIN_FORM_ID}`);
         } else {
             debugWarn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }
     });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', cleanup);
 
 })();

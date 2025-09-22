@@ -1,6 +1,6 @@
 // form-submission-handler.js
-// VERSION 21.4: Enhanced with EmailJS Integration and Improved Error Handling
-// Verbesserte Version mit EmailJS, robusterer Retry-Logik und Race Condition Prevention
+// VERSION 21.6: Performance Optimized with Advanced Caching and Memory Management
+// Hochoptimierte Version mit DOM Caching, Object Pooling, Batch Operations und Memory Management
 
 (function() {
     'use strict';
@@ -197,49 +197,147 @@
         'webflowItemIdFieldAirtable': 'Webflow Item ID'
     };
 
-    // Utility functions
-    const find = (selector, element = document) => element.querySelector(selector);
-    const findAll = (selector, element = document) => element.querySelectorAll(selector);
+    // Optimized utility functions with caching
+    const DOMCache = {
+        elements: new Map(),
+        find(selector, element = document) {
+            const key = `${selector}_${element === document ? 'doc' : element.tagName}`;
+            if (!this.elements.has(key)) {
+                this.elements.set(key, element.querySelector(selector));
+            }
+            return this.elements.get(key);
+        },
+        findAll(selector, element = document) {
+            const key = `${selector}_all_${element === document ? 'doc' : element.tagName}`;
+            if (!this.elements.has(key)) {
+                this.elements.set(key, Array.from(element.querySelectorAll(selector)));
+            }
+            return this.elements.get(key);
+        },
+        clear() {
+            this.elements.clear();
+        }
+    };
 
-    // Retry mechanism for API calls
-    async function retryOperation(operation, maxRetries = MAX_RETRIES, delay = RETRY_DELAY) {
+    const find = DOMCache.find.bind(DOMCache);
+    const findAll = DOMCache.findAll.bind(DOMCache);
+
+    // Object pooling for frequent objects
+    const ObjectPool = {
+        transactionStates: [],
+        getTransactionState() {
+            const state = this.transactionStates.pop() || {};
+            return Object.assign(state, {
+                airtableRecordId: null,
+                webflowItemId: null,
+                memberRecordId: null,
+                memberUpdated: false,
+                creditDeducted: false,
+                completed: false,
+                verificationPassed: false
+            });
+        },
+        returnTransactionState(state) {
+            Object.keys(state).forEach(key => state[key] = null);
+            this.transactionStates.push(state);
+        }
+    };
+
+    // Popup elements caching
+    const PopupCache = {
+        elements: null,
+        get() {
+            if (!this.elements) {
+                this.elements = {
+                    wrapper: find(POPUP_WRAPPER_ATTR),
+                    title: find(POPUP_TITLE_ATTR),
+                    message: find(POPUP_MESSAGE_ATTR),
+                    mailLink: find(MAIL_ERROR_ATTR),
+                    closeBtn: find(CLOSE_POPUP_ATTR)
+                };
+            }
+            return this.elements;
+        },
+        clear() {
+            this.elements = null;
+        }
+    };
+
+    // Optimized retry mechanism with exponential backoff and jitter
+    async function optimizedRetryOperation(operation, maxRetries = MAX_RETRIES, baseDelay = RETRY_DELAY) {
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 return await operation();
             } catch (error) {
                 debugWarn(`Attempt ${attempt} failed:`, error.message);
-                if (attempt === maxRetries) {
-                    throw error;
-                }
-                await new Promise(resolve => setTimeout(resolve, delay * attempt));
+                if (attempt === maxRetries) throw error;
+                
+                // Exponential backoff with jitter
+                const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
+                await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
     }
 
     // Critical retry mechanism for important operations
-    async function criticalRetryOperation(operation, maxRetries = CRITICAL_MAX_RETRIES, delay = CRITICAL_RETRY_DELAY) {
+    async function criticalRetryOperation(operation, maxRetries = CRITICAL_MAX_RETRIES, baseDelay = CRITICAL_RETRY_DELAY) {
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 return await operation();
             } catch (error) {
                 debugWarn(`Critical attempt ${attempt} failed:`, error.message);
-                if (attempt === maxRetries) {
-                    throw error;
-                }
-                await new Promise(resolve => setTimeout(resolve, delay * attempt));
+                if (attempt === maxRetries) throw error;
+                
+                // Exponential backoff with jitter for critical operations
+                const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 2000;
+                await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
     }
 
-    // EmailJS Integration
+    // Backward compatibility
+    const retryOperation = optimizedRetryOperation;
+
+    // Optimized EmailJS with lazy loading and caching
+    const EmailJSCache = {
+        loaded: false,
+        loading: null,
+        async ensureLoaded() {
+            if (this.loaded) return true;
+            if (this.loading) return this.loading;
+            
+            this.loading = this.loadScript();
+            await this.loading;
+            this.loaded = true;
+            this.loading = null;
+            return true;
+        },
+        async loadScript() {
+            return new Promise((resolve, reject) => {
+                if (window.emailjs) {
+                    emailjs.init(EMAILJS_CONFIG.PUBLIC_KEY);
+                    resolve();
+                    return;
+                }
+
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js';
+                script.onload = () => {
+                    emailjs.init(EMAILJS_CONFIG.PUBLIC_KEY);
+                    resolve();
+                };
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+    };
+
+    // Optimized EmailJS Integration
     async function sendEmailJS(templateId, templateParams) {
         try {
             debugLog('Sende EmailJS:', { templateId, templateParams });
             
-            if (!window.emailjs) {
-                debugWarn('EmailJS nicht geladen, lade Script...');
-                await loadEmailJSScript();
-            }
+            await EmailJSCache.ensureLoaded();
 
             const response = await emailjs.send(
                 EMAILJS_CONFIG.SERVICE_ID,
@@ -254,25 +352,6 @@
             debugError('EmailJS Fehler:', error);
             throw error;
         }
-    }
-
-    // EmailJS Script laden falls nicht vorhanden
-    async function loadEmailJSScript() {
-        return new Promise((resolve, reject) => {
-            if (window.emailjs) {
-                resolve();
-                return;
-            }
-
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js';
-            script.onload = () => {
-                emailjs.init(EMAILJS_CONFIG.PUBLIC_KEY);
-                resolve();
-            };
-            script.onerror = reject;
-            document.head.appendChild(script);
-        });
     }
 
     // Success Email senden
@@ -316,35 +395,33 @@
         }
     }
 
+    // Optimized popup functions with caching
     function showCustomPopup(message, type, title, supportDetails = '') {
-        const popup = find(POPUP_WRAPPER_ATTR);
-        const popupTitle = find(POPUP_TITLE_ATTR);
-        const popupMessage = find(POPUP_MESSAGE_ATTR);
-        const mailIconLink = find(MAIL_ERROR_ATTR);
-
-        if (!popup || !popupTitle || !popupMessage || !mailIconLink) {
+        const elements = PopupCache.get();
+        
+        if (!elements.wrapper || !elements.title || !elements.message || !elements.mailLink) {
             debugError("Popup-Elemente nicht gefunden!");
             debugLog(`Status: ${type.toUpperCase()} - Titel: ${title} - Nachricht: ${message}`);
             if (supportDetails) debugLog('Support Details:', supportDetails);
             return;
         }
         
-        popup.setAttribute('data-popup-type', type);
-        popupTitle.textContent = title;
-        popupMessage.textContent = message;
+        elements.wrapper.setAttribute('data-popup-type', type);
+        elements.title.textContent = title;
+        elements.message.textContent = message;
 
         if (type === 'error') {
-            mailIconLink.style.display = 'inline-block';
+            elements.mailLink.style.display = 'inline-block';
             const subject = encodeURIComponent(`Fehlerbericht Formularübermittlung (${title})`);
             const body = encodeURIComponent(`Es ist ein Fehler im Formular aufgetreten:\n\nNachricht für den Benutzer:\n${message}\n\nSupport Details:\n${supportDetails}\n\nZeitstempel: ${new Date().toISOString()}\nBrowser: ${navigator.userAgent}\nSeite: ${window.location.href}`);
-            mailIconLink.href = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
-            mailIconLink.target = '_blank';
+            elements.mailLink.href = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+            elements.mailLink.target = '_blank';
         } else {
-            mailIconLink.style.display = 'none';
-            mailIconLink.href = '#';
+            elements.mailLink.style.display = 'none';
+            elements.mailLink.href = '#';
         }
         
-        popup.style.display = 'flex';
+        elements.wrapper.style.display = 'flex';
         
         if (type !== 'error' && type !== 'loading') {
             setTimeout(closeCustomPopup, 7000);
@@ -352,52 +429,78 @@
     }
 
     function closeCustomPopup() {
-        const popup = find(POPUP_WRAPPER_ATTR);
-        if (popup) {
-            popup.style.display = 'none';
+        const elements = PopupCache.get();
+        if (elements.wrapper) {
+            elements.wrapper.style.display = 'none';
         }
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        const closeBtn = find(CLOSE_POPUP_ATTR);
-        if (closeBtn) {
-            closeBtn.addEventListener('click', closeCustomPopup);
+    // Event delegation for better performance
+    document.addEventListener('click', (event) => {
+        if (event.target.matches(CLOSE_POPUP_ATTR)) {
+            closeCustomPopup();
         }
     });
 
-    function formatToISODate(dateString) {
-        if (!dateString) return null;
-        if (/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z/.test(dateString)) {
-            return dateString;
-        }
-        
-        const ymdParts = dateString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (ymdParts) {
-            const dateObj = new Date(Date.UTC(parseInt(ymdParts[1]), parseInt(ymdParts[2]) - 1, parseInt(ymdParts[3])));
-            if (!isNaN(dateObj.getTime())) return dateObj.toISOString();
-        }
-        
-        let dateObj;
-        const deParts = dateString.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-        if (deParts) {
-            dateObj = new Date(Date.UTC(parseInt(deParts[3]), parseInt(deParts[2]) - 1, parseInt(deParts[1])));
-        } else {
-            dateObj = new Date(dateString);
-            if (isNaN(dateObj.getTime())) {
-                const now = new Date(dateString);
-                if (!isNaN(now.getTime())) {
-                    dateObj = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds()));
+    // Pre-compiled regex patterns for better performance
+    const DATE_PATTERNS = {
+        ISO: /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z/,
+        DE: /^(\d{2})\.(\d{2})\.(\d{4})$/,
+        YMD: /^(\d{4})-(\d{2})-(\d{2})$/
+    };
+
+    // Memoized date formatting with caching
+    const DateFormatCache = {
+        cache: new Map(),
+        formatToISODate(dateString) {
+            if (!dateString) return null;
+            
+            // Check cache first
+            if (this.cache.has(dateString)) {
+                return this.cache.get(dateString);
+            }
+            
+            let result = null;
+            
+            // Already ISO format
+            if (DATE_PATTERNS.ISO.test(dateString)) {
+                result = dateString;
+            } else {
+                // YYYY-MM-DD format
+                const ymdParts = dateString.match(DATE_PATTERNS.YMD);
+                if (ymdParts) {
+                    const dateObj = new Date(Date.UTC(parseInt(ymdParts[1]), parseInt(ymdParts[2]) - 1, parseInt(ymdParts[3])));
+                    if (!isNaN(dateObj.getTime())) result = dateObj.toISOString();
+                } else {
+                    // DD.MM.YYYY format
+                    const deParts = dateString.match(DATE_PATTERNS.DE);
+                    if (deParts) {
+                        const dateObj = new Date(Date.UTC(parseInt(deParts[3]), parseInt(deParts[2]) - 1, parseInt(deParts[1])));
+                        if (!isNaN(dateObj.getTime())) result = dateObj.toISOString();
+                    } else {
+                        // Generic date parsing
+                        const dateObj = new Date(dateString);
+                        if (!isNaN(dateObj.getTime())) {
+                            result = new Date(Date.UTC(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), dateObj.getHours(), dateObj.getMinutes(), dateObj.getSeconds(), dateObj.getMilliseconds())).toISOString();
+                        }
+                    }
                 }
             }
+            
+            if (!result) {
+                debugWarn('Ungültiges Datumsformat für ISO-Konvertierung:', dateString);
+            }
+            
+            // Cache the result
+            this.cache.set(dateString, result);
+            return result;
+        },
+        clear() {
+            this.cache.clear();
         }
-        
-        if (isNaN(dateObj.getTime())) {
-            debugWarn('Ungültiges Datumsformat für ISO-Konvertierung:', dateString);
-            return null;
-        }
-        
-        return dateObj.toISOString();
-    }
+    };
+
+    const formatToISODate = DateFormatCache.formatToISODate.bind(DateFormatCache);
 
     function getFriendlyErrorFieldInfo(errorMessage) {
         const result = {
@@ -956,6 +1059,178 @@
         });
     }
 
+    // Verification functions
+    async function verifyAirtableJobId(airtableRecordId) {
+        try {
+            debugLog(`Verifiziere Airtable Job-ID für Record ${airtableRecordId}`);
+            
+            const response = await fetch(`${AIRTABLE_WORKER_URL}/get-record/${airtableRecordId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Airtable Verification fehlgeschlagen (${response.status})`);
+            }
+            
+            const data = await response.json();
+            const webflowIdField = AIRTABLE_FIELD_MAPPINGS['webflowItemIdFieldAirtable'];
+            const hasWebflowId = data.fields && data.fields[webflowIdField];
+            
+            debugLog(`Airtable Verification: ${hasWebflowId ? 'PASSED' : 'FAILED'} - Webflow ID: ${hasWebflowId || 'FEHLT'}`);
+            return hasWebflowId;
+        } catch (error) {
+            debugError('Airtable Verification Fehler:', error);
+            return false;
+        }
+    }
+
+    async function verifyWebflowJobId(webflowItemId) {
+        try {
+            debugLog(`Verifiziere Webflow Job-ID für Item ${webflowItemId}`);
+            
+            const response = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/${webflowItemId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Webflow Verification fehlgeschlagen (${response.status})`);
+            }
+            
+            const data = await response.json();
+            const jobIdField = WEBFLOW_FIELD_SLUG_MAPPINGS['airtableJobIdForWebflow'];
+            const hasJobId = data.fields && data.fields[jobIdField];
+            
+            debugLog(`Webflow Verification: ${hasJobId ? 'PASSED' : 'FAILED'} - Job ID: ${hasJobId || 'FEHLT'}`);
+            return hasJobId;
+        } catch (error) {
+            debugError('Webflow Verification Fehler:', error);
+            return false;
+        }
+    }
+
+    async function verifyMemberHasJob(webflowMemberId, expectedJobId) {
+        try {
+            debugLog(`Verifiziere Member ${webflowMemberId} hat Job ${expectedJobId}`);
+            
+            const response = await fetch(`${WEBFLOW_CMS_POST_WORKER_URL}/members/${webflowMemberId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Member Verification fehlgeschlagen (${response.status})`);
+            }
+            
+            const data = await response.json();
+            let postedJobs = [];
+            
+            if (data.fieldData && data.fieldData['posted-jobs']) {
+                postedJobs = data.fieldData['posted-jobs'];
+            } else if (data.fields && data.fields['posted-jobs']) {
+                postedJobs = data.fields['posted-jobs'];
+            } else if (data['posted-jobs']) {
+                postedJobs = data['posted-jobs'];
+            }
+            
+            if (!Array.isArray(postedJobs)) {
+                postedJobs = postedJobs ? [postedJobs] : [];
+            }
+            
+            const hasJob = postedJobs.includes(expectedJobId);
+            debugLog(`Member Verification: ${hasJob ? 'PASSED' : 'FAILED'} - Jobs: ${postedJobs.length}, Expected: ${expectedJobId}`);
+            return hasJob;
+        } catch (error) {
+            debugError('Member Verification Fehler:', error);
+            return false;
+        }
+    }
+
+    // Optimized batch verification
+    async function performCriticalVerification(transactionState, webflowMemberId) {
+        debugLog('=== STARTING CRITICAL VERIFICATION ===');
+        
+        const verificationResults = {
+            airtableHasWebflowId: false,
+            webflowHasJobId: false,
+            memberHasJob: false
+        };
+        
+        try {
+            // Batch all verification calls for parallel execution
+            const verificationPromises = [];
+            
+            if (transactionState.airtableRecordId) {
+                verificationPromises.push(
+                    verifyAirtableJobId(transactionState.airtableRecordId)
+                        .then(result => ({ type: 'airtable', result }))
+                        .catch(error => ({ type: 'airtable', result: false, error }))
+                );
+            }
+            
+            if (transactionState.webflowItemId) {
+                verificationPromises.push(
+                    verifyWebflowJobId(transactionState.webflowItemId)
+                        .then(result => ({ type: 'webflow', result }))
+                        .catch(error => ({ type: 'webflow', result: false, error }))
+                );
+            }
+            
+            if (webflowMemberId && transactionState.webflowItemId) {
+                verificationPromises.push(
+                    verifyMemberHasJob(webflowMemberId, transactionState.webflowItemId)
+                        .then(result => ({ type: 'member', result }))
+                        .catch(error => ({ type: 'member', result: false, error }))
+                );
+            }
+            
+            // Execute all verifications in parallel
+            const results = await Promise.all(verificationPromises);
+            
+            // Process results
+            results.forEach(({ type, result, error }) => {
+                if (error) {
+                    debugError(`${type} verification error:`, error);
+                }
+                
+                switch (type) {
+                    case 'airtable':
+                        verificationResults.airtableHasWebflowId = result;
+                        break;
+                    case 'webflow':
+                        verificationResults.webflowHasJobId = result;
+                        break;
+                    case 'member':
+                        verificationResults.memberHasJob = result;
+                        break;
+                }
+            });
+            
+            const allPassed = verificationResults.airtableHasWebflowId && 
+                             verificationResults.webflowHasJobId && 
+                             verificationResults.memberHasJob;
+            
+            debugLog('Verification Ergebnis:', {
+                webflowJobId: verificationResults.webflowHasJobId,
+                airtableWebflowId: verificationResults.airtableHasWebflowId,
+                memberHasJob: verificationResults.memberHasJob,
+                overall: allPassed ? 'PASSED' : 'FAILED'
+            });
+            
+            return { passed: allPassed, results: verificationResults };
+        } catch (error) {
+            debugError('Critical Verification Fehler:', error);
+            return { passed: false, results: verificationResults, error: error.message };
+        }
+    }
+
     // Credit deduction function
     async function deductMemberstackCredit(memberstackId) {
         if (!memberstackId) {
@@ -1023,15 +1298,8 @@
             else submitButton.value = sendingText;
         }
 
-        // Transaction state tracking
-        let transactionState = {
-            airtableRecordId: null,
-            webflowItemId: null,
-            memberRecordId: null,
-            memberUpdated: false,
-            creditDeducted: false,
-            completed: false
-        };
+        // Use object pooling for transaction state
+        const transactionState = ObjectPool.getTransactionState();
 
         // Initialize rawFormData early to avoid reference errors
         let rawFormData = {};
@@ -1214,7 +1482,76 @@
             transactionState.memberUpdated = true;
             debugLog('Webflow Member posted-jobs Feld erfolgreich aktualisiert.');
 
-            // Step 10: Deduct credit (non-critical - don't fail if this fails)
+            // Step 10: Critical Verification
+            showCustomPopup('Verifiziere Job-Erstellung...', 'loading', 'Finale Überprüfung');
+            const verification = await performCriticalVerification(transactionState, webflowMemberIdOfTheSubmitter);
+            
+            if (!verification.passed) {
+                debugError('Critical Verification fehlgeschlagen:', verification);
+                
+                // Try to fix missing connections
+                let fixAttempts = 0;
+                const maxFixAttempts = 2;
+                
+                while (!verification.passed && fixAttempts < maxFixAttempts) {
+                    fixAttempts++;
+                    debugLog(`Fix-Versuch ${fixAttempts}/${maxFixAttempts}`);
+                    
+                    // Fix 1: Update Airtable if missing Webflow ID
+                    if (!verification.results.airtableHasWebflowId && transactionState.airtableRecordId && transactionState.webflowItemId) {
+                        debugLog('Versuche Airtable Webflow ID nachzutragen...');
+                        try {
+                            await updateAirtableRecord(transactionState.airtableRecordId, transactionState.webflowItemId);
+                            verification.results.airtableHasWebflowId = true;
+                        } catch (error) {
+                            debugError('Airtable Fix fehlgeschlagen:', error);
+                        }
+                    }
+                    
+                    // Fix 2: Update Webflow if missing Job ID
+                    if (!verification.results.webflowHasJobId && transactionState.webflowItemId) {
+                        debugLog('Versuche Webflow Job ID nachzutragen...');
+                        try {
+                            const jobSlugInWebflowToUpdate = WEBFLOW_FIELD_SLUG_MAPPINGS['airtableJobIdForWebflow'];
+                            if (jobSlugInWebflowToUpdate) {
+                                await updateWebflowItem(transactionState.webflowItemId, {
+                                    [jobSlugInWebflowToUpdate]: transactionState.webflowItemId
+                                });
+                                verification.results.webflowHasJobId = true;
+                            }
+                        } catch (error) {
+                            debugError('Webflow Fix fehlgeschlagen:', error);
+                        }
+                    }
+                    
+                    // Fix 3: Update Member if missing Job
+                    if (!verification.results.memberHasJob && webflowMemberIdOfTheSubmitter && transactionState.webflowItemId) {
+                        debugLog('Versuche Member Job nachzutragen...');
+                        try {
+                            await updateWebflowMemberPostedJobs(webflowMemberIdOfTheSubmitter, transactionState.webflowItemId);
+                            verification.results.memberHasJob = true;
+                        } catch (error) {
+                            debugError('Member Fix fehlgeschlagen:', error);
+                        }
+                    }
+                    
+                    // Re-verify after fixes
+                    if (fixAttempts < maxFixAttempts) {
+                        const reVerification = await performCriticalVerification(transactionState, webflowMemberIdOfTheSubmitter);
+                        verification.passed = reVerification.passed;
+                        verification.results = reVerification.results;
+                    }
+                }
+                
+                if (!verification.passed) {
+                    throw new Error(`VERIFICATION_FAILED: Job wurde erstellt, aber Verknüpfungen sind unvollständig. Airtable: ${verification.results.airtableHasWebflowId}, Webflow: ${verification.results.webflowHasJobId}, Member: ${verification.results.memberHasJob}`);
+                }
+            }
+            
+            transactionState.verificationPassed = true;
+            debugLog('=== VERIFICATION COMPLETED SUCCESSFULLY ===');
+
+            // Step 11: Deduct credit (non-critical - don't fail if this fails)
             const memberstackId = rawFormData['memberstackId'];
             if (memberstackId) {
                 transactionState.creditDeducted = await deductMemberstackCredit(memberstackId);
@@ -1251,6 +1588,9 @@
             } else if (error.message.startsWith('MEMBER_SEARCH_ERROR:')) {
                 const userMessage = error.message.replace('MEMBER_SEARCH_ERROR: ', '');
                 showCustomPopup("Dein Benutzerkonto konnte nicht überprüft werden. Bitte lade die Seite neu oder kontaktiere den Support.", 'error', 'Fehler bei der Benutzerprüfung', `Member Search Error: ${userMessage}`);
+            } else if (error.message.startsWith('VERIFICATION_FAILED:')) {
+                const userMessage = error.message.replace('VERIFICATION_FAILED: ', '');
+                showCustomPopup("Dein Job wurde erstellt, aber es gab Probleme bei der Verknüpfung. Der Support wurde automatisch benachrichtigt und wird das Problem beheben.", 'error', 'Verknüpfungsproblem', `Verification Error: ${userMessage}`);
             } else {
                 // Handle other errors
                 const technicalSupportDetails = `Fehler: ${error.message}. Stack: ${error.stack}. TransactionState: ${JSON.stringify(transactionState)}. RawData: ${JSON.stringify(rawFormData || {})}`;
@@ -1301,6 +1641,9 @@
             // Reset submission lock
             isSubmitting = false;
             
+            // Return transaction state to pool
+            ObjectPool.returnTransactionState(transactionState);
+            
             // Final cleanup of submit button state
             if (submitButton && submitButton.disabled) {
                 const currentButtonText = submitButton.tagName === 'BUTTON' ? submitButton.textContent : submitButton.value;
@@ -1333,6 +1676,19 @@
         handleFormSubmit(event, null);
     }
 
+    // Global cleanup function for memory management
+    function cleanup() {
+        // Clear all caches
+        DOMCache.clear();
+        PopupCache.clear();
+        DateFormatCache.clear();
+        
+        // Reset global state
+        isSubmitting = false;
+        
+        debugLog('Memory cleanup completed');
+    }
+
     // Initialize on DOM ready
     document.addEventListener('DOMContentLoaded', () => {
         const mainForm = find(`#${MAIN_FORM_ID}`);
@@ -1343,10 +1699,13 @@
             }
             mainForm.removeEventListener('submit', handleFormSubmitWrapper);
             mainForm.addEventListener('submit', handleFormSubmitWrapper);
-            debugLog(`Form Submission Handler v21.4 initialisiert für: #${MAIN_FORM_ID}`);
+            debugLog(`Form Submission Handler v21.6 initialisiert für: #${MAIN_FORM_ID}`);
         } else {
             debugWarn(`Hauptformular "${MAIN_FORM_ID}" nicht gefunden. Handler nicht aktiv.`);
         }
     });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', cleanup);
 
 })();
